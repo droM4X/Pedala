@@ -27,7 +27,7 @@
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:400 16px/1.45 var(--ui)}
 /* an app, not a page: nothing pans, zooms or pulls to refresh while riding */
 html,body{overflow:hidden;overscroll-behavior:none}
-body{touch-action:manipulation}
+body{touch-action:pan-x pan-y}   /* no pinch or double-tap zoom: a zoomed screen hides part of the ride view */
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--z2);outline-offset:2px}
@@ -385,7 +385,8 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
     <div class="spacer"></div>
     <button class="chip" id="chip-trainer"><span class="dot"></span><span>Spoji trenažer</span></button>
     <button class="chip" id="chip-hr"><span class="dot"></span><span>Puls</span></button>
-    <button class="chip" id="chip-click"><span class="dot"></span><span>Click</span></button>
+    <button class="chip" id="chip-click-p"><span class="dot"></span><span>Click +</span></button>
+    <button class="chip" id="chip-click-m"><span class="dot"></span><span>Click −</span></button>
   </header>
 
   <!-- RIDE -->
@@ -593,8 +594,8 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <p class="note" id="bt-auto-note" hidden></p>
       <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" type="button" id="btn-bt-auto">Potraži zapamćene uređaje</button></div>
       <h2 class="section-title">Zwift Click</h2>
-      <p class="note">Spoji ga gumbom Click gore desno, nakon što ga odspojiš iz Zwifta. Click v2 ima dva dijela: spoji svaki posebno. Ako tipke rade krivo, postavi ih ispočetka.</p>
-      <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" id="btn-click-cal" type="button">Postavi tipke ispočetka</button></div>
+      <p class="note">Click v2 ima dva dijela i svaki se spaja posebno: dio za težu brzinu gumbom <b>Click +</b> gore desno, dio za lakšu gumbom <b>Click −</b>. Prije spajanja probudi samo taj dio (pritisni mu tipku), pa će u popisu biti jedini. Svaka tipka na dijelu + diže brzinu, svaka na dijelu − je spušta. Ako su zamijenjeni, klikni <b>Odredi + i − dio</b>. Prvo ga odspoji iz Zwifta. Stari Click (v1) s obje tipke spaja se bilo kojim od dva gumba.</p>
+      <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" id="btn-click-cal" type="button">Odredi + i − dio</button></div>
       <details class="note"><summary>Zadnji paketi s Clicka</summary><pre data-notr id="click-log" style="white-space:pre-wrap;font-size:12px;margin:8px 0 0">Još ništa.</pre></details>
       <h2 class="section-title">Tipkovnica</h2>
       <p class="note">Razmak: kreni / pauza. Strelice gore i dolje: intenzitet u ERG treningu ili brzina u slobodnoj vožnji.</p>
@@ -641,7 +642,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
 </dialog>
 
 <dialog id="dlg-click">
-  <h2>Postavi tipke na Clicku</h2>
+  <h2>Postavi dijelove Clicka</h2>
   <p id="clk-step">Pritisni tipku za težu brzinu (+).</p>
   <div class="dlg-acts"><button class="btn" data-close>Odustani</button></div>
 </dialog>
@@ -856,7 +857,16 @@ const EN = new Map(Object.entries({
   "Automatsko spajanje": "Automatic connection",
   "Trenažer, puls i Click koje si jednom spojio aplikacija sama spaja kad se upale. Prvi put ih spoji ručno.": "A trainer, heart rate strap or Click you connected once is connected automatically as soon as it is switched on. Connect them by hand the first time.",
   "Potraži zapamćene uređaje": "Look for remembered devices",
-  "Spoji ga gumbom Click gore desno, nakon što ga odspojiš iz Zwifta. Click v2 ima dva dijela: spoji svaki posebno. Ako tipke rade krivo, postavi ih ispočetka.": "Connect it with the Click button at the top right, after disconnecting it from Zwift. Click v2 has two pods: connect each one. If the buttons do the wrong thing, set them up again.",
+  "Click v2 ima dva dijela i svaki se spaja posebno: dio za težu brzinu gumbom": "Click v2 has two pods, each connected on its own: the harder-gear pod with the",
+  "gore desno, dio za lakšu gumbom": "button at the top right, the easier-gear pod with the",
+  ". Prije spajanja probudi samo taj dio (pritisni mu tipku), pa će u popisu biti jedini. Svaka tipka na dijelu + diže brzinu, svaka na dijelu − je spušta. Ako su zamijenjeni, klikni": "button. Before connecting, wake only that pod (press one of its buttons) so it is the only one in the list. Every button on the + pod shifts up, every button on the − pod shifts down. If they are swapped, click",
+  ". Prvo ga odspoji iz Zwifta. Stari Click (v1) s obje tipke spaja se bilo kojim od dva gumba.": ". Disconnect it from Zwift first. The older Click (v1), with both buttons on one device, connects with either button.",
+  "Odredi + i − dio": "Set the + and − pod", "Pritisni bilo koju tipku na dijelu za težu brzinu (+).": "Press any button on the harder-gear pod (+).",
+  "Sad pritisni bilo koju tipku na drugom dijelu (−).": "Now press any button on the other pod (−).",
+  "To je isti dio kao za +. Pritisni tipku na drugom dijelu (−).": "That is the same pod as +. Press a button on the other pod (−).",
+  "Dijelovi Clicka postavljeni: + i −": "Click pods set: + and −", "Ovaj dio je +. Drugi dio spoji gumbom Click −.": "This pod is +. Connect the other one with the Click − button.",
+  "Click + je već spojen": "Click + is already connected", "Click − je već spojen": "Click − is already connected",
+  "Nepoznata tipka na Clicku. Postavi je u Postavkama (Zwift Click).": "Unknown Click button. Set it up in Settings (Zwift Click).",
   "Postavi tipke ispočetka": "Set up buttons again", "Zadnji paketi s Clicka": "Last packets from the Click", "Još ništa.": "Nothing yet.", "Tipkovnica": "Keyboard",
   "Razmak: kreni / pauza. Strelice gore i dolje: intenzitet u ERG treningu ili brzina u slobodnoj vožnji.": "Space: start / pause. Up and down arrows: intensity in an ERG workout, or gear in free ride.",
   // devices
@@ -866,7 +876,7 @@ const EN = new Map(Object.entries({
   "Trenažer spojen": "Trainer connected", "Spajam Click…": "Connecting Click…", "Click spava…": "Click is asleep…", "Uređaj se ne javlja": "The device is not responding",
   "Ovaj preglednik nema Web Bluetooth. Otvori u Chromeu preko https.": "This browser has no Web Bluetooth. Open it in Chrome over https.", "Ovaj preglednik nema Web Bluetooth": "This browser has no Web Bluetooth",
   "Spajanje pulsmetra nije uspjelo": "Could not connect the heart rate strap",
-  "Postavi tipke na Clicku": "Set up the Click buttons", "Pritisni tipku za težu brzinu (+).": "Press the button for a harder gear (+).",
+  "Postavi tipke na Clicku": "Set up the Click buttons", "Postavi dijelove Clicka": "Set up the Click pods", "Pritisni tipku za težu brzinu (+).": "Press the button for a harder gear (+).",
   "Sad pritisni tipku za lakšu brzinu (−).": "Now press the button for an easier gear (−).",
   "To je ista tipka kao za +. Pritisni tipku za lakšu brzinu (−), na drugom dijelu Clicka ako ga ima.": "That is the same button as +. Press the button for an easier gear (−), on the other Click pod if you have one.",
   "Tipke na Clicku postavljene": "Click buttons set up", "Postavi tipke Clicka još jednom: sada se razlikuju lijevi i desni dio.": "Set up the Click buttons once more: the left and right pods are now told apart.",
@@ -2714,30 +2724,69 @@ function clickKeys(b){
 }
 const CLICK_DEFAULT = { p: 1, m: -1 };
 const CLICK_DEBOUNCE_MS = 250;   // one shift per press, even if the pod repeats or bounces
+/* Click v2 is two pods, each its own Bluetooth device. Each pod has a role, kept per device id: every button on the
+   "plus" pod shifts up, every button on the "minus" pod shifts down, whichever button bit it reports.
+   The older Click v1 is one device with both buttons ("both"): its keys p and m say the direction. */
+const CLICK_LABEL = { plus: "Click +", minus: "Click −", both: "Click" };
+const clickChipOf = role => role === "minus" ? "#chip-click-m" : "#chip-click-p";
+const podTag = id => String(id || "x").replace(/[^\w]/g, "").slice(-6);
+function setClickRole(id, role){
+  const k = store.get("devices", {}), r = { ...(k.clickRoles || {}) };
+  if(role !== "both") for(const x of Object.keys(r)) if(r[x] === role) delete r[x];   // one pod per role
+  r[id] = role; k.clickRoles = r; store.set("devices", k);
+}
+function clickRoleOf(id){
+  const r = (store.get("devices", {}).clickRoles || {})[id]; if(r) return r;
+  // set up before pods had roles: the pod whose button was set to + is the plus pod
+  const m = Object.entries(settings.clickMap || {}).find(([key]) => key.startsWith(podTag(id) + ":"));
+  if(m){ const role = m[1] > 0 ? "plus" : "minus"; setClickRole(id, role); return role; }
+  return null;
+}
+const freeClickRole = () => Object.values(store.get("devices", {}).clickRoles || {}).includes("plus") ? "minus" : "plus";
 let clickLog = [], calib = null;
 function logClick(dir, b){ clickLog.unshift(`${new Date().toLocaleTimeString(LOC)} ${dir} ${hex(b)}`); clickLog = clickLog.slice(0, 30); const el = $("#click-log"); if(el) el.textContent = clickLog.join("\n"); }
-function onClickKey(key){
-  if(calib){
-    if(calib.step === 1){ calib.plus = key; calib.step = 2; $("#clk-step").textContent = "Sad pritisni tipku za lakšu brzinu (−)."; }
-    else if(key !== calib.plus){ settings.clickMap = { [calib.plus]: 1, [key]: -1 }; store.set("settings", settings); calib = null; $("#dlg-click").close(); toast("Tipke na Clicku postavljene"); }
-    else $("#clk-step").textContent = "To je ista tipka kao za +. Pritisni tipku za lakšu brzinu (−), na drugom dijelu Clicka ako ga ima.";
-    return;
+function onClickPress(z, key){
+  if(calib){ calibPress(z, key); return; }
+  let d;
+  if(z.kind === "ride"){
+    if(z.role !== "plus" && z.role !== "minus"){ startCalibration(); return; }
+    d = z.role === "plus" ? 1 : -1;
+  } else {
+    d = settings.clickMap?.[key] ?? CLICK_DEFAULT[key] ?? 0;
+    if(!d){ if(!onClickPress.warned){ onClickPress.warned = true; toast("Nepoznata tipka na Clicku. Postavi je u Postavkama (Zwift Click)."); } return; }
   }
-  const map = Object.keys(settings.clickMap || {}).length ? settings.clickMap : CLICK_DEFAULT;
-  // keys set up before the two Click v2 pods were told apart: ask once to set them up again
-  if(key.includes(":") && !Object.keys(map).some(k => k.includes(":")) && Object.keys(map).some(k => k.startsWith("b"))){ startCalibration(); toast("Postavi tipke Clicka još jednom: sada se razlikuju lijevi i desni dio."); return; }
-  const d = map[key] ?? (key === "p" ? 1 : key === "m" ? -1 : 0);
-  if(!d){ if(!onClickKey.warned){ onClickKey.warned = true; toast("Nepoznata tipka na Clicku. Postavi tipke u Postavkama (Zwift Click → Postavi tipke ispočetka)."); } return; }
   if(document.querySelector("dialog[open]")) return;
-  const now = performance.now(); if(now - (onClickKey.last || 0) < CLICK_DEBOUNCE_MS) return; onClickKey.last = now;
+  const now = performance.now(); if(now - (z.lastPress || 0) < CLICK_DEBOUNCE_MS) return; z.lastPress = now;
   bump(d);
 }
-function startCalibration(){ if($("#dlg-click").open) return; calib = { step: 1 }; $("#clk-step").textContent = "Pritisni tipku za težu brzinu (+)."; $("#dlg-click").showModal(); }
+function startCalibration(){ if($("#dlg-click").open) return; calib = { step: 1 }; $("#clk-step").textContent = tr("Pritisni bilo koju tipku na dijelu za težu brzinu (+)."); $("#dlg-click").showModal(); }
+function calibPress(z, key){
+  const step = t => { $("#clk-step").textContent = tr(t); }, done = msg => { calib = null; $("#dlg-click").close(); toast(tr(msg)); };
+  if(z.kind !== "ride"){   // Click v1: two buttons on one device
+    if(calib.step === 1){ calib.first = key; calib.step = 2; step("Sad pritisni tipku za lakšu brzinu (−)."); }
+    else if(key !== calib.first){ settings.clickMap = { [calib.first]: 1, [key]: -1 }; store.set("settings", settings); done("Tipke na Clicku postavljene"); }
+    else step("To je ista tipka kao za +. Pritisni tipku za lakšu brzinu (−), na drugom dijelu Clicka ako ga ima.");
+    return;
+  }
+  if(calib.step === 1){
+    z.role = "plus"; setClickRole(z.device.id, "plus"); z.onStatus("on");
+    const other = S.clicks.find(x => x !== z && x.kind === "ride");
+    if(!other) return done("Ovaj dio je +. Drugi dio spoji gumbom Click −.");
+    calib.first = z; calib.step = 2; step("Sad pritisni bilo koju tipku na drugom dijelu (−).");
+  }
+  else if(z !== calib.first){ z.role = "minus"; setClickRole(z.device.id, "minus"); setClickRole(calib.first.device.id, "plus"); z.onStatus("on"); calib.first.onStatus("on"); done("Dijelovi Clicka postavljeni: + i −"); }
+  else step("To je isti dio kao za +. Pritisni tipku na drugom dijelu (−).");
+}
 $("#dlg-click").addEventListener("close", () => { calib = null; });
 
 class ZwiftClick {
-  constructor(onStatus){ this.onStatus = onStatus; this.down = new Set(); }
-  get tag(){ return String(this.device?.id || "x").replace(/[^\w]/g, "").slice(-6); }
+  constructor(role){ this.role = role; this.down = new Set(); }
+  get tag(){ return podTag(this.device?.id); }
+  /* each pod has its own chip; the text is its role, the dot its state */
+  onStatus(c){
+    const role = this.role || "plus"; setChip(clickChipOf(role), c === "off" ? "" : c, CLICK_LABEL[role]);
+    if(role === "both") $("#chip-click-m").hidden = c === "on";
+  }
   async connect(){ await this.attach(await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "Zwift" }], optionalServices: [ZW.v1, ZW.ride, "battery_service"] })); rememberDevice("clicks", this.device); }
   attach(dev){ this.device = dev; dev.addEventListener("gattserverdisconnected", () => this.reconnect()); return this.setup(); }
   async setup(){
@@ -2760,6 +2809,7 @@ class ZwiftClick {
   async send(bytes){ const d = new Uint8Array(bytes);
     try{ await this.rx.writeValueWithoutResponse(d); }catch{ await this.rx.writeValueWithResponse(d); } }
   frame(b, isTx){
+    if(this.dead) return;
     this.answered = true;
     logClick((isTx ? "tx " : "as ") + this.tag, b);
     if(isTx){
@@ -2767,14 +2817,12 @@ class ZwiftClick {
       if(b[0] === 0xff && b[1] === 0x03) toast("Ovaj dio Clicka je zaključan. Spoji ga jednom na Zwift pa probaj ponovno.");
       return;
     }
-    let keys = clickKeys(b); if(!keys) return;
-    // Click v2 is two separate pods that can report the same button bit: key ids carry the pod
-    if(this.kind === "ride") keys = new Set([...keys].map(k => this.tag + ":" + k));
-    for(const k of keys) if(!this.down.has(k)) onClickKey(k);     // act on press, not release
+    const keys = clickKeys(b); if(!keys) return;
+    for(const k of keys) if(!this.down.has(k)) onClickPress(this, k);     // act on press, not release
     this.down = keys;
   }
   async reconnect(){
-    if(this.closing) return; clearInterval(this.ka); this.unlockSent = false;
+    if(this.closing || this.dead) return; clearInterval(this.ka); this.unlockSent = false;
     this.onStatus("wait", "Click spava…");
     for(let i = 0; i < 200; i++){            // Click sleeps when idle; a button press wakes it up
       try{ await new Promise(r => setTimeout(r, 3000)); await this.setup(); return; }catch{}
@@ -2783,7 +2831,6 @@ class ZwiftClick {
   }
 }
 S.clicks = [];
-const clickStatus = (c, txt) => setChip("#chip-click", c, S.clicks.length > 1 && c === "on" ? `Click ×${S.clicks.length}` : txt);
 const trainerStatus = (c, txt) => setChip("#chip-trainer", c, txt);
 const hrStatus = (c, txt) => { if(c !== "on") S.live.hr = 0; setChip("#chip-hr", c, txt); };
 function rememberDevice(role, dev){
@@ -2794,7 +2841,7 @@ function rememberDevice(role, dev){
 /* Reconnect devices this site was allowed to use before. Needs navigator.bluetooth.getDevices(), which Chrome only
    has with persistent Bluetooth permissions. For each remembered device the app waits until it advertises
    (watchAdvertisements) and connects then; without that API it simply retries every few seconds. */
-const BT_ROLES = { trainer: "Trenažer", hr: "Puls", click: "Click" };
+const BT_ROLES = { trainer: "Trenažer", hr: "Puls", clickPlus: "Click +", clickMinus: "Click −", click: "Click" };
 const btState = { api: null, permitted: null, roles: {}, watching: new Set() };
 async function autoConnect(){
   btState.api = !!navigator.bluetooth?.getDevices;
@@ -2807,7 +2854,10 @@ async function autoConnect(){
   for(const dev of devs){
     if(dev.id === k.trainer) watchDevice("trainer", dev, () => new BleTrainer(onData, trainerStatus), () => !!S.trainer, t => { S.trainer = t; applyControl(); startClock(); toast("Trenažer spojen"); });
     else if(dev.id === k.hr) watchDevice("hr", dev, () => new BleHR(setHr, hrStatus), () => !!S.hrm, h => { S.hrm = h; });
-    else if(clicks.includes(dev.id)) watchDevice("click", dev, () => new ZwiftClick(clickStatus), () => S.clicks.some(z => z.device.id === dev.id), z => { S.clicks.push(z); clickStatus("on", "Click"); });
+    else if(clicks.includes(dev.id)){
+      let role = clickRoleOf(dev.id); if(!role){ role = freeClickRole(); setClickRole(dev.id, role); }
+      watchDevice(role === "minus" ? "clickMinus" : role === "plus" ? "clickPlus" : "click", dev, () => new ZwiftClick(role), () => S.clicks.some(z => z.device.id === dev.id), z => { S.clicks.push(z); z.onStatus("on"); });
+    }
   }
   renderBtState();
 }
@@ -2853,16 +2903,26 @@ function renderBtState(){
 }
 $("#btn-bt-auto").onclick = () => { btHint.shown = false; autoConnect(); };
 /* coming back to the app (screen was off, app in background): look for devices that are not connected */
-document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible" && (!S.trainer || !S.hrm)) autoConnect(); });
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible" && (!S.trainer || !S.hrm || S.clicks.length < (store.get("devices", {}).clicks || []).length)) autoConnect(); });
 
-$("#chip-click").onclick = async () => {
+/* Click + and Click −: the device picked in Chrome's list gets that role (a Click v1 gets both) */
+async function connectClick(role){
   if(!navigator.bluetooth){ toast("Ovaj preglednik nema Web Bluetooth"); return; }
-  const status = clickStatus;
-  const z = new ZwiftClick(status);
-  try{ await z.connect(); S.clicks.push(z); status("on", "Click");
-    if(z.kind === "ride" && !Object.keys(settings.clickMap || {}).length) startCalibration(); }
-  catch(e){ if(!S.clicks.length) setChip("#chip-click", "", "Click"); if(e.name !== "NotFoundError") toast("Spajanje Clicka nije uspjelo: " + e.message); }
-};
+  if(S.clicks.some(z => z.role === role && z.device.gatt.connected)){ toast(`${CLICK_LABEL[role]} je već spojen`); return; }
+  const z = new ZwiftClick(role);
+  try{
+    await z.connect();
+    const r = z.kind === "ride" ? role : "both", old = S.clicks.find(x => x.device.id === z.device.id);
+    if(old){ old.dead = old.closing = true; clearInterval(old.ka); S.clicks = S.clicks.filter(x => x !== old); }   // the same pod again: the new connection replaces it
+    z.role = r; setClickRole(z.device.id, r); S.clicks.push(z);
+    const other = S.clicks.find(x => x !== z && x.kind === "ride" && x.role === r);
+    if(other && r !== "both"){ other.role = r === "plus" ? "minus" : "plus"; setClickRole(other.device.id, other.role); other.onStatus("on"); }   // the other pod had this role: they swap
+    else if(old && old.role !== r && old.role !== "both") setChip(clickChipOf(old.role), "", CLICK_LABEL[old.role]);   // its old chip is free now
+    z.onStatus("on");
+  }catch(e){ if(!S.clicks.some(x => x.role === role)) z.onStatus("off"); if(e.name !== "NotFoundError") toast("Spajanje Clicka nije uspjelo: " + e.message); }
+}
+$("#chip-click-p").onclick = () => connectClick("plus");
+$("#chip-click-m").onclick = () => connectClick("minus");
 $("#btn-click-cal").onclick = () => startCalibration();
 
 $("#btn-start").onclick = () => { if(!S.started || !S.running) { S.started && S.autoPaused ? resume() : start(); } else pause(false); render(); };
@@ -2923,7 +2983,7 @@ window.addEventListener("beforeunload", e => { if(S.started){ e.preventDefault()
   fetch("/api/intervals").then(r => r.ok ? r.json() : {}).then(j => { icuServer = !!j.serverKey; }).catch(() => {})
     .finally(() => { syncIcu(); renderHistoryIfOpen(); if($("#view-settings").classList.contains("active")) renderIcu(); });
 })();
-window.__pedala = { S, parseZwo, parseGpx, setRoute, routes, gradeAt, trainerGrade, clickKeys, onClickKey, encodeFit, metrics, allWorkouts, setWorkout, GEARS };
+window.__pedala = { S, parseZwo, parseGpx, setRoute, routes, gradeAt, trainerGrade, clickKeys, onClickPress, encodeFit, metrics, allWorkouts, setWorkout, GEARS };
 </script>
 </body>
 </html>
