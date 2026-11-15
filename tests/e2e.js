@@ -125,7 +125,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await hr.context().close();
   });
 
-  await test("Zwift Click v2: each pod is its own + or − device, any button on it works", async () => {
+  await test("Zwift Click v2: each pod is its own + or − device, or both directions on one pod", async () => {
     const p = await open();
     await p.evaluate(() => {
       const mk = (id, role = null) => { const z = new ZwiftClick(role); z.device = { id, gatt: { connected: true } }; z.kind = "ride"; S.clicks.push(z); return z; };
@@ -148,6 +148,16 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     });
     assert.deepEqual(await p.evaluate(() => store.get("devices").clickRoles), { podRIGHT: "minus", podLEFT1: "plus" });
     assert.equal(await p.evaluate(() => S.clicks.length), 2, "the same pod is replaced, not added twice");
+    // the left pod often sends no presses: both directions on one pod, by button
+    await p.evaluate(() => { const r = S.clicks.find(z => z.device.id === "podRIGHT"); window.__r2 = r; startCalibration(); __press(r, 5); __press(r, 1); S.gear = 10; });
+    assert.equal(await p.evaluate(() => store.get("devices").clickRoles.podRIGHT), "keys");
+    for(const bit of [5, 1, 1, 9]){ await p.evaluate(bit => __press(__r2, bit), bit); await wait(300); }
+    assert.equal(await p.evaluate(() => S.gear), 9, "+1 −1 −1 and an unset button does nothing");
+    assert.equal(await p.textContent("#chip-click-p"), "Click ±");
+    // one tap: Y (bit 6) and the shift button (bit 12) up, B (bit 5) down
+    await p.click("[data-view=\"settings\"]"); await p.click("#btn-click-yb"); await p.evaluate(() => { S.gear = 10; });
+    for(const bit of [6, 12, 5, 5, 5]){ await p.evaluate(bit => __press(__r2, bit), bit); await wait(300); }
+    assert.equal(await p.evaluate(() => S.gear), 9, "Y +1, shift +1, B −3");
     // keys set up before pods had roles still tell which pod is which
     await p.evaluate(() => { settings.clickMap = { "dOLDPD:b5": -1 }; });
     assert.equal(await p.evaluate(() => clickRoleOf("pod-dOLDPD")), "minus");
