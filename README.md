@@ -59,6 +59,10 @@ Every deploy is private to its owner: rides, plans and keys stay in your browser
 
 Chrome only remembers Bluetooth devices with `chrome://flags/#enable-web-bluetooth-new-permissions-backend` set to **Enabled**. Restart Chrome, connect the devices once by hand, and from then on they connect by themselves. *Settings → Automatic connection* shows what is going on.
 
+### Zwift Click v2
+
+The two pods are two separate devices. Connect the harder-gear pod with **Click +** and the easier-gear pod with **Click −** (wake only that pod before connecting). Every button on the + pod shifts up, every button on the − pod shifts down. If they end up swapped, use *Settings → Zwift Click → Set the + and − pod*.
+
 ### Voice
 
 Croatian announcements need a Croatian text-to-speech voice (Android: *Text-to-speech → Speech Services by Google → Install voice data → Croatian*). Without one, everything is spoken in English, or pick a language under *Settings → Announcement language*. With the app in English, announcements are in English.

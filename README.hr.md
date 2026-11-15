@@ -64,7 +64,7 @@ Svaki deploy je samo vlasnikov: vožnje, plan i ključevi ostaju u tvom pregledn
 
 **Glas:** za hrvatske najave treba hrvatski glas (Android: *Pretvaranje teksta u govor → Govorne usluge Googlea → Instaliraj glasovne podatke → Hrvatski*; na Samsungu potraži *Tekst u govor*). Bez njega najave idu na engleskom.
 
-**Zwift Click v2:** dva dijela se postavljaju u *Postavke → Zwift Click → Postavi tipke ispočetka*: + na jednom dijelu, − na drugom.
+**Zwift Click v2:** dva dijela su dva zasebna uređaja. Dio za težu brzinu spoji gumbom **Click +**, a dio za lakšu gumbom **Click −** (prije spajanja probudi samo taj dio). Svaka tipka na dijelu + diže brzinu, svaka na dijelu − je spušta. Zamijenjene dijelove popravlja *Postavke → Zwift Click → Odredi + i − dio*.
 
 ## Razvoj
 

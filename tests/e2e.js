@@ -125,17 +125,32 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await hr.context().close();
   });
 
-  await test("Zwift Click v2: the two pods are told apart, + and − both work", async () => {
+  await test("Zwift Click v2: each pod is its own + or − device, any button on it works", async () => {
     const p = await open();
     await p.evaluate(() => {
-      const mk = id => { const z = new ZwiftClick(() => {}); z.device = { id, gatt: { connected: true } }; z.kind = "ride"; return z; };
+      const mk = (id, role = null) => { const z = new ZwiftClick(role); z.device = { id, gatt: { connected: true } }; z.kind = "ride"; S.clicks.push(z); return z; };
       window.__r = mk("podRIGHT"); window.__l = mk("podLEFT1");
-      window.__press = z => { z.frame(Uint8Array.from([0x23, 0x08, 0xdf, 0xff, 0x0f]), false); z.frame(Uint8Array.from([0x23, 0x08, 0xff, 0xff, 0x0f]), false); };
+      // a press and release of button bit 5, then of bit 1: both pods may report the same bits
+      window.__press = (z, bit = 5) => { const v = 0x3ffff & ~(1 << bit); z.frame(Uint8Array.from([0x23, 0x08, (v & 0x7f) | 0x80, ((v >> 7) & 0x7f) | 0x80, v >> 14]), false); z.frame(Uint8Array.from([0x23, 0x08, 0xff, 0xff, 0x0f]), false); };
       startCalibration(); __press(__r); __press(__l); S.workout = null; S.gear = 10;
     });
-    assert.equal(Object.keys(await p.evaluate(() => settings.clickMap)).length, 2);
-    await p.evaluate(() => __press(__r)); await wait(300); await p.evaluate(() => __press(__l)); await wait(300); await p.evaluate(() => __press(__l)); await wait(300);
-    assert.equal(await p.evaluate(() => S.gear), 9);
+    assert.deepEqual(await p.evaluate(() => store.get("devices").clickRoles), { podRIGHT: "plus", podLEFT1: "minus" });
+    assert.deepEqual(await p.evaluate(() => [$("#chip-click-p").textContent, $("#chip-click-p").className, $("#chip-click-m").textContent, $("#chip-click-m").className]),
+      ["Click +", "chip on", "Click −", "chip on"]);
+    for(const [z, bit] of [["__r", 5], ["__l", 5], ["__l", 1], ["__l", 9]]){ await p.evaluate(([z, bit]) => __press(window[z], bit), [z, bit]); await wait(300); }
+    assert.equal(await p.evaluate(() => S.gear), 8, "+1 −1 −1 −1 from 10");
+    // picking the other pod with Click +: the two swap roles
+    await p.evaluate(async () => {
+      if(!navigator.bluetooth) Object.defineProperty(navigator, "bluetooth", { value: {} });
+      let next = ""; ZwiftClick.prototype.connect = async function(){ this.device = { id: next, gatt: { connected: false } }; this.kind = "ride"; };
+      S.clicks.forEach(z => z.device.gatt.connected = false);
+      next = "podLEFT1"; await connectClick("plus");
+    });
+    assert.deepEqual(await p.evaluate(() => store.get("devices").clickRoles), { podRIGHT: "minus", podLEFT1: "plus" });
+    assert.equal(await p.evaluate(() => S.clicks.length), 2, "the same pod is replaced, not added twice");
+    // keys set up before pods had roles still tell which pod is which
+    await p.evaluate(() => { settings.clickMap = { "dOLDPD:b5": -1 }; });
+    assert.equal(await p.evaluate(() => clickRoleOf("pod-dOLDPD")), "minus");
     await p.context().close();
   });
 
