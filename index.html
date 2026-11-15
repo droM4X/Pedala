@@ -594,7 +594,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <p class="note" id="bt-auto-note" hidden></p>
       <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" type="button" id="btn-bt-auto">Potraži zapamćene uređaje</button></div>
       <h2 class="section-title">Zwift Click</h2>
-      <p class="note">Click v2 ima dva dijela i svaki se spaja posebno: dio za težu brzinu gumbom <b>Click +</b> gore desno, dio za lakšu gumbom <b>Click −</b>. Prije spajanja probudi samo taj dio (pritisni mu tipku), pa će u popisu biti jedini. Svaka tipka na dijelu + diže brzinu, svaka na dijelu − je spušta. Ako su zamijenjeni, klikni <b>Odredi + i − dio</b>. Prvo ga odspoji iz Zwifta. Stari Click (v1) s obje tipke spaja se bilo kojim od dva gumba.</p>
+      <p class="note">Click v2 ima dva dijela i svaki se spaja posebno: dio za težu brzinu gumbom <b>Click +</b> gore desno, dio za lakšu gumbom <b>Click −</b>. Prije spajanja probudi samo taj dio (pritisni mu tipku), pa će u popisu biti jedini. Svaka tipka na dijelu + diže brzinu, svaka na dijelu − je spušta. Ako su zamijenjeni, klikni <b>Odredi + i − dio</b>. Ako dio − ne šalje pritiske (poznati problem lijevog dijela Clicka v2), obje brzine stavi na desni dio: u <b>Odredi + i − dio</b> pritisni tipku za +, a zatim drugu tipku na istom dijelu za −. Prvo ga odspoji iz Zwifta. Stari Click (v1) s obje tipke spaja se bilo kojim od dva gumba.</p>
       <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" id="btn-click-cal" type="button">Odredi + i − dio</button></div>
       <details class="note"><summary>Zadnji paketi s Clicka</summary><pre data-notr id="click-log" style="white-space:pre-wrap;font-size:12px;margin:8px 0 0">Još ništa.</pre></details>
       <h2 class="section-title">Tipkovnica</h2>
@@ -860,6 +860,11 @@ const EN = new Map(Object.entries({
   "Click v2 ima dva dijela i svaki se spaja posebno: dio za težu brzinu gumbom": "Click v2 has two pods, each connected on its own: the harder-gear pod with the",
   "gore desno, dio za lakšu gumbom": "button at the top right, the easier-gear pod with the",
   ". Prije spajanja probudi samo taj dio (pritisni mu tipku), pa će u popisu biti jedini. Svaka tipka na dijelu + diže brzinu, svaka na dijelu − je spušta. Ako su zamijenjeni, klikni": "button. Before connecting, wake only that pod (press one of its buttons) so it is the only one in the list. Every button on the + pod shifts up, every button on the − pod shifts down. If they are swapped, click",
+  ". Ako dio − ne šalje pritiske (poznati problem lijevog dijela Clicka v2), obje brzine stavi na desni dio: u": ". If the − pod sends no presses (a known problem with the left Click v2 pod), put both directions on the right pod: in",
+  "pritisni tipku za +, a zatim drugu tipku na istom dijelu za −. Prvo ga odspoji iz Zwifta. Stari Click (v1) s obje tipke spaja se bilo kojim od dva gumba.": "press a button for +, then another button on the same pod for −. Disconnect it from Zwift first. The older Click (v1), with both buttons on one device, connects with either button.",
+  "Sad pritisni tipku za lakšu brzinu (−): bilo koju na drugom dijelu, ili drugu tipku na istom dijelu.": "Now press a button for an easier gear (−): any on the other pod, or another button on the same pod.",
+  "Obje brzine su na ovom dijelu: jedna tipka +, druga −": "Both directions are on this pod: one button +, another −",
+  "To je ista tipka kao za +. Pritisni tipku za lakšu brzinu (−): na drugom dijelu, ili drugu tipku na ovom.": "That is the same button as +. Press a button for an easier gear (−): on the other pod, or another button on this one.",
   ". Prvo ga odspoji iz Zwifta. Stari Click (v1) s obje tipke spaja se bilo kojim od dva gumba.": ". Disconnect it from Zwift first. The older Click (v1), with both buttons on one device, connects with either button.",
   "Odredi + i − dio": "Set the + and − pod", "Pritisni bilo koju tipku na dijelu za težu brzinu (+).": "Press any button on the harder-gear pod (+).",
   "Sad pritisni bilo koju tipku na drugom dijelu (−).": "Now press any button on the other pod (−).",
@@ -2727,12 +2732,12 @@ const CLICK_DEBOUNCE_MS = 250;   // one shift per press, even if the pod repeats
 /* Click v2 is two pods, each its own Bluetooth device. Each pod has a role, kept per device id: every button on the
    "plus" pod shifts up, every button on the "minus" pod shifts down, whichever button bit it reports.
    The older Click v1 is one device with both buttons ("both"): its keys p and m say the direction. */
-const CLICK_LABEL = { plus: "Click +", minus: "Click −", both: "Click" };
+const CLICK_LABEL = { plus: "Click +", minus: "Click −", both: "Click", keys: "Click ±" };
 const clickChipOf = role => role === "minus" ? "#chip-click-m" : "#chip-click-p";
 const podTag = id => String(id || "x").replace(/[^\w]/g, "").slice(-6);
 function setClickRole(id, role){
   const k = store.get("devices", {}), r = { ...(k.clickRoles || {}) };
-  if(role !== "both") for(const x of Object.keys(r)) if(r[x] === role) delete r[x];   // one pod per role
+  if(role !== "both") for(const x of Object.keys(r)) if(r[x] === role || role === "keys" && x !== id && r[x] === "plus") delete r[x];   // one pod per role
   r[id] = role; k.clickRoles = r; store.set("devices", k);
 }
 function clickRoleOf(id){
@@ -2749,8 +2754,9 @@ function onClickPress(z, key){
   if(calib){ calibPress(z, key); return; }
   let d;
   if(z.kind === "ride"){
-    if(z.role !== "plus" && z.role !== "minus"){ startCalibration(); return; }
-    d = z.role === "plus" ? 1 : -1;
+    if(z.role === "keys"){ d = (store.get("devices", {}).clickKeys || {})[z.device.id]?.[key]; if(!d) return; }   // other buttons on that pod do nothing
+    else if(z.role !== "plus" && z.role !== "minus"){ startCalibration(); return; }
+    else d = z.role === "plus" ? 1 : -1;
   } else {
     d = settings.clickMap?.[key] ?? CLICK_DEFAULT[key] ?? 0;
     if(!d){ if(!onClickPress.warned){ onClickPress.warned = true; toast("Nepoznata tipka na Clicku. Postavi je u Postavkama (Zwift Click)."); } return; }
@@ -2770,12 +2776,16 @@ function calibPress(z, key){
   }
   if(calib.step === 1){
     z.role = "plus"; setClickRole(z.device.id, "plus"); z.onStatus("on");
-    const other = S.clicks.find(x => x !== z && x.kind === "ride");
-    if(!other) return done("Ovaj dio je +. Drugi dio spoji gumbom Click −.");
-    calib.first = z; calib.step = 2; step("Sad pritisni bilo koju tipku na drugom dijelu (−).");
+    calib.first = z; calib.key = key; calib.step = 2;
+    step("Sad pritisni tipku za lakšu brzinu (−): bilo koju na drugom dijelu, ili drugu tipku na istom dijelu.");
   }
   else if(z !== calib.first){ z.role = "minus"; setClickRole(z.device.id, "minus"); setClickRole(calib.first.device.id, "plus"); z.onStatus("on"); calib.first.onStatus("on"); done("Dijelovi Clicka postavljeni: + i −"); }
-  else step("To je isti dio kao za +. Pritisni tipku na drugom dijelu (−).");
+  // another button on the same pod: this pod shifts both ways, by button (the left Click v2 pod often sends no presses)
+  else if(key !== calib.key){
+    const k = store.get("devices", {}); k.clickKeys = { ...(k.clickKeys || {}), [z.device.id]: { [calib.key]: 1, [key]: -1 } }; store.set("devices", k);
+    z.role = "keys"; setClickRole(z.device.id, "keys"); z.onStatus("on"); done("Obje brzine su na ovom dijelu: jedna tipka +, druga −");
+  }
+  else step("To je ista tipka kao za +. Pritisni tipku za lakšu brzinu (−): na drugom dijelu, ili drugu tipku na ovom.");
 }
 $("#dlg-click").addEventListener("close", () => { calib = null; });
 
