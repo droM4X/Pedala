@@ -595,7 +595,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" type="button" id="btn-bt-auto">Potraži zapamćene uređaje</button></div>
       <h2 class="section-title">Zwift Click</h2>
       <p class="note">Click v2 ima dva dijela i svaki se spaja posebno: dio za težu brzinu gumbom <b>Click +</b> gore desno, dio za lakšu gumbom <b>Click −</b>. Prije spajanja probudi samo taj dio (pritisni mu tipku), pa će u popisu biti jedini. Svaka tipka na dijelu + diže brzinu, svaka na dijelu − je spušta. Ako su zamijenjeni, klikni <b>Odredi + i − dio</b>. Ako dio − ne šalje pritiske (poznati problem lijevog dijela Clicka v2), obje brzine stavi na desni dio: u <b>Odredi + i − dio</b> pritisni tipku za +, a zatim drugu tipku na istom dijelu za −. Prvo ga odspoji iz Zwifta. Stari Click (v1) s obje tipke spaja se bilo kojim od dva gumba.</p>
-      <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" id="btn-click-cal" type="button">Odredi + i − dio</button></div>
+      <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" id="btn-click-cal" type="button">Odredi + i − dio</button><button class="btn small" id="btn-click-yb" type="button">Sve na desni dio: Y +, B −</button></div>
       <details class="note"><summary>Zadnji paketi s Clicka</summary><pre data-notr id="click-log" style="white-space:pre-wrap;font-size:12px;margin:8px 0 0">Još ništa.</pre></details>
       <h2 class="section-title">Tipkovnica</h2>
       <p class="note">Razmak: kreni / pauza. Strelice gore i dolje: intenzitet u ERG treningu ili brzina u slobodnoj vožnji.</p>
@@ -866,7 +866,8 @@ const EN = new Map(Object.entries({
   "Obje brzine su na ovom dijelu: jedna tipka +, druga −": "Both directions are on this pod: one button +, another −",
   "To je ista tipka kao za +. Pritisni tipku za lakšu brzinu (−): na drugom dijelu, ili drugu tipku na ovom.": "That is the same button as +. Press a button for an easier gear (−): on the other pod, or another button on this one.",
   ". Prvo ga odspoji iz Zwifta. Stari Click (v1) s obje tipke spaja se bilo kojim od dva gumba.": ". Disconnect it from Zwift first. The older Click (v1), with both buttons on one device, connects with either button.",
-  "Odredi + i − dio": "Set the + and − pod", "Pritisni bilo koju tipku na dijelu za težu brzinu (+).": "Press any button on the harder-gear pod (+).",
+  "Odredi + i − dio": "Set the + and − pod", "Sve na desni dio: Y +, B −": "All on the right pod: Y +, B −",
+  "Prvo spoji desni dio gumbom Click +.": "Connect the right pod with the Click + button first.", "Desni dio: Y i tipka za brzinu +, B −": "Right pod: Y and the shift button +, B −", "Pritisni bilo koju tipku na dijelu za težu brzinu (+).": "Press any button on the harder-gear pod (+).",
   "Sad pritisni bilo koju tipku na drugom dijelu (−).": "Now press any button on the other pod (−).",
   "To je isti dio kao za +. Pritisni tipku na drugom dijelu (−).": "That is the same pod as +. Press a button on the other pod (−).",
   "Dijelovi Clicka postavljeni: + i −": "Click pods set: + and −", "Ovaj dio je +. Drugi dio spoji gumbom Click −.": "This pod is +. Connect the other one with the Click − button.",
@@ -2934,6 +2935,17 @@ async function connectClick(role){
 $("#chip-click-p").onclick = () => connectClick("plus");
 $("#chip-click-m").onclick = () => connectClick("minus");
 $("#btn-click-cal").onclick = () => startCalibration();
+/* Click v2 button bits (Zwift Ride keypad): B = 5, Y = 6, shift up on the right pod = 12 */
+const RIGHT_POD_YB = { b12: 1, b6: 1, b5: -1 };
+$("#btn-click-yb").onclick = () => {
+  const roles = store.get("devices", {}).clickRoles || {};
+  const z = S.clicks.find(x => x.kind === "ride" && (x.role === "plus" || x.role === "keys"));
+  const id = z?.device.id || Object.keys(roles).find(k => roles[k] === "plus" || roles[k] === "keys");
+  if(!id){ toast("Prvo spoji desni dio gumbom Click +."); return; }
+  const k = store.get("devices", {}); k.clickKeys = { ...(k.clickKeys || {}), [id]: RIGHT_POD_YB }; store.set("devices", k);
+  setClickRole(id, "keys"); if(z){ z.role = "keys"; z.onStatus("on"); }
+  toast("Desni dio: Y i tipka za brzinu +, B −");
+};
 
 $("#btn-start").onclick = () => { if(!S.started || !S.running) { S.started && S.autoPaused ? resume() : start(); } else pause(false); render(); };
 $("#btn-end").onclick = () => { pause(false); openSummary(); };
