@@ -858,7 +858,7 @@ const EN = new Map(Object.entries({
   ". Jedan komentar stoji oko 6 centi, a mjesečni limit potrošnje postavi u Consoleu.": ". One comment costs about 6 cents; set a monthly spend limit in the Console.",
   "Trener nije uključen. Upute su u Postavkama, kod Virtualnog trenera.": "The coach is off. See Settings → Virtual coach.",
   "Komentari će se pojaviti nakon sljedećeg treninga.": "Comments will show up after your next session.", "Trener piše komentar…": "The coach is writing…",
-  "Komentar nije uspio": "Comment failed", "Pokušaj ponovno": "Try again", "Komentar trenera": "Coach's comment",
+  "Komentar nije uspio": "Comment failed", "Na Anthropic računu nema kredita. Nadoplati ga na console.anthropic.com → Billing.": "There is no credit left on the Anthropic account. Top it up at console.anthropic.com → Billing.", "Pokušaj ponovno": "Try again", "Komentar trenera": "Coach's comment",
   "Trener je komentirao vožnju (Napredak → Trener)": "The coach commented on your ride (Progress → Coach)",
   "Pitaj trenera": "Ask the coach", "Pošalji": "Send", "Komentari treninga": "Session comments", "Ti": "You", "Trener piše odgovor…": "The coach is writing…",
   "Odgovor nije uspio": "No answer", "Prijedlog promjene plana": "Proposed plan change", "Primijeni": "Apply", "Primijenjeno": "Applied", "Plan je promijenjen": "Plan changed",
@@ -2340,7 +2340,7 @@ document.addEventListener("visibilitychange", () => { if(document.visibilityStat
    other activity that reaches intervals.icu (runs and swims from a watch…) when the app opens. Comments are kept in
    store "coach" (shared between devices) as { "ride:<id>" | "icu:<id>": { text | error | pending, at, title, date } }. */
 let coachServer = false;                                   // ANTHROPIC_API_KEY is set on Vercel
-const coachOn = () => coachServer && settings.coachAuto !== false;
+const coachOn = () => coachServer && settings.coachAuto !== false && Date.now() > store.get("coachPause", 0);   // paused for 12 h when the credit runs out
 const coachNotes = () => store.get("coach", {});
 function saveCoachNote(key, note){
   const all = { ...coachNotes(), [key]: note };
@@ -2368,6 +2368,7 @@ async function coachAsk(key, payload, title, date){
     const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "comment", icuKey: icuKey() || undefined,
       notes: settings.coachAbout || "", athlete: { ftp: settings.ftp, maxHr: settings.maxHr, weight: settings.weight }, ...payload }) });
     const j = await r.json().catch(() => ({}));
+    if(r.status === 402) store.set("coachPause", Date.now() + 12 * 36e5);
     if(!r.ok) throw new Error(j.error || "greška " + r.status);
     saveCoachNote(key, { text: j.text, at: Date.now(), title, date }); renderCoachViews(); return j.text;
   }catch(e){ saveCoachNote(key, { error: e.message, at: Date.now(), title, date }); renderCoachViews(); throw e; }

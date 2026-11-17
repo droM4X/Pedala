@@ -87,6 +87,12 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
     assert.deepEqual((await callCoach("GET")).body, { enabled: false });
     assert.equal((await callCoach("POST", { action: "comment", ride: coachRide })).status, 501);
   });
+  await test("coach: no credit left gives a clear 402", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    global.fetch = async () => new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "Your credit balance is too low to access the Anthropic API." } }), { status: 400, headers: { "content-type": "application/json" } });
+    try{ const r = await callCoach("POST", { action: "comment", ride: coachRide }); assert.equal(r.status, 402); assert.match(r.body.error, /nema kredita/); }
+    finally{ global.fetch = realFetch; delete process.env.ANTHROPIC_API_KEY; }
+  });
   await test("coach: a refusal is reported, not shown as a comment", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-test"; let sent;
     global.fetch = async (url, opt) => { sent = JSON.parse(opt.body); return new Response(JSON.stringify({ id: "m", type: "message", role: "assistant", model: "claude-opus-5-5",

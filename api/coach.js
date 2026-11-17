@@ -130,6 +130,8 @@ async function claude({ system, content, format }){
 }
 function apiError(res, e){
   if(e instanceof Anthropic.AuthenticationError) return res.status(500).json({ error: "Anthropic ne prihvaća ANTHROPIC_API_KEY" });
+  // out of prepaid credit: a clear message, and 402 so the app stops trying for a while (failed requests cost nothing)
+  if(e instanceof Anthropic.APIError && e.status === 400 && /credit balance/i.test(e.message)) return res.status(402).json({ error: "Na Anthropic računu nema kredita. Nadoplati ga na console.anthropic.com → Billing." });
   if(e instanceof Anthropic.RateLimitError) return res.status(429).json({ error: "Trener je trenutno zauzet, probaj kasnije" });
   if(e instanceof Anthropic.APIError) return res.status(502).json({ error: `Anthropic greška ${e.status ?? ""}: ${e.message}`.slice(0, 300) });
   return res.status(502).json({ error: "Trener nije dostupan: " + e.message });
