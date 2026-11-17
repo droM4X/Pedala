@@ -189,6 +189,27 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
   });
 
+  await test("coach: a question gets an answer, a proposed plan change is applied only after confirming", async () => {
+    srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
+    const p = await open();
+    const first = await p.evaluate(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+      store.set("plan", { id: PLAN.id, start: ymd(d), done: {}, skipped: {}, times: { wk: "18:00", sun: "09:00" }, remind: 120 }); return planSessions()[0].id; });
+    await p.click('[data-view="progress"]'); await p.waitForTimeout(800);
+    await p.fill("#coach-q", "Prehlađen sam, što s ovim tjednom?"); await p.click("#coach-form button");
+    await p.waitForFunction(() => coachChat().at(-1)?.a, null, { timeout: 15000 });
+    const sent = srv.claude.at(-1);
+    assert.equal(sent.output_config.format.type, "json_schema");
+    assert.match(sent.messages[0].content, /Prehlađen sam/); assert.match(sent.messages[0].content, /"workout_id":"p-rec"|"id":"p-rec"/);
+    assert.match(await p.textContent("#coach-thread"), /Odmori se/);
+    assert.equal(await p.locator("#coach-thread li").count(), 1, "a change for a session that does not exist is dropped");
+    assert.ok(!(await p.evaluate(() => plan().swap)), "nothing changes before confirming");
+    await p.click("#coach-thread [data-apply]");
+    assert.deepEqual(await p.evaluate(() => plan().swap), { [first]: "p-rec" });
+    assert.equal(await p.evaluate(id => planSessions().find(x => x.id === id).w.name, first), "Aktivni oporavak");
+    assert.match(await p.textContent("#coach-thread"), /Primijenjeno/);
+    srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
+  });
+
   await test("feed: favourite channel videos and own playlist", async () => {
     srv.setEnv({ YOUTUBE_API_KEY: "AIzaSERVER" });
     const p = await open();

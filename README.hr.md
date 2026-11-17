@@ -34,7 +34,7 @@
   - kratki treninzi preko tjedna, duga nedjeljna vožnja u zoni 2;
   - praćenje napretka i kalendar (`.ics`) s podsjetnicima.
 - **Slanje na intervals.icu** nakon svake vožnje i izvoz u `.FIT`.
-- **Virtualni trener:** nakon svakog treninga Claude napiše kratak komentar na vožnje iz Pedale i na sve ostalo što stigne na intervals.icu, npr. trčanje i plivanje sa sata. Treba `ANTHROPIC_API_KEY`; oko 6 centi po komentaru.
+- **Virtualni trener:** nakon svakog treninga Claude napiše kratak komentar na vožnje iz Pedale i na sve ostalo što stigne na intervals.icu, npr. trčanje i plivanje sa sata. Možeš ga i pitati ili zatražiti promjenu plana („prehlađen sam, što s ovim tjednom?“); predložene promjene primjenjuju se kad ih potvrdiš. Treba `ANTHROPIC_API_KEY`; oko 6 centi po komentaru ili odgovoru.
 - **Sinkronizacija mobitela i tableta** preko Vercel Blob spremišta, uz sigurnosnu kopiju u `.json`.
 
 ## Što treba

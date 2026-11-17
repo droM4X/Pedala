@@ -6,6 +6,9 @@
 //   POST /api/coach { action: "comment", icuKey, notes, athlete, ride | icuId } -> { text, model }
 //     ride:  a ride recorded in Pedala (summary, laps, minute-by-minute power, cadence and heart rate)
 //     icuId: any activity on intervals.icu (runs and swims from a watch, outdoor rides…)
+//   POST /api/coach { action: "ask", icuKey, notes, athlete, question, chat, plan, rides, comments }
+//     -> { answer, changes: [{ session_id, action: "replace" | "skip" | "restore", workout_id, reason }] }
+//     a question outside a session; changes to the plan are only proposals, the app applies them when the athlete confirms
 const AnthropicSDK = require("@anthropic-ai/sdk");
 const Anthropic = AnthropicSDK.default || AnthropicSDK;
 
@@ -28,6 +31,26 @@ Pravila:
 - Ako podataka nema dovoljno za neki zaključak, ne nagađaj.
 - Duljina: 80 do 160 riječi, običan tekst bez naslova i markdowna, najviše tri kratka odlomka.`;
 
+const SYSTEM_ASK = `Ti si osobni trener izdržljivosti (biciklizam, trčanje, plivanje) u aplikaciji Pedala. Sportaš ti piše izvan treninga: pitanje, kako se osjeća, ili želi nešto promijeniti u planu. Imaš njegov plan za idući period, treninge zadnjih tjedana, formu, svoje ranije komentare i dosadašnji razgovor.
+
+Odgovor (polje answer):
+- na hrvatskom, toplo i izravno, u drugom licu jednine; najviše 150 riječi, običan tekst bez markdowna;
+- konkretno za njegovu situaciju, uz poštovanje njegovih bilješki i odluka;
+- kod znakova bolesti, ozljede ili boli savjetuj odmor i, kad treba, liječnika; ne postavljaj dijagnoze.
+
+Promjene plana (polje changes):
+- predloži ih samo kad sportaš traži promjenu ili kad je jasno potrebna (bolest, umor, put), inače vrati prazan popis;
+- session_id mora biti jedan od navedenih treninga iz plana, a workout_id jedan od navedenih mogućih treninga (ili null);
+- replace: zamijeni trening drugim (workout_id); skip: preskoči (npr. bolest, ili zamjena trčanjem ili plivanjem izvan Pedale; workout_id null); restore: vrati izvorni trening (workout_id null);
+- ne mijenjaj treninge koji su već odrađeni; reason kratko objašnjava zašto;
+- u odgovoru reci što predlažeš: promjene se primjenjuju tek kad ih sportaš potvrdi u aplikaciji.`;
+
+const ASK_SCHEMA = { type: "object", additionalProperties: false, required: ["answer", "changes"], properties: {
+  answer: { type: "string" },
+  changes: { type: "array", items: { type: "object", additionalProperties: false, required: ["session_id", "action", "workout_id", "reason"], properties: {
+    session_id: { type: "string" }, action: { type: "string", enum: ["replace", "skip", "restore"] },
+    workout_id: { anyOf: [{ type: "string" }, { type: "null" }] }, reason: { type: "string" } } } } } };
+
 module.exports = async (req, res) => {
   res.setHeader("cache-control", "no-store");
   const enabled = !!process.env.ANTHROPIC_API_KEY;
@@ -44,8 +67,9 @@ module.exports = async (req, res) => {
         id: String(a.id), type: a.type || "", name: a.name || "", start: a.start_date_local || "", external_id: a.external_id || null,
         minutes: a.moving_time ? Math.round(a.moving_time / 60) : null })) });
     }
-    if(b.action !== "comment") return res.status(400).json({ error: "Nepoznata akcija" });
+    if(b.action !== "comment" && b.action !== "ask") return res.status(400).json({ error: "Nepoznata akcija" });
     if(!enabled) return res.status(501).json({ error: "Trener nije uključen: na Vercelu dodaj ANTHROPIC_API_KEY i napravi Redeploy." });
+    if(b.action === "ask") return ask(b, icuKey, res);
     if(!b.ride && !b.icuId) return res.status(400).json({ error: "Nema treninga za komentar" });
 
     // what the coach looks at; intervals.icu parts are optional (no key, or the service is down)
@@ -55,46 +79,78 @@ module.exports = async (req, res) => {
     let exclude = null;
     if(b.ride){ parts.push(section("Trening koji komentiraš (Pedala, trenažer)", trimRide(b.ride))); exclude = b.ride.id; }
     if(icuKey){
-      const [acts, well, one] = await Promise.all([
-        icu(icuKey, `/athlete/0/activities?oldest=${ymd(Date.now() - 42 * DAY)}&newest=${ymd(Date.now() + DAY)}`).catch(() => null),
-        icu(icuKey, `/athlete/0/wellness?oldest=${ymd(Date.now() - 14 * DAY)}&newest=${ymd(Date.now())}`).catch(() => null),
-        b.icuId ? icu(icuKey, `/activity/${encodeURIComponent(b.icuId)}?intervals=true`).catch(() => null) : null,
-      ]);
+      const ctx = await icuContext(icuKey, b.icuId);
       if(b.icuId){
-        if(!one) return res.status(404).json({ error: "Trening nije pronađen na intervals.icu" });
-        parts.push(section("Trening koji komentiraš (intervals.icu)", trimIcuActivity(one)));
+        if(!ctx.one) return res.status(404).json({ error: "Trening nije pronađen na intervals.icu" });
+        parts.push(section("Trening koji komentiraš (intervals.icu)", trimIcuActivity(ctx.one)));
       }
-      if(Array.isArray(acts)) parts.push(section("Svi treninzi zadnjih 6 tjedana (intervals.icu)",
-        acts.filter(a => String(a.id) !== String(b.icuId) && (!exclude || a.external_id !== exclude)).map(a => pick({
-          datum: a.start_date_local, vrsta: a.type, naziv: a.name, min: a.moving_time && Math.round(a.moving_time / 60),
-          km: a.distance && +(a.distance / 1000).toFixed(1), opterecenje: a.icu_training_load, puls: a.average_heartrate,
-          snaga: a.icu_average_watts || a.average_watts }, null))));
-      if(Array.isArray(well)) parts.push(section("Forma i oporavak (intervals.icu wellness, po danima)", well.map(w => pick({
-        datum: w.id, kondicija: w.ctl && Math.round(w.ctl), umor: w.atl && Math.round(w.atl), puls_mirovanje: w.restingHR, hrv: w.hrv,
-        san_h: w.sleepSecs && +(w.sleepSecs / 3600).toFixed(1), tezina: w.weight }, null))));
+      parts.push(...ctx.parts(a => String(a.id) !== String(b.icuId) && (!exclude || a.external_id !== exclude)));
     } else if(b.icuId) return res.status(401).json({ error: "Za treninge s intervals.icu treba intervals.icu ključ" });
 
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const msg = await client.beta.messages.create({
-      model: MODEL,
-      max_tokens: 4000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",                       // a declined request is retried on a fallback model
-      output_config: { effort: "medium" },
-      system: SYSTEM,
-      messages: [{ role: "user", content: parts.join("\n\n") + "\n\nNapiši komentar." }],
-    });
+    const msg = await claude({ system: SYSTEM, content: parts.join("\n\n") + "\n\nNapiši komentar." });
     if(msg.stop_reason === "refusal") return res.status(422).json({ error: "Trener ovaj put nije napisao komentar" });
     const text = msg.content.filter(c => c.type === "text").map(c => c.text).join("\n").trim();
     if(!text) return res.status(502).json({ error: "Trener je vratio prazan komentar" });
     return res.status(200).json({ text, model: msg.model });
-  }catch(e){
-    if(e instanceof Anthropic.AuthenticationError) return res.status(500).json({ error: "Anthropic ne prihvaća ANTHROPIC_API_KEY" });
-    if(e instanceof Anthropic.RateLimitError) return res.status(429).json({ error: "Trener je trenutno zauzet, probaj kasnije" });
-    if(e instanceof Anthropic.APIError) return res.status(502).json({ error: `Anthropic greška ${e.status ?? ""}: ${e.message}`.slice(0, 300) });
-    return res.status(502).json({ error: "Trener nije dostupan: " + e.message });
-  }
+  }catch(e){ return apiError(res, e); }
 };
+
+/* a question outside a session, with the plan, so the coach can propose changes the app applies on confirmation */
+async function ask(b, icuKey, res){
+  const q = String(b.question || "").trim().slice(0, 2000);
+  if(!q) return res.status(400).json({ error: "Nema pitanja" });
+  const parts = [section("Sportaš", { ...pick(b.athlete || {}, ["ftp", "maxHr", "weight"]), danas: ymd(Date.now()) })];
+  if(b.notes) parts.push(`## Sportaševe bilješke\n${String(b.notes).slice(0, 2000)}`);
+  if(b.plan) parts.push(section("Plan: treninzi koje možeš mijenjati (session_id) i njihovo stanje", b.plan.sessions || []),
+    section("Mogući treninzi za zamjenu (workout_id)", b.plan.options || []));
+  else parts.push("## Plan\nSportaš trenutno nema pokrenut plan, pa promjene plana nisu moguće.");
+  if(Array.isArray(b.rides) && b.rides.length) parts.push(section("Vožnje u Pedali zadnja 3 tjedna", b.rides.slice(0, 30)));
+  if(icuKey){ const ctx = await icuContext(icuKey); parts.push(...ctx.parts(() => true)); }
+  if(Array.isArray(b.comments) && b.comments.length) parts.push(section("Tvoji zadnji komentari treninga", b.comments.slice(0, 5)));
+  if(Array.isArray(b.chat) && b.chat.length) parts.push(section("Dosadašnji razgovor (od starijeg prema novijem)", b.chat.slice(-8)));
+  const msg = await claude({ system: SYSTEM_ASK, content: parts.join("\n\n") + "\n\n## Sportaš sada piše\n" + q, format: ASK_SCHEMA });
+  if(msg.stop_reason === "refusal") return res.status(422).json({ error: "Trener ovaj put nije odgovorio" });
+  let out; try{ out = JSON.parse(msg.content.filter(c => c.type === "text").map(c => c.text).join("")); }catch{ return res.status(502).json({ error: "Trener je vratio neispravan odgovor" }); }
+  const ids = new Set((b.plan?.sessions || []).map(x => x.id)), opts = new Set((b.plan?.options || []).map(x => x.id));
+  const changes = (out.changes || []).filter(c => ids.has(c.session_id) && (c.action !== "replace" || opts.has(c.workout_id)));   // only what the app can apply
+  return res.status(200).json({ answer: String(out.answer || "").trim(), changes, model: msg.model });
+}
+
+async function claude({ system, content, format }){
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  return client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 4000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",                         // a declined request is retried on a fallback model
+    output_config: { effort: "medium", ...(format ? { format: { type: "json_schema", schema: format } } : {}) },
+    system,
+    messages: [{ role: "user", content }],
+  });
+}
+function apiError(res, e){
+  if(e instanceof Anthropic.AuthenticationError) return res.status(500).json({ error: "Anthropic ne prihvaća ANTHROPIC_API_KEY" });
+  if(e instanceof Anthropic.RateLimitError) return res.status(429).json({ error: "Trener je trenutno zauzet, probaj kasnije" });
+  if(e instanceof Anthropic.APIError) return res.status(502).json({ error: `Anthropic greška ${e.status ?? ""}: ${e.message}`.slice(0, 300) });
+  return res.status(502).json({ error: "Trener nije dostupan: " + e.message });
+}
+/* the last six weeks of activities and two weeks of wellness from intervals.icu (each part optional) */
+async function icuContext(key, oneId){
+  const [acts, well, one] = await Promise.all([
+    icu(key, `/athlete/0/activities?oldest=${ymd(Date.now() - 42 * DAY)}&newest=${ymd(Date.now() + DAY)}`).catch(() => null),
+    icu(key, `/athlete/0/wellness?oldest=${ymd(Date.now() - 14 * DAY)}&newest=${ymd(Date.now())}`).catch(() => null),
+    oneId ? icu(key, `/activity/${encodeURIComponent(oneId)}?intervals=true`).catch(() => null) : null,
+  ]);
+  return { one, parts: keep => [
+    Array.isArray(acts) && section("Svi treninzi zadnjih 6 tjedana (intervals.icu)", acts.filter(keep).map(a => pick({
+      datum: a.start_date_local, vrsta: a.type, naziv: a.name, min: a.moving_time && Math.round(a.moving_time / 60),
+      km: a.distance && +(a.distance / 1000).toFixed(1), opterecenje: a.icu_training_load, puls: a.average_heartrate,
+      snaga: a.icu_average_watts || a.average_watts }, null))),
+    Array.isArray(well) && section("Forma i oporavak (intervals.icu wellness, po danima)", well.map(w => pick({
+      datum: w.id, kondicija: w.ctl && Math.round(w.ctl), umor: w.atl && Math.round(w.atl), puls_mirovanje: w.restingHR, hrv: w.hrv,
+      san_h: w.sleepSecs && +(w.sleepSecs / 3600).toFixed(1), tezina: w.weight }, null))),
+  ].filter(Boolean) };
+}
 
 async function icu(key, path){
   const r = await fetch(ICU + path, { headers: { Authorization: "Basic " + Buffer.from("API_KEY:" + key).toString("base64") } });

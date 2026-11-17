@@ -668,7 +668,7 @@ const fmtTime = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s/36
   return h ? `${h}:${String(m).padStart(2,"0")}:${String(x).padStart(2,"0")}` : `${m}:${String(x).padStart(2,"0")}`; };
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),2600); }
 /* keys shared between devices through api/sync.js; each change is time-stamped so the newest one wins */
-const SYNCED = ["settings", "plan", "workouts", "routes", "ytChannels", "ytPlaylists", "coach"];
+const SYNCED = ["settings", "plan", "workouts", "routes", "ytChannels", "ytPlaylists", "coach", "coachChat"];
 const store = {
   get(k, d){ try{ const v = localStorage.getItem("pedala."+k); return v==null ? d : JSON.parse(v); }catch{ return d; } },
   set(k, v){
@@ -860,6 +860,10 @@ const EN = new Map(Object.entries({
   "Komentari će se pojaviti nakon sljedećeg treninga.": "Comments will show up after your next session.", "Trener piše komentar…": "The coach is writing…",
   "Komentar nije uspio": "Comment failed", "Pokušaj ponovno": "Try again", "Komentar trenera": "Coach's comment",
   "Trener je komentirao vožnju (Napredak → Trener)": "The coach commented on your ride (Progress → Coach)",
+  "Pitaj trenera": "Ask the coach", "Pošalji": "Send", "Komentari treninga": "Session comments", "Ti": "You", "Trener piše odgovor…": "The coach is writing…",
+  "Odgovor nije uspio": "No answer", "Prijedlog promjene plana": "Proposed plan change", "Primijeni": "Apply", "Primijenjeno": "Applied", "Plan je promijenjen": "Plan changed",
+  "zamijeni s": "swap for", "preskoči": "skip", "vrati izvorni trening": "restore the original session", "Vrati izvorni": "Restore original", "zamjena": "swapped",
+  "Pitaj trenera ili zatraži promjenu plana, npr. prehlađen sam, što s ovim tjednom?": "Ask the coach or ask for a plan change, e.g. I have a cold, what about this week?",
   "Ključ je postavljen na Vercelu (INTERVALS_API_KEY). Klikni Spremi i provjeri za provjeru.": "The key is set on Vercel (INTERVALS_API_KEY). Click Save and check to test it.",
   "Nije povezano.": "Not connected.", "Ključ je upisan, ali još nije provjeren.": "The key is entered but not checked yet.",
   "intervals.icu odspojen": "intervals.icu disconnected", "intervals.icu povezan": "intervals.icu connected", "intervals.icu ne prihvaća ovaj API ključ": "intervals.icu does not accept this API key",
@@ -2398,20 +2402,81 @@ function coachNoteHtml(n){
 }
 function renderCoachBox(){
   const box = $("#coach-box"); if(!box) return;
-  const list = Object.entries(coachNotes()).sort((a, b) => (b[1].date || b[1].at) - (a[1].date || a[1].at)).slice(0, 10);
-  let html = `<h2 class="section-title" style="margin-top:6px">Trener</h2>`;
-  if(!coachServer && !list.length) html += `<p class="note">Trener nije uključen. Upute su u Postavkama, kod Virtualnog trenera.</p>`;
-  else if(!list.length) html += `<p class="note">Komentari će se pojaviti nakon sljedećeg treninga.</p>`;
-  else html += `<div class="list">` + list.map(([k, n]) => `<div class="item" data-k="${k}"><div><h3></h3>${coachNoteHtml(n)}</div>${n.error && coachServer ? `<div class="acts"><button class="btn small" data-retry>Pokušaj ponovno</button></div>` : ""}</div>`).join("") + `</div>`;
-  box.innerHTML = html;
-  box.querySelectorAll("[data-k]").forEach(el => {
-    const k = el.dataset.k, n = coachNotes()[k];
-    el.querySelector("h3").textContent = `${tr(n.title || "Trening")} · ${coachDate(n.date || n.at)}`;
-    el.querySelector("[data-retry]")?.addEventListener("click", async () => {
+  if(!box.dataset.ready){   // built once, so a refresh never wipes a question being typed
+    box.dataset.ready = 1;
+    box.innerHTML = `<h2 class="section-title" style="margin-top:6px">Trener</h2>
+      <form class="field" id="coach-form" style="align-items:flex-end;margin-bottom:12px"><textarea id="coach-q" rows="3" placeholder="Pitaj trenera ili zatraži promjenu plana, npr. prehlađen sam, što s ovim tjednom?"
+        style="flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit;resize:vertical"></textarea><button class="btn" type="submit">Pošalji</button></form>
+      <div id="coach-thread" class="list" style="margin-bottom:16px"></div><h3 class="vsect">Komentari treninga</h3><div id="coach-list"></div>`;
+    $("#coach-form").onsubmit = e => { e.preventDefault(); const q = $("#coach-q").value.trim(); if(!q) return; $("#coach-q").value = ""; coachQuestion(q).catch(() => {}); };
+    $("#coach-q").addEventListener("keydown", e => { if(e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#coach-form").requestSubmit(); });
+  }
+  $("#coach-form").hidden = !coachServer;
+  const list = Object.entries(coachNotes()).sort((a, b) => (b[1].date || b[1].at) - (a[1].date || a[1].at)).slice(0, 10), el = $("#coach-list");
+  if(!coachServer && !list.length) el.innerHTML = `<p class="note">Trener nije uključen. Upute su u Postavkama, kod Virtualnog trenera.</p>`;
+  else if(!list.length) el.innerHTML = `<p class="note">Komentari će se pojaviti nakon sljedećeg treninga.</p>`;
+  else el.innerHTML = `<div class="list">` + list.map(([k, n]) => `<div class="item" data-k="${k}"><div><h3></h3>${coachNoteHtml(n)}</div>${n.error && coachServer ? `<div class="acts"><button class="btn small" data-retry>Pokušaj ponovno</button></div>` : ""}</div>`).join("") + `</div>`;
+  el.querySelectorAll("[data-k]").forEach(item => {
+    const k = item.dataset.k, n = coachNotes()[k];
+    item.querySelector("h3").textContent = `${tr(n.title || "Trening")} · ${coachDate(n.date || n.at)}`;
+    item.querySelector("[data-retry]")?.addEventListener("click", async () => {
       if(k.startsWith("icu:")) coachAsk(k, { icuId: k.slice(4) }, n.title, n.date).catch(() => {});
       else { const r = (await dbAll()).find(x => "ride:" + x.id === k); if(r) coachRide(r).catch(() => {}); }
     });
   });
+  renderCoachThread();
+}
+/* ---- questions outside a session; the coach may propose plan changes, applied when the rider confirms ---- */
+const coachChat = () => store.get("coachChat", []);
+function saveChat(fn){ const c = coachChat(); fn(c); store.set("coachChat", c.slice(-20)); }
+const esc = t => String(t).replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]);
+async function coachQuestion(q){
+  const at = Date.now(); saveChat(c => c.push({ q, at, pending: true })); renderCoachThread();
+  const p = plan(), now = Date.now();
+  const sessions = p ? planSessions(p).filter(x => x.date >= now - 7 * 864e5 && x.date <= now + 21 * 864e5).map(x => ({ id: x.id, datum: x.d, dan: x.day, tjedan: x.week,
+    trening: x.w.name, workout_id: x.w.id, min: woMin(x.w), stanje: x.done ? "odrađen" : x.skipped ? "preskočen" : x.past ? "propušten" : x.today ? "danas" : "predstoji", zamijenjen: x.swapped || undefined })) : null;
+  const options = [...new Map([...Object.values(PLAN_WO), ...BUILTIN].map(w => [w.id, w])).values()]
+    .map(w => ({ id: w.id, naziv: w.name, min: woMin(w), vrsta: w.cat, opis: String(w.desc || "").slice(0, 140) }));
+  let rides = []; try{ rides = (await dbAll()).filter(r => r.start > now - 21 * 864e5).sort((a, b) => b.start - a.start)
+    .map(r => ({ datum: ymd(new Date(r.start)), naziv: r.name, min: Math.round(r.m.duration / 60), tss: r.m.tss, snaga: r.m.avgP, puls: r.m.avgHr || undefined })); }catch{}
+  const comments = Object.values(coachNotes()).filter(n => n.text).sort((a, b) => (b.date || b.at) - (a.date || a.at)).slice(0, 5)
+    .map(n => ({ trening: n.title, datum: ymd(new Date(n.date || n.at)), komentar: n.text }));
+  const chat = coachChat().filter(x => x.a).slice(-4).flatMap(x => [{ sportas: x.q }, { trener: x.a }]);
+  try{
+    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "ask", question: q, icuKey: icuKey() || undefined,
+      notes: settings.coachAbout || "", athlete: { ftp: settings.ftp, maxHr: settings.maxHr, weight: settings.weight }, plan: p ? { sessions, options } : null, rides, comments, chat }) });
+    const j = await r.json().catch(() => ({}));
+    if(!r.ok) throw new Error(j.error || "greška " + r.status);
+    saveChat(c => { const x = c.find(y => y.at === at); if(x){ delete x.pending; x.a = j.answer; x.changes = j.changes || []; } });
+  }catch(e){ saveChat(c => { const x = c.find(y => y.at === at); if(x){ delete x.pending; x.error = e.message; } }); }
+  renderCoachThread();
+}
+function changeText(c){
+  const x = planSessions().find(s => s.id === c.session_id), w = c.workout_id && findWorkout(c.workout_id);
+  const where = x ? `${tr(x.label)} ${shortDate(x.date)} · ${x.w.name}` : c.session_id;
+  const what = c.action === "replace" ? `${tr("zamijeni s")} „${w?.name || c.workout_id}“` : c.action === "skip" ? tr("preskoči") : tr("vrati izvorni trening");
+  return `<b>${esc(where)}</b>: ${esc(what)}${c.reason ? ` <span data-notr>(${esc(c.reason)})</span>` : ""}`;
+}
+function applyChanges(at){
+  const x = coachChat().find(y => y.at === at); if(!x?.changes?.length || !plan()) return;
+  planUpdate(p => { for(const c of x.changes){
+    if(c.action === "replace"){ p.swap = { ...p.swap, [c.session_id]: c.workout_id }; if(p.skipped) delete p.skipped[c.session_id]; }
+    else if(c.action === "skip") p.skipped = { ...p.skipped, [c.session_id]: true };
+    else { if(p.swap) delete p.swap[c.session_id]; if(p.skipped) delete p.skipped[c.session_id]; }
+  } });
+  saveChat(c => { const y = c.find(z => z.at === at); if(y) y.applied = Date.now(); });
+  toast(tr("Plan je promijenjen")); renderCoachThread();
+}
+function renderCoachThread(){
+  const el = $("#coach-thread"); if(!el) return;
+  const items = coachChat().slice(-5).reverse();
+  el.innerHTML = items.map(x => `<div class="item" data-at="${x.at}"><div>
+      <p data-notr style="white-space:pre-line;margin:0"><b style="color:var(--text)">${tr("Ti")}:</b> ${esc(x.q)}</p>
+      ${x.pending ? `<p>${tr("Trener piše odgovor…")}</p>` : x.error ? `<p style="color:var(--z5)">${tr("Odgovor nije uspio")}: ${esc(x.error)}</p>`
+        : `<p data-notr style="white-space:pre-line;color:var(--text);margin:6px 0 0"><b>${tr("Trener")}:</b> ${esc(x.a)}</p>`}
+      ${x.changes?.length ? `<p style="margin-top:8px">${tr("Prijedlog promjene plana")}:</p><ul style="margin:4px 0 0;padding-left:18px;color:var(--muted);font-size:14px">${x.changes.map(c => `<li>${changeText(c)}</li>`).join("")}</ul>` : ""}
+    </div>${x.changes?.length ? `<div class="acts">${x.applied ? `<span class="note">${tr("Primijenjeno")} ✓</span>` : `<button class="btn small primary" data-apply>${tr("Primijeni")}</button>`}</div>` : ""}</div>`).join("");
+  el.querySelectorAll("[data-apply]").forEach(b => b.onclick = () => applyChanges(+b.closest("[data-at]").dataset.at));
 }
 function renderRepCoach(r){
   const box = $("#rep-coach"); if(!box) return; box.dataset.ride = r.id;
@@ -2486,8 +2551,9 @@ function planSessions(p = plan()){
   if(!p) return [];
   const start = fromYmd(p.start), today = ymd(new Date()), out = [];
   PLAN.weeks.forEach((wk, i) => PLAN_DAYS.forEach(([day, off, label], j) => {
-    const date = plusDays(start, i * 7 + off), w = PLAN_WO[wk[j].startsWith("b-") ? wk[j] : "p-" + wk[j]], id = `w${i + 1}-${day}`, d = ymd(date);
-    out.push({ id, week: i + 1, day, label, date, d, w, done: !!p.done?.[id], skipped: !!p.skipped?.[id], today: d === today, past: d < today });
+    const date = plusDays(start, i * 7 + off), id = `w${i + 1}-${day}`, d = ymd(date), orig = PLAN_WO[wk[j].startsWith("b-") ? wk[j] : "p-" + wk[j]];
+    const sw = p.swap?.[id] && findWorkout(p.swap[id]), w = sw || orig;   // swapped for another workout (by the coach or by hand)
+    out.push({ id, week: i + 1, day, label, date, d, w, swapped: !!sw, done: !!p.done?.[id], skipped: !!p.skipped?.[id], today: d === today, past: d < today });
   }));
   return out;
 }
@@ -2538,7 +2604,7 @@ function renderPlan(){
       </div>
       <div class="row"><button class="btn" id="plan-ics">Preuzmi kalendar (.ics)</button></div>
       <p style="margin-top:10px">Google Kalendar kod uvoza zanemaruje podsjetnike iz datoteke, pa ga postavi ovako: na računalu u Google Kalendaru napravi novi kalendar <b>Pedala</b>, u njegovim postavkama pod <b>Obavijesti o događajima</b> dodaj obavijest (npr. 2 sata prije), pa <b>Postavke → Uvoz i izvoz</b> uvezi datoteku u kalendar Pedala. Samsung Kalendar i Outlook čitaju podsjetnik iz same datoteke.</p></div>
-    <div class="plan-card"><div class="row" style="margin-top:0"><button class="btn small" id="plan-restart">Promijeni početak</button><button class="btn small danger" id="plan-stop">Završi plan</button></div></div>`;
+    <div class="plan-card"><div class="row" style="margin-top:0"><button class="btn small" id="plan-ask">Pitaj trenera</button><button class="btn small" id="plan-restart">Promijeni početak</button><button class="btn small danger" id="plan-stop">Završi plan</button></div></div>`;
   const weeks = $("#plan-weeks");
   PLAN.weeks.forEach((_, i) => {
     const wk = ss.filter(x => x.week === i + 1), el = document.createElement("div");
@@ -2557,15 +2623,17 @@ function renderPlan(){
   const saveTimes = () => planUpdate(q => { q.times = { wk: $("#plan-twk").value || "18:00", sun: $("#plan-tsun").value || "09:00" }; q.remind = +$("#plan-remind").value; });
   ["#plan-twk", "#plan-tsun", "#plan-remind"].forEach(id => $(id).onchange = saveTimes);
   $("#plan-ics").onclick = () => downloadIcs();
+  $("#plan-ask").onclick = () => { showView("progress"); setTimeout(() => { $("#coach-q")?.focus(); $("#coach-box")?.scrollIntoView({ block: "start" }); }, 50); };
   $("#plan-restart").onclick = () => { const v = prompt(tr("Novi početak plana (GGGG-MM-DD, ponedjeljak):"), p.start); if(v && /^\d{4}-\d{2}-\d{2}$/.test(v)) planUpdate(q => { q.start = v; }); };
   $("#plan-stop").onclick = () => { if(confirm(tr("Završiti plan? Vožnje ostaju u Povijesti."))){ store.set("plan", null); renderPlan(); } };
 }
 function openSession(x){
   $("#sess-title").textContent = x.w.name;
-  $("#sess-sub").textContent = `${shortDay(x.date)} · tjedan ${x.week} · ${woMin(x.w)} min${x.done ? " · odrađeno" : x.skipped ? " · preskočeno" : ""} — ${x.w.desc}`;
+  $("#sess-sub").textContent = `${shortDay(x.date)} · tjedan ${x.week} · ${woMin(x.w)} min${x.swapped ? " · zamjena" : ""}${x.done ? " · odrađeno" : x.skipped ? " · preskočeno" : ""} — ${x.w.desc}`;
   const acts = $("#sess-acts"); acts.innerHTML = "";
   const add = (label, cls, fn) => { const b = document.createElement("button"); b.className = "btn " + cls; b.textContent = label; b.onclick = () => { fn(); $("#dlg-sess").close(); }; acts.append(b); };
   add("Zatvori", "", () => {});
+  if(x.swapped && !x.done) add("Vrati izvorni", "", () => planUpdate(p => { delete p.swap[x.id]; }));
   if(x.done || x.skipped) add("Poništi", "", () => planUpdate(p => { delete p.done[x.id]; delete p.skipped[x.id]; }));
   else { add("Preskoči", "", () => planUpdate(p => { p.skipped = { ...p.skipped, [x.id]: true }; })); add("Označi odrađeno", "", () => planUpdate(p => { p.done = { ...p.done, [x.id]: true }; })); }
   add("Vozi", "primary", () => rideSession(x));

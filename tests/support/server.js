@@ -64,6 +64,13 @@ const claude = [];
 async function fakeClaude(url, opt){
   const body = JSON.parse(opt.body); claude.push(body);
   log.push(`claude ${body.model} ${body.messages[0].content.length} chars`);
+  if(body.output_config?.format){   // a question: propose swapping the first listed session for active recovery, plus one invalid change
+    const id = body.messages[0].content.match(/"id":"(w\d+-\w+)"/)?.[1];
+    const out = { answer: "Odmori se. Predlažem lagani oporavak umjesto ovog treninga.", changes: [
+      { session_id: id, action: "replace", workout_id: "p-rec", reason: "prehlada" }, { session_id: "w99-xyz", action: "skip", workout_id: null, reason: "ne postoji" }] };
+    return J({ id: "msg_q", type: "message", role: "assistant", model: body.model, stop_reason: "end_turn", stop_details: null,
+      content: [{ type: "text", text: JSON.stringify(out) }], usage: { input_tokens: 5000, output_tokens: 300 } });
+  }
   return J({ id: "msg_test", type: "message", role: "assistant", model: body.model, stop_reason: "end_turn", stop_details: null,
     content: [{ type: "thinking", thinking: "", signature: "x" }, { type: "text", text: "Dobar trening. Puls je stabilan, nastavi ovako." }],
     usage: { input_tokens: 3000, output_tokens: 400 } });
