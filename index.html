@@ -531,6 +531,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
     <div class="scroll"><div class="wrap">
       <h1>Napredak</h1>
       <p class="lead">Računa se iz vožnji spremljenih u ovom pregledniku.</p>
+      <div id="coach-box"></div>
       <div id="pg-empty" class="list" hidden><div class="item"><div><h3>Još nema vožnji</h3><p>Spremi nekoliko vožnji i ovdje ćeš vidjeti formu, volumen i najbolje snage.</p></div></div></div>
       <div id="pg-body">
         <div class="weekbar" id="pg-totals"></div>
@@ -581,6 +582,12 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <div class="field" style="max-width:520px;margin:10px 0"><input id="icu-key" type="text" autocomplete="off" spellcheck="false" placeholder="API ključ" aria-label="intervals.icu API ključ"><button class="btn small" id="btn-icu" type="button">Spremi i provjeri</button></div>
       <p class="note" id="icu-status"></p>
       <label class="check note" style="display:flex"><input type="checkbox" id="icu-auto"> Automatski pošalji svaku spremljenu vožnju na intervals.icu</label>
+      <h2 class="section-title">Virtualni trener</h2>
+      <p class="note">Nakon svakog treninga Claude (Anthropic) napiše kratak komentar na hrvatskom: na vožnje iz Pedale i na sve ostalo što stigne na intervals.icu, npr. trčanje i plivanje sa sata. Komentari su u Napretku i u izvještaju vožnje.</p>
+      <p class="note" id="coach-status"></p>
+      <label class="check note" style="display:flex"><input type="checkbox" id="coach-auto"> Komentiraj svaki trening automatski</label>
+      <label class="note" style="display:block;max-width:520px;margin-top:10px">Bilješke za trenera (visina, ciljevi, ozljede, što želiš pratiti)
+        <textarea id="coach-about" rows="4" style="display:block;width:100%;margin-top:5px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit;resize:vertical"></textarea></label>
       <h2 class="section-title">Sinkronizacija</h2>
       <p class="note" id="sync-status">Provjeravam…</p>
       <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" type="button" id="btn-sync">Sinkroniziraj sada</button></div>
@@ -630,6 +637,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
   <h2 id="rep-title"></h2>
   <p id="rep-sub"></p>
   <div class="sum" id="rep-grid"></div>
+  <div id="rep-coach"></div>
   <div id="rep-body"></div>
   <div class="dlg-acts" style="margin-top:16px"><button class="btn" data-close>Zatvori</button></div>
 </dialog>
@@ -660,7 +668,7 @@ const fmtTime = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s/36
   return h ? `${h}:${String(m).padStart(2,"0")}:${String(x).padStart(2,"0")}` : `${m}:${String(x).padStart(2,"0")}`; };
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),2600); }
 /* keys shared between devices through api/sync.js; each change is time-stamped so the newest one wins */
-const SYNCED = ["settings", "plan", "workouts", "routes", "ytChannels", "ytPlaylists"];
+const SYNCED = ["settings", "plan", "workouts", "routes", "ytChannels", "ytPlaylists", "coach"];
 const store = {
   get(k, d){ try{ const v = localStorage.getItem("pedala."+k); return v==null ? d : JSON.parse(v); }catch{ return d; } },
   set(k, v){
@@ -841,6 +849,17 @@ const EN = new Map(Object.entries({
   "Besplatan servis za analizu treninga. Na intervals.icu otvori": "A free training analysis service. On intervals.icu open", ", stvori": ", create an", "i zalijepi ga ovdje.": "and paste it here.",
   "API ključ": "API key", "intervals.icu API ključ": "intervals.icu API key", "Spremi i provjeri": "Save and check", "Provjeravam…": "Checking…",
   "Automatski pošalji svaku spremljenu vožnju na intervals.icu": "Send every saved ride to intervals.icu automatically",
+  "Virtualni trener": "Virtual coach", "Trener": "Coach", "Komentiraj svaki trening automatski": "Comment on every session automatically",
+  "Nakon svakog treninga Claude (Anthropic) napiše kratak komentar na hrvatskom: na vožnje iz Pedale i na sve ostalo što stigne na intervals.icu, npr. trčanje i plivanje sa sata. Komentari su u Napretku i u izvještaju vožnje.":
+    "After every session Claude (Anthropic) writes a short comment in Croatian: on rides from Pedala and on everything else that reaches intervals.icu, such as runs and swims from a watch. Comments are under Progress and in the ride report.",
+  "Bilješke za trenera (visina, ciljevi, ozljede, što želiš pratiti)": "Notes for the coach (height, goals, injuries, what you want to track)",
+  "Trener je uključen (ANTHROPIC_API_KEY je postavljen na Vercelu). Za ostale treninge treba i intervals.icu ključ.": "The coach is on (ANTHROPIC_API_KEY is set on Vercel). Other activities also need an intervals.icu key.",
+  "Trener nije uključen. Na": "The coach is off. On", "napravi API ključ, na Vercelu ga dodaj kao": "create an API key, add it on Vercel as", "i napravi": "and",
+  ". Jedan komentar stoji oko 6 centi, a mjesečni limit potrošnje postavi u Consoleu.": ". One comment costs about 6 cents; set a monthly spend limit in the Console.",
+  "Trener nije uključen. Upute su u Postavkama, kod Virtualnog trenera.": "The coach is off. See Settings → Virtual coach.",
+  "Komentari će se pojaviti nakon sljedećeg treninga.": "Comments will show up after your next session.", "Trener piše komentar…": "The coach is writing…",
+  "Komentar nije uspio": "Comment failed", "Pokušaj ponovno": "Try again", "Komentar trenera": "Coach's comment",
+  "Trener je komentirao vožnju (Napredak → Trener)": "The coach commented on your ride (Progress → Coach)",
   "Ključ je postavljen na Vercelu (INTERVALS_API_KEY). Klikni Spremi i provjeri za provjeru.": "The key is set on Vercel (INTERVALS_API_KEY). Click Save and check to test it.",
   "Nije povezano.": "Not connected.", "Ključ je upisan, ali još nije provjeren.": "The key is entered but not checked yet.",
   "intervals.icu odspojen": "intervals.icu disconnected", "intervals.icu povezan": "intervals.icu connected", "intervals.icu ne prihvaća ovaj API ključ": "intervals.icu does not accept this API key",
@@ -2156,6 +2175,7 @@ function chart(cv, min, max, fmt = v => Math.round(v)){
 }
 let progressRides = [];
 async function renderProgress(){
+  renderCoachBox();
   try{ progressRides = await dbAll(); }catch(e){ console.warn(e); progressRides = []; }
   progressRides.sort((a, b) => a.start - b.start);
   drawProgress();
@@ -2310,6 +2330,109 @@ $("#icu-key").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preven
 $("#icu-auto").onchange = e => { settings.icuAuto = e.target.checked; store.set("settings", settings); };
 window.addEventListener("online", () => syncIcu());
 document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") syncIcu(); });
+
+/* ============ virtual coach (api/coach.js, Claude) ============
+   After every training session the coach writes a short comment: rides saved in Pedala right after saving, and every
+   other activity that reaches intervals.icu (runs and swims from a watch…) when the app opens. Comments are kept in
+   store "coach" (shared between devices) as { "ride:<id>" | "icu:<id>": { text | error | pending, at, title, date } }. */
+let coachServer = false;                                   // ANTHROPIC_API_KEY is set on Vercel
+const coachOn = () => coachServer && settings.coachAuto !== false;
+const coachNotes = () => store.get("coach", {});
+function saveCoachNote(key, note){
+  const all = { ...coachNotes(), [key]: note };
+  const keep = Object.entries(all).sort((a, b) => (b[1].date || b[1].at) - (a[1].date || a[1].at)).slice(0, 80);
+  store.set("coach", Object.fromEntries(keep));
+}
+/* a ride as the coach sees it: summary, laps and power, cadence and heart rate minute by minute */
+function coachRidePayload(r){
+  const n = r.samples.length, step = n > 7200 ? 120 : 60, rows = [];
+  for(let i = 0; i < n; i += step){ const s = r.samples.slice(i, i + step), hr = s.filter(x => x[3]);
+    rows.push([Math.round(i / 60), Math.round(s.reduce((a, x) => a + x[1], 0) / s.length), Math.round(s.reduce((a, x) => a + x[2], 0) / s.length), hr.length ? Math.round(hr.reduce((a, x) => a + x[3], 0) / hr.length) : null]); }
+  const w = findWorkout(r.workoutId), sess = planSessions().find(x => plan()?.done?.[x.id] === r.id);
+  const { best, ...m } = r.m;
+  return { id: r.id, name: r.name, start: new Date(r.start).toISOString(), desc: w?.desc, route: r.route || undefined, ftp: r.ftp, maxHr: r.maxHr,
+    plan: sess ? { tjedan: sess.week, dan: sess.day, trening: sess.w.name } : undefined,
+    m: { ...m, trajanje_min: Math.round(m.duration / 60), najbolje_w: best },
+    laps: (r.laps || []).filter(l => l.dur >= 20).map(l => ({ naziv: l.name, s: l.dur, snaga: l.avgP, cilj: l.tgt, vrsta_cilja: l.kind, ostvareno_posto: l.score,
+      puls: l.avgHr || null, kadenca: l.avgCad, cilj_kadenca: l.cadTgt, uputa: l.note })),
+    minutes: { korak_s: step, stupci: ["min", "W", "rpm", "bpm"], podaci: rows } };
+}
+async function coachAsk(key, payload, title, date){
+  const old = coachNotes()[key]; if(old?.pending && Date.now() - old.at < 3 * 60000) return null;
+  saveCoachNote(key, { pending: true, at: Date.now(), title, date }); renderCoachViews();
+  try{
+    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "comment", icuKey: icuKey() || undefined,
+      notes: settings.coachAbout || "", athlete: { ftp: settings.ftp, maxHr: settings.maxHr, weight: settings.weight }, ...payload }) });
+    const j = await r.json().catch(() => ({}));
+    if(!r.ok) throw new Error(j.error || "greška " + r.status);
+    saveCoachNote(key, { text: j.text, at: Date.now(), title, date }); renderCoachViews(); return j.text;
+  }catch(e){ saveCoachNote(key, { error: e.message, at: Date.now(), title, date }); renderCoachViews(); throw e; }
+}
+const coachRide = r => coachAsk("ride:" + r.id, { ride: coachRidePayload(r) }, r.name, r.start);
+function coachAfterSave(r){
+  if(!coachOn() || r.m.duration < 300) return;
+  coachRide(r).then(t => t && notify(tr("Trener je komentirao vožnju (Napredak → Trener)"))).catch(() => {});
+}
+/* new activities on intervals.icu that did not come from Pedala: comment the newest two from the last week */
+async function coachCheck(){
+  if(!coachOn() || !icuOn() || coachCheck.busy || Date.now() - (coachCheck.at || 0) < 10 * 60000) return;
+  coachCheck.busy = true; coachCheck.at = Date.now();
+  try{
+    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "list", icuKey: icuKey() || undefined }) });
+    if(!r.ok) return;
+    const { activities = [] } = await r.json(), notes = coachNotes(), mine = (await dbAll()).map(x => x.start);
+    const todo = activities.map(a => ({ ...a, t: Date.parse(a.start) }))
+      .filter(a => !String(a.external_id || "").startsWith("r-") && !mine.some(t => Math.abs(t - a.t) < 5 * 60000)   // Pedala's own rides
+        && a.t > Date.now() - 7 * 864e5 && (a.minutes == null || a.minutes >= 5)
+        && (!notes["icu:" + a.id] || notes["icu:" + a.id].error && Date.now() - notes["icu:" + a.id].at > 12 * 36e5))
+      .sort((a, b) => b.t - a.t).slice(0, 2);
+    for(const a of todo){ try{ await coachAsk("icu:" + a.id, { icuId: a.id }, a.name || a.type, a.t); }catch{ break; } }
+  }catch(e){ console.warn("coach", e); }
+  finally{ coachCheck.busy = false; }
+}
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") coachCheck(); });
+const coachDate = t => new Date(t).toLocaleString(LOC, { weekday: "short", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" });
+function coachNoteHtml(n){
+  return n.text ? `<p data-notr style="white-space:pre-line;color:var(--text);margin:6px 0 0">${n.text.replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c])}</p>`
+    : n.pending ? `<p>${tr("Trener piše komentar…")}</p>` : `<p style="color:var(--z5)">${tr("Komentar nije uspio")}: ${String(n.error).replace(/[<>&]/g, "")}</p>`;
+}
+function renderCoachBox(){
+  const box = $("#coach-box"); if(!box) return;
+  const list = Object.entries(coachNotes()).sort((a, b) => (b[1].date || b[1].at) - (a[1].date || a[1].at)).slice(0, 10);
+  let html = `<h2 class="section-title" style="margin-top:6px">Trener</h2>`;
+  if(!coachServer && !list.length) html += `<p class="note">Trener nije uključen. Upute su u Postavkama, kod Virtualnog trenera.</p>`;
+  else if(!list.length) html += `<p class="note">Komentari će se pojaviti nakon sljedećeg treninga.</p>`;
+  else html += `<div class="list">` + list.map(([k, n]) => `<div class="item" data-k="${k}"><div><h3></h3>${coachNoteHtml(n)}</div>${n.error && coachServer ? `<div class="acts"><button class="btn small" data-retry>Pokušaj ponovno</button></div>` : ""}</div>`).join("") + `</div>`;
+  box.innerHTML = html;
+  box.querySelectorAll("[data-k]").forEach(el => {
+    const k = el.dataset.k, n = coachNotes()[k];
+    el.querySelector("h3").textContent = `${tr(n.title || "Trening")} · ${coachDate(n.date || n.at)}`;
+    el.querySelector("[data-retry]")?.addEventListener("click", async () => {
+      if(k.startsWith("icu:")) coachAsk(k, { icuId: k.slice(4) }, n.title, n.date).catch(() => {});
+      else { const r = (await dbAll()).find(x => "ride:" + x.id === k); if(r) coachRide(r).catch(() => {}); }
+    });
+  });
+}
+function renderRepCoach(r){
+  const box = $("#rep-coach"); if(!box) return; box.dataset.ride = r.id;
+  const n = coachNotes()["ride:" + r.id];
+  box.innerHTML = n ? `<div class="rep"><h3>Trener</h3>${coachNoteHtml(n)}</div>`
+    : coachServer ? `<div class="dlg-acts" style="justify-content:flex-start;margin:4px 0 0"><button class="btn small" id="rep-coach-go">Komentar trenera</button></div>` : "";
+  $("#rep-coach-go")?.addEventListener("click", () => coachRide(r).catch(e => toast(e.message)));
+}
+async function renderCoachViews(){
+  if($("#view-progress").classList.contains("active")) renderCoachBox();
+  const box = $("#rep-coach"); if($("#dlg-report").open && box.dataset.ride){ const r = (await dbAll()).find(x => x.id === box.dataset.ride); if(r) renderRepCoach(r); }
+}
+function fillCoach(){
+  const st = $("#coach-status"); if(!st) return;
+  st.innerHTML = coachServer ? "Trener je uključen (ANTHROPIC_API_KEY je postavljen na Vercelu). Za ostale treninge treba i intervals.icu ključ."
+    : "Trener nije uključen. Na <b>console.anthropic.com</b> napravi API ključ, na Vercelu ga dodaj kao <b>ANTHROPIC_API_KEY</b> i napravi <b>Redeploy</b>. Jedan komentar stoji oko 6 centi, a mjesečni limit potrošnje postavi u Consoleu.";
+  $("#coach-auto").checked = settings.coachAuto !== false;
+  if(document.activeElement !== $("#coach-about")) $("#coach-about").value = settings.coachAbout || "";
+}
+$("#coach-auto").onchange = e => { settings.coachAuto = e.target.checked; store.set("settings", settings); };
+$("#coach-about").addEventListener("change", e => { settings.coachAbout = e.target.value.trim(); store.set("settings", settings); });
 
 /* ============ training plan ============
    "Održivi 14 tjedana", adapted: the Tuesday threshold and Thursday VO2max sessions last 30 minutes at most
@@ -2567,7 +2690,7 @@ function reportHeader(r){
 async function openReport(r){
   $("#rep-title").textContent = r.name;
   $("#rep-sub").textContent = new Date(r.start).toLocaleString(LOC);
-  $("#rep-grid").innerHTML = reportHeader(r);
+  $("#rep-grid").innerHTML = reportHeader(r); renderRepCoach(r);
   $("#rep-body").innerHTML = ""; $("#dlg-report").showModal();
   renderReport($("#rep-body"), r);
 }
@@ -2665,13 +2788,13 @@ $("#sum-save").onclick = async () => {
   try{ await dbPut(pendingRide); toast(toIcu ? "Vožnja spremljena, šaljem na intervals.icu" : "Vožnja spremljena"); navigator.storage?.persist?.().catch(() => {}); }catch(e){ toast("Spremanje nije uspjelo: " + e.message); return; }
   const r = pendingRide; $("#dlg-summary").close(); resetRide();
   const sess = planMarkRide(r); if(sess) toast(`Plan: ${sess.w.name} odrađen`);
-  syncNow();
+  syncNow(); coachAfterSave(r);
   if(toIcu) syncIcu(); else if(confirm(tr("Skinuti .FIT datoteku sada?"))) downloadFit(r); };
 $("#sum-discard").onclick = () => { if(confirm(tr("Odbaciti vožnju bez spremanja?"))){ $("#dlg-summary").close(); resetRide(); } };
 $("#sum-resume").onclick = () => { $("#dlg-summary").close(); start(); };
 
 /* ============ settings ============ */
-function fillSettings(){ const f = $("#settings-form"); f.ftp.value = settings.ftp; f.weight.value = settings.weight; f.beep.checked = settings.beep; f.pauseVideo.checked = settings.pauseVideo; f.autoPause.checked = settings.autoPause; f.ytKey.value = settings.ytKey || ""; f.chainring.value = settings.chainring; f.cog.value = settings.cog; f.maxHr.value = settings.maxHr; f.voice.checked = settings.voice; f.uiLang.value = UI; fillVoices(); }
+function fillSettings(){ const f = $("#settings-form"); f.ftp.value = settings.ftp; f.weight.value = settings.weight; f.beep.checked = settings.beep; f.pauseVideo.checked = settings.pauseVideo; f.autoPause.checked = settings.autoPause; f.ytKey.value = settings.ytKey || ""; f.chainring.value = settings.chainring; f.cog.value = settings.cog; f.maxHr.value = settings.maxHr; f.voice.checked = settings.voice; f.uiLang.value = UI; fillVoices(); fillCoach(); }
 $("#settings-form").addEventListener("input", e => { const f = e.currentTarget;
   const ftp = +f.ftp.value, wt = +f.weight.value; if(ftp >= 80 && ftp <= 600) settings.ftp = ftp; if(wt >= 30 && wt <= 200) settings.weight = wt;
   settings.beep = f.beep.checked; settings.pauseVideo = f.pauseVideo.checked; settings.autoPause = f.autoPause.checked; settings.ytKey = f.ytKey.value.trim();
@@ -3002,6 +3125,8 @@ window.addEventListener("beforeunload", e => { if(S.started){ e.preventDefault()
   autoConnect();
   if("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.register("/sw.js").catch(e => console.warn("sw", e));
   syncNow().finally(() => setTimeout(planToday, 1500));
+  fetch("/api/coach").then(r => r.ok ? r.json() : {}).then(j => { coachServer = !!j.enabled; }).catch(() => {})
+    .finally(() => { fillCoach(); if($("#view-progress").classList.contains("active")) renderCoachBox(); setTimeout(coachCheck, 4000); });
   fetch("/api/intervals").then(r => r.ok ? r.json() : {}).then(j => { icuServer = !!j.serverKey; }).catch(() => {})
     .finally(() => { syncIcu(); renderHistoryIfOpen(); if($("#view-settings").classList.contains("active")) renderIcu(); });
 })();

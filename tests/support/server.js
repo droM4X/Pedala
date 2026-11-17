@@ -1,5 +1,5 @@
 // Local stand-in for Vercel used by the tests: serves the app and runs the real api/*.js functions,
-// with intervals.icu, the YouTube Data API and Vercel Blob replaced by small in-memory fakes.
+// with intervals.icu, the YouTube Data API, the Anthropic API and Vercel Blob replaced by small in-memory fakes.
 const http = require("http"), fs = require("fs"), path = require("path");
 const ROOT = path.join(__dirname, "..", "..");
 
@@ -13,6 +13,7 @@ global.fetch = async (url, opt = {}) => {
   url = String(url);
   if(url.startsWith("https://www.googleapis.com")) return fakeYouTube(new URL(url));
   if(url.startsWith("https://intervals.icu")) return fakeIntervals(new URL(url), opt);
+  if(url.startsWith("https://api.anthropic.com")) return fakeClaude(url, opt);
   return realFetch(url, opt);
 };
 
@@ -47,7 +48,25 @@ async function fakeIntervals(u, opt){
     if(seenFit.has(h)) return J([{ icu_athlete_id: "i12345", id: seenFit.get(h) }], 200);
     const id = "i" + (900 + ++uploads); seenFit.set(h, id); return J([{ icu_athlete_id: "i12345", id }], 201);
   }
+  // reading for the coach: a run from a watch, a ride uploaded by Pedala, wellness
+  const today = new Date().toISOString().slice(0, 10);
+  if(u.pathname === "/api/v1/athlete/0/activities") return J([
+    { id: "i777", type: "Run", name: "Jutarnje trčanje", start_date_local: today + "T07:00:00", moving_time: 1800, distance: 5000, average_heartrate: 148, icu_training_load: 38 },
+    { id: "i555", type: "VirtualRide", name: "Pedala", external_id: "r-1", start_date_local: today + "T06:00:00", moving_time: 1620, icu_training_load: 38 }]);
+  if(u.pathname === "/api/v1/athlete/0/wellness") return J([{ id: today, ctl: 6.2, atl: 15.4, restingHR: 52 }]);
+  if(u.pathname === "/api/v1/activity/i777") return J({ id: "i777", type: "Run", name: "Jutarnje trčanje", start_date_local: today + "T07:00:00", moving_time: 1800, distance: 5000,
+    average_heartrate: 148, icu_intervals: [{ type: "WORK", moving_time: 900, distance: 2600, average_heartrate: 152 }] });
   return J({ error: "not found" }, 404);
+}
+
+/* Anthropic Messages API: answers every request with a short comment and remembers what it was sent */
+const claude = [];
+async function fakeClaude(url, opt){
+  const body = JSON.parse(opt.body); claude.push(body);
+  log.push(`claude ${body.model} ${body.messages[0].content.length} chars`);
+  return J({ id: "msg_test", type: "message", role: "assistant", model: body.model, stop_reason: "end_turn", stop_details: null,
+    content: [{ type: "thinking", thinking: "", signature: "x" }, { type: "text", text: "Dobar trening. Puls je stabilan, nastavi ovako." }],
+    usage: { input_tokens: 3000, output_tokens: 400 } });
 }
 
 /* Vercel Blob, private store, in memory */
@@ -58,7 +77,7 @@ blob.list = async ({ prefix }) => ({ blobs: [...blobs.values()].filter(b => b.pa
 blob.del = async urls => { for(const u of [].concat(urls)) blobs.delete(String(u).replace("mem://", "")); };
 process.env.BLOB_READ_WRITE_TOKEN = "test";
 
-const api = { intervals: require("../../api/intervals.js"), youtube: require("../../api/youtube.js"), sync: require("../../api/sync.js") };
+const api = { intervals: require("../../api/intervals.js"), youtube: require("../../api/youtube.js"), sync: require("../../api/sync.js"), coach: require("../../api/coach.js") };
 const TYPES = { ".png": "image/png", ".js": "text/javascript", ".webmanifest": "application/manifest+json", ".html": "text/html; charset=utf-8" };
 
 function start(port = 0){
@@ -79,7 +98,7 @@ function start(port = 0){
     res.setHeader("content-type", TYPES[".html"]); res.end(fs.readFileSync(path.join(ROOT, "index.html")));
   });
   return new Promise(resolve => server.listen(port, () => resolve({
-    url: `http://localhost:${server.address().port}`, log, blobs,
+    url: `http://localhost:${server.address().port}`, log, blobs, claude,
     setEnv(vars){ for(const [k, v] of Object.entries(vars)) v == null ? delete process.env[k] : process.env[k] = v; },
     close: () => new Promise(r => server.close(r)),
   })));

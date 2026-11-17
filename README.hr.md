@@ -34,6 +34,7 @@
   - kratki treninzi preko tjedna, duga nedjeljna vožnja u zoni 2;
   - praćenje napretka i kalendar (`.ics`) s podsjetnicima.
 - **Slanje na intervals.icu** nakon svake vožnje i izvoz u `.FIT`.
+- **Virtualni trener:** nakon svakog treninga Claude napiše kratak komentar na vožnje iz Pedale i na sve ostalo što stigne na intervals.icu, npr. trčanje i plivanje sa sata. Treba `ANTHROPIC_API_KEY`; oko 6 centi po komentaru.
 - **Sinkronizacija mobitela i tableta** preko Vercel Blob spremišta, uz sigurnosnu kopiju u `.json`.
 
 ## Što treba
@@ -51,6 +52,7 @@ Web Bluetooth radi u **Chromeu ili Edgeu na Androidu, Windowsima, macOS-u, Linux
 | `PEDALA_USER` | Korisničko ime (zadano `admin`) |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 ključ za pretragu videa, kanala i playlista. U Google Cloudu postavi *Application restrictions: None* i *API restrictions: YouTube Data API v3*, jer ključ koristi server, a ne preglednik. |
 | `INTERVALS_API_KEY` | intervals.icu API ključ (na intervals.icu: *Settings → Developer Settings*) |
+| `ANTHROPIC_API_KEY` | Claude API ključ s console.anthropic.com za virtualnog trenera (nije obavezno). U Consoleu postavi mjesečni limit potrošnje. |
 | `BLOB_READ_WRITE_TOKEN` | Doda ga Vercel kad napraviš Blob spremište: **Storage → Create → Blob**, *Private*, kvačica *Add a read-write token*. Uključuje sinkronizaciju uređaja. |
 
 3. Otvori stranicu u Chromeu, prijavi se, pa **⋮ → Dodaj na početni zaslon → Instaliraj**.
@@ -68,10 +70,10 @@ Svaki deploy je samo vlasnikov: vožnje, plan i ključevi ostaju u tvom pregledn
 
 ## Razvoj
 
-Aplikacija je jedna datoteka `index.html`, bez builda. Na serveru su četiri male datoteke:
+Aplikacija je jedna datoteka `index.html`, bez builda. Na serveru je pet malih datoteka:
 - `middleware.js`: prijava;
 - `api/sync.js`: Vercel Blob;
-- `api/intervals.js` i `api/youtube.js`: posrednici koji ključeve drže na serveru.
+- `api/intervals.js`, `api/youtube.js` i `api/coach.js`: posrednici koji ključeve drže na serveru.
 
 ```bash
 npm install

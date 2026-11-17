@@ -164,6 +164,31 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.context().close();
   });
 
+  await test("coach: a saved ride and a run from intervals.icu each get a comment, Pedala's own upload does not", async () => {
+    srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
+    const p = await open({ settings: { ftp: 160, maxHr: 185, weight: 100, coachAbout: "190 cm, vraćam se nakon pauze" } });
+    await p.click('[data-view="settings"]'); await p.fill("#icu-key", "goodkey"); await p.click("#btn-icu"); await p.waitForTimeout(600);
+    assert.match(await p.textContent("#coach-status"), /uključen \(ANTHROPIC_API_KEY/);
+    await p.click("#chip-trainer"); await p.click("#c-sim"); await p.evaluate(() => setWorkout(allWorkouts().find(w => w.id === "b-ss")));
+    await p.click("#btn-start"); await p.waitForTimeout(4000); await p.click("#btn-end"); await p.waitForTimeout(500); await p.click("#sum-save");
+    await p.waitForFunction(() => Object.entries(store.get("coach", {})).some(([k, n]) => k.startsWith("ride:") && n.text), null, { timeout: 15000 });
+    const ride = srv.claude.find(b => b.messages[0].content.includes("Pedala, trenažer"));
+    assert.ok(ride, "the ride was sent to the coach");
+    assert.equal(ride.model, "claude-opus-5-5"); assert.equal(ride.fallbacks, "default");
+    assert.match(ride.messages[0].content, /190 cm, vraćam se nakon pauze/); assert.match(ride.messages[0].content, /po_minutama/);
+    assert.match(ride.messages[0].content, /Jutarnje trčanje/, "the last six weeks from intervals.icu are included");
+    // the run from the watch gets its own comment when the app checks intervals.icu
+    await p.evaluate(() => { coachCheck.at = 0; return coachCheck(); });
+    await p.waitForFunction(() => store.get("coach", {})["icu:i777"]?.text, null, { timeout: 15000 });
+    assert.ok(!(await p.evaluate(() => store.get("coach", {})["icu:i555"])), "Pedala's own upload is not commented twice");
+    await p.click('[data-view="progress"]'); await p.waitForTimeout(500);
+    assert.equal(await p.locator("#coach-box .item").count(), 2);
+    assert.match(await p.textContent("#coach-box"), /Dobar trening/);
+    await p.click('[data-view="history"]'); await p.waitForTimeout(400); await p.locator("[data-rep]").first().click(); await p.waitForTimeout(600);
+    assert.match(await p.textContent("#rep-coach"), /Dobar trening/);
+    srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
+  });
+
   await test("feed: favourite channel videos and own playlist", async () => {
     srv.setEnv({ YOUTUBE_API_KEY: "AIzaSERVER" });
     const p = await open();
