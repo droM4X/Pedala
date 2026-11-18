@@ -221,7 +221,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.deepEqual(wk1, ["mon:swim", "tue:ride", "tue2:run", "wed:swim", "thu:ride", "fri:run", "sun:ride"]);
     assert.match(await p.evaluate(() => planSessions().find(x => x.id === "w1-mon").w.desc), /klizanje na prsima/);
     assert.equal(await p.evaluate(() => planSessions().find(x => x.id === "w5-fri").w.name), "Trčanje · 2,5 km lagano");
+    assert.deepEqual(await p.evaluate(() => planSessions().filter(x => x.week === 14 && !x.w.segs).map(x => x.w.name)),
+      ["Test · 400 m plivanja", "Brick · 15 min trčanja", "Plivanje · lagano (neobavezno)", "Test · 5 km trčanja"], "week 14: tests for the next block");
+    assert.ok(await p.evaluate(() => planSessions().find(x => x.id === "w1-wed").optional), "Wednesday swim is optional");
     await p.click('[data-view="plan"]'); await p.waitForFunction(() => plan().done?.["w1-fri"], null, { timeout: 10000 });
+    assert.equal(await p.locator(".sess .opt.missed").count(), 0, "a past optional swim is not missed"); assert.equal(await p.locator(".sess .opt").count() > 0, true);
     assert.equal(await p.evaluate(() => plan().done["w1-fri"]), "icu:i777", "today's run from the watch ticks off Friday's run");
     await p.evaluate(() => { store.set("coach", {}); coachCheck.at = 0; return coachCheck(); });   // comments synced from the earlier coach test
     await p.waitForFunction(() => store.get("coach", {})["icu:i777"]?.text, null, { timeout: 15000 });

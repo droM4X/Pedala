@@ -255,6 +255,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
 .sess .done{border-color:var(--z3);background:rgba(47,191,113,.16)}
 .sess .missed{border-color:var(--z5)}
 .sess .skipped{opacity:.45}
+.sess .opt:not(.done){border-style:dashed}
 .sess .today{outline:2px solid var(--z2);outline-offset:1px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
 .toast.show{opacity:1}
@@ -2442,7 +2443,7 @@ async function coachQuestion(q){
   const at = Date.now(); saveChat(c => c.push({ q, at, pending: true })); renderCoachThread();
   const p = plan(), now = Date.now();
   const sessions = p ? planSessions(p).filter(x => x.date >= now - 7 * 864e5 && x.date <= now + 21 * 864e5).map(x => ({ id: x.id, datum: x.d, dan: x.day, tjedan: x.week,
-    trening: x.w.name, workout_id: x.w.id, min: woMin(x.w), stanje: x.done ? "odrađen" : x.skipped ? "preskočen" : x.past ? "propušten" : x.today ? "danas" : "predstoji", zamijenjen: x.swapped || undefined })) : null;
+    trening: x.w.name, workout_id: x.w.id, min: woMin(x.w), stanje: x.done ? "odrađen" : x.skipped ? "preskočen" : x.past ? (x.optional ? "neobavezan, nije odrađen" : "propušten") : x.today ? "danas" : "predstoji", zamijenjen: x.swapped || undefined })) : null;
   const options = [...new Map([...Object.values(PLAN_WO), ...BUILTIN].map(w => [w.id, w])).values()]
     .map(w => ({ id: w.id, naziv: w.name, min: woMin(w), vrsta: w.cat, opis: String(w.desc || "").slice(0, 140) }));
   let rides = []; try{ rides = (await dbAll()).filter(r => r.start > now - 21 * 864e5).sort((a, b) => b.start - a.start)
@@ -2556,6 +2557,9 @@ const SWIM_TECH_MIN = [30, 30, 30, 30, 35, 35, 35, 30, 40, 40, 40, 30, 40, 40], 
 const km1 = n => UI === "hr" ? String(n).replace(".", ",") : String(n);
 function extraWorkout(kind, wi){
   const deload = PLAN.deload.includes(wi + 1);
+  if(kind === "swimTech" && wi === 13) return { id: "x-swimtest", sport: "swim", min: 30, name: ui("Test · 400 m plivanja", "Test · 400 m swim"),
+    desc: ui("Upliv 200 m lagano i 4 × 25 m klizanje. Zatim 400 m u komadu, ravnomjerno i bez stajanja ako ide (ako ne ide, stani na kraju bazena koliko treba i zapiši koliko si puta stao). Zapiši vrijeme: to je polazna točka za plivanje u idućem bloku. Na kraju 100 m opušteno.",
+      "Warm up 200 m easy and 4 × 25 m glide. Then 400 m in one go, evenly and without stopping if you can (if not, rest at the wall as needed and note how often you stopped). Note your time: it is the starting point for swimming in the next block. Finish with 100 m relaxed.") };
   if(kind === "swimTech"){
     const main = deload ? "6 × 50 m" : wi < 4 ? "8 × 50 m" : wi < 8 ? "10 × 50 m" : "6 × 100 m";
     return { id: `x-swimtech-${wi + 1}`, sport: "swim", min: SWIM_TECH_MIN[wi], name: ui("Plivanje · tehnika", "Swim · technique"),
@@ -2564,13 +2568,16 @@ function extraWorkout(kind, wi){
   }
   if(kind === "swimEasy"){
     const main = deload ? ui("4 × 50 m", "4 × 50 m") : wi < 4 ? ui("4 × 100 m (ili 8 × 50 m)", "4 × 100 m (or 8 × 50 m)") : wi < 8 ? "5 × 100 m" : ui("3 × 200 m s 45 s odmora", "3 × 200 m with 45 s rest");
-    return { id: `x-swimeasy-${wi + 1}`, sport: "swim", min: SWIM_EASY_MIN[wi], name: ui("Plivanje · lagano", "Swim · easy"),
+    return { id: `x-swimeasy-${wi + 1}`, sport: "swim", optional: true, min: SWIM_EASY_MIN[wi], name: ui("Plivanje · lagano (neobavezno)", "Swim · easy (optional)"),
       desc: ui(`Upliv 200 m. Glavni dio: ${main} mirno, 30 s odmora, zatim plivaj u komadu koliko ide opušteno. Na kraju 4 × 25 m klizanje na prsima. Cilj je ravnomjeran ritam i disanje, ne brzina.`,
         `Warm up 200 m. Main set: ${main} easy, 30 s rest, then swim continuously for as long as it stays relaxed. Finish with 4 × 25 m glide on your front. The aim is an even rhythm and breathing, not speed.`) };
   }
   if(kind === "brick") return { id: `x-brick-${wi + 1}`, sport: "run", min: BRICK_MIN[wi], name: ui(`Brick · ${BRICK_MIN[wi]} min trčanja`, `Brick · ${BRICK_MIN[wi]} min run`),
     desc: ui("Odmah nakon vožnje: tenisice i lagano trčanje. Cilj je naviknuti noge na prijelaz s bicikla, ne tempo. Prve minute noge su teške, to je normalno.",
       "Straight after the ride: running shoes on and an easy run. The aim is to get your legs used to switching from the bike, not pace. Heavy legs for the first minutes are normal.") };
+  if(wi === 13) return { id: "x-run5k", sport: "run", km: 5, min: 40, name: ui("Test · 5 km trčanja", "Test · 5 km run"),
+    desc: ui("10 min lagano s par kratkih ubrzanja, zatim 5 km najbrže što možeš ravnomjerno održati: prvi kilometar suzdržano, zadnji najjači. Ne idi do boli; ako nešto počne boljeti, uspori ili stani. Na kraju 10 min hodanja i laganog trčanja. Vrijeme i prosječni puls su polazna točka za idući blok.",
+      "10 min easy with a few short strides, then 5 km as fast as you can hold evenly: hold back on the first kilometre, finish strongest. Don't push through pain; if something starts to hurt, slow down or stop. Finish with 10 min of walking and easy running. Your time and average heart rate are the starting point for the next block.") };
   const k = RUN_KM[wi];
   return { id: `x-run-${wi + 1}`, sport: "run", km: k, min: Math.round(k * 8), name: ui(`Trčanje · ${km1(k)} km lagano`, `Run · ${k} km easy`),
     desc: ui("Jako lagano, tempom na kojem možeš pričati (puls u zoni 2). Ako puls naraste, hodaj minutu pa nastavi; kombinacija trčanja i hodanja je u redu. Ako nešto boli i sutradan (koljeno, potkoljenica, Ahilova tetiva), idući tjedan ne povećavaj.",
@@ -2591,7 +2598,7 @@ function planSessions(p = plan()){
   const add = (i, day, off, label, orig) => {
     const date = plusDays(start, i * 7 + Math.floor(off)), id = `w${i + 1}-${day}`, d = ymd(date);
     const sw = p.swap?.[id] && findWorkout(p.swap[id]), w = sw || orig;   // swapped for another workout (by the coach or by hand)
-    out.push({ id, week: i + 1, day, label, date, d, w, off, swapped: !!sw, done: !!p.done?.[id], skipped: !!p.skipped?.[id], today: d === today, past: d < today });
+    out.push({ id, week: i + 1, day, label, date, d, w, off, swapped: !!sw, optional: !!w.optional, done: !!p.done?.[id], skipped: !!p.skipped?.[id], today: d === today, past: d < today });
   };
   PLAN.weeks.forEach((wk, i) => {
     PLAN_DAYS.forEach(([day, off, label], j) => add(i, day, off, label, PLAN_WO[wk[j].startsWith("b-") ? wk[j] : "p-" + wk[j]]));
@@ -2619,8 +2626,8 @@ function renderPlan(){
     box.innerHTML = `<div class="plan-card"><h3>${PLAN.name}</h3>
       <p>${ui("Utorkom prag (threshold), četvrtkom VO2max, oba do 30 minuta: teže postaju gušćim intervalima, ne dužim treningom. Nedjeljom vožnja u zoni 2 raste od 50 minuta do 3 sata. Tjedni 4, 8 i 12 su lakši, a 14. završava ramp testom.",
         "Threshold on Tuesdays, VO2max on Thursdays, both 30 minutes at most: they get harder through denser intervals, not longer sessions. The Sunday Zone 2 ride grows from 50 minutes to 3 hours. Weeks 4, 8 and 12 are easier, and week 14 ends with a ramp test.")}</p>
-      <p>${ui("Uz to plivanje ponedjeljkom (tehnika) i srijedom (lagano), kratko brick trčanje utorkom nakon vožnje i lagano trčanje petkom od 1 do 6 km. Plivanje i trčanje radiš izvan Pedale, a otkvače se sami kad stignu na intervals.icu.",
-        "Plus swims on Monday (technique) and Wednesday (easy), a short brick run after Tuesday's ride and an easy run on Friday that grows from 1 to 6 km. Swims and runs happen outside Pedala and tick off by themselves when they reach intervals.icu.")}</p>
+      <p>${ui("Uz to plivanje ponedjeljkom (tehnika) i srijedom (lagano, neobavezno), kratko brick trčanje utorkom nakon vožnje i lagano trčanje petkom od 1 do 6 km. Zadnji tjedan su testovi: 400 m plivanja, 5 km trčanja i ramp test, kao polazna točka za idući blok. Plivanje i trčanje radiš izvan Pedale, a otkvače se sami kad stignu na intervals.icu.",
+        "Plus swims on Monday (technique) and Wednesday (easy, optional), a short brick run after Tuesday's ride and an easy run on Friday that grows from 1 to 6 km. The last week is tests: a 400 m swim, a 5 km run and the ramp test, as the starting point for the next block. Swims and runs happen outside Pedala and tick off by themselves when they reach intervals.icu.")}</p>
       <p>${ui("Najduži trening preko tjedna", "Longest weekday session")}: ${Math.max(...tw.flatMap(w => w.slice(0, 2)).map(woMin))} min · ${ui("najduža nedjelja", "longest Sunday")}: ${Math.max(...tw.map(w => woMin(w[2])))} min · ${ui("ukupno", "total")} ${tw.length * 3} ${ui("vožnji", "rides")}.</p>
       <div class="row"><label>Početak (ponedjeljak) <input type="date" id="plan-start" value="${ymd(nextMonday())}"></label><button class="btn primary" id="plan-go">Pokreni plan</button></div></div>`;
     $("#plan-go").onclick = () => { const v = $("#plan-start").value; if(!v) return;
@@ -2628,14 +2635,15 @@ function renderPlan(){
       store.set("plan", { id: PLAN.id, start: v, done: {}, skipped: {}, extra: true, times: { wk: "18:00", sun: "09:00" }, remind: 120 }); renderPlan(); };
     return;
   }
-  const ss = planSessions(p), done = ss.filter(x => x.done), missed = ss.filter(x => x.past && !x.done && !x.skipped);
+  const ss = planSessions(p), done = ss.filter(x => x.done), missed = ss.filter(x => x.past && !x.done && !x.skipped && !x.optional);
+  const total = ss.filter(x => !x.optional || x.done).length;   // optional sessions count only when done
   const week = Math.min(PLAN.weeks.length, Math.max(1, Math.floor((new Date() - fromYmd(p.start)) / (7 * 864e5)) + 1));
   const next = ss.find(x => !x.done && !x.skipped && !x.past), hours = done.filter(isRide).reduce((a, x) => a + totalDur(x.w), 0) / 3600;
   const started = new Date() >= fromYmd(p.start), end = plusDays(fromYmd(p.start), PLAN.weeks.length * 7 - 1);
   box.innerHTML = `<div class="plan-card"><h3>${PLAN.name}</h3>
       <p>${started ? `Tjedan ${week} od ${PLAN.weeks.length}` : `Počinje ${shortDay(fromYmd(p.start))}`} · ${shortDay(fromYmd(p.start))} – ${shortDay(end)}</p>
-      <div class="pbar"><i style="width:${Math.round(done.length / ss.length * 100)}%"></i></div>
-      <div class="pstats"><span><b>${done.length}</b>od ${ss.length} odrađeno</span><span><b>${missed.length}</b>propušteno</span><span><b>${hours.toFixed(1).replace(".", ",")}</b>h vožnje</span>${done.length + missed.length ? `<span><b>${Math.round(done.length / (done.length + missed.length) * 100)}%</b>dosljednost</span>` : ""}</div></div>
+      <div class="pbar"><i style="width:${Math.round(done.length / total * 100)}%"></i></div>
+      <div class="pstats"><span><b>${done.length}</b>od ${total} odrađeno</span><span><b>${missed.length}</b>propušteno</span><span><b>${hours.toFixed(1).replace(".", ",")}</b>h vožnje</span>${done.length + missed.length ? `<span><b>${Math.round(done.length / (done.length + missed.length) * 100)}%</b>dosljednost</span>` : ""}</div></div>
     ${next ? `<div class="plan-card"><p>${next.today ? "Danas" : shortDay(next.date)} · ${next.w.sport === "swim" ? "plivanje" : next.day === "tue2" ? "brick" : next.w.sport === "run" ? "trčanje" : next.day === "sun" ? "duga vožnja" : next.day === "tue" ? "prag" : "VO2max"}</p>
       <h3>${next.w.name}${/\d (min|h)$/.test(next.w.name) ? "" : ` · ${woMin(next.w)} min`}</h3><p>${next.w.desc}</p>
       <div class="row">${isRide(next) ? `<button class="btn primary" id="plan-ride">Vozi sada</button>` : `<button class="btn primary" id="plan-done-next">Označi odrađeno</button>`}<button class="btn small" id="plan-next-more">Više</button></div></div>` : `<div class="plan-card"><h3>Plan je završen 🎉</h3><p>Odradi ramp test ako već nisi i postavi novi FTP.</p></div>`}
@@ -2657,7 +2665,7 @@ function renderPlan(){
     el.innerHTML = `<h4><span>Tjedan ${i + 1}${PLAN.deload.includes(i + 1) ? (i === 13 ? " · test" : " · lakši") : ""}</span><small>${shortDay(wk[0].date)} – ${shortDay(wk.at(-1).date)}</small></h4><div class="sess"></div>`;
     for(const x of wk){
       const b = document.createElement("button"); b.type = "button";
-      b.className = [x.w.sport, x.done && "done", x.skipped && "skipped", !x.done && !x.skipped && x.past && "missed", x.today && "today"].filter(Boolean).join(" ");
+      b.className = [x.w.sport, x.done && "done", x.skipped && "skipped", !x.done && !x.skipped && !x.optional && x.past && "missed", x.optional && "opt", x.today && "today"].filter(Boolean).join(" ");
       b.innerHTML = `<small>${tr(x.label)} ${shortDate(x.date)} ${x.done ? "✓" : x.skipped ? "–" : ""}</small><b></b><small>${woMin(x.w)} min</small>`;
       b.querySelector("b").textContent = x.w.name; b.onclick = () => openSession(x);
       el.querySelector(".sess").append(b);
