@@ -167,7 +167,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
   await test("coach: a saved ride and a run from intervals.icu each get a comment, Pedala's own upload does not", async () => {
     srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
-    const p = await open({ settings: { ftp: 160, maxHr: 185, weight: 100, coachAbout: "190 cm, vraćam se nakon pauze" } });
+    const p = await open({ settings: { ftp: 160, maxHr: 185, weight: 100, coachAbout: "190 cm, vraćam se nakon pauze", coachMode: "each" } });
     await p.click('[data-view="settings"]'); await p.fill("#icu-key", "goodkey"); await p.click("#btn-icu"); await p.waitForTimeout(600);
     assert.match(await p.textContent("#coach-status"), /uključen \(ANTHROPIC_API_KEY/);
     await p.click("#chip-trainer"); await p.click("#c-sim"); await p.evaluate(() => setWorkout(allWorkouts().find(w => w.id === "b-ss")));
@@ -193,6 +193,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await test("coach: a question gets an answer, a proposed plan change is applied only after confirming", async () => {
     srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
     const p = await open();
+    await p.evaluate(() => { settings.coachMode = "off"; });   // no weekly review in the middle of this test
     const first = await p.evaluate(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
       store.set("plan", { id: PLAN.id, start: ymd(d), done: {}, skipped: {}, times: { wk: "18:00", sun: "09:00" }, remind: 120 }); return planSessions()[0].id; });
     await p.click('[data-view="progress"]'); await p.waitForTimeout(800);
@@ -220,7 +221,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await test("plan: swims and runs are in the plan and tick off from intervals.icu, the coach sees the day's target", async () => {
     srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
     const p = await open();
-    await p.evaluate(() => { settings.icuKey = "goodkey"; store.set("settings", settings);
+    await p.evaluate(() => { settings.icuKey = "goodkey"; settings.coachMode = "each"; store.set("settings", settings);
       const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - 4);   // today is the Friday of week 1
       store.set("plan", { id: PLAN.id, start: ymd(d), done: {}, skipped: {}, extra: true }); });
     const wk1 = await p.evaluate(() => planSessions().filter(x => x.week === 1).map(x => x.day + ":" + (x.w.sport || "ride")));
@@ -240,6 +241,23 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.equal(await p.evaluate(() => { const q = { ...plan(), extraFrom: ymd(new Date()) }; return planSessions(q).filter(x => !x.w.segs && x.d < q.extraFrom).length; }), 0);
     await p.evaluate(() => planUpdate(q => { q.extra = false; }));
     assert.equal(await p.evaluate(() => planSessions().length), 42, "swims and runs can be switched off");
+    srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
+  });
+
+  await test("coach: a weekly review instead of a comment after every session", async () => {
+    srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
+    const p = await open(); await p.waitForTimeout(600);
+    await p.evaluate(() => { settings.coachMode = "week"; store.set("settings", settings); });   // settings synced from earlier tests say "each"
+    await p.evaluate(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+      store.set("plan", { id: PLAN.id, start: ymd(d), done: {}, skipped: {}, extra: true, extraFrom: ymd(d) }); });
+    await p.click("#chip-trainer"); await p.click("#c-sim"); await p.click("#btn-start"); await p.waitForTimeout(3000); await p.click("#btn-end"); await p.waitForTimeout(400); await p.click("#sum-save"); await p.waitForTimeout(800);
+    assert.ok(!srv.claude.some(b => b.messages[0].content.includes("Pedala, trenažer")), "no comment after the ride");
+    await p.evaluate(() => coachWeek(true));
+    const key = await p.evaluate(() => "week:" + ymd(lastSaturday()));
+    assert.match(await p.evaluate(k => store.get("coach", {})[k]?.text, key), /Dobar trening/);
+    const sent = srv.claude.find(b => b.system.includes("pregled proteklih sedam dana"));
+    assert.ok(sent, "the weekly review prompt was used"); assert.match(sent.messages[0].content, /Plan: proteklih 7 dana/); assert.match(sent.messages[0].content, /Vožnje u Pedali proteklih 7 dana/);
+    assert.equal(await p.evaluate(() => coachWeek()), null, "only once a week");
     srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
   });
 

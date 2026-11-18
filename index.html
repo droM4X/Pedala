@@ -589,7 +589,8 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <h2 class="section-title">Virtualni trener</h2>
       <p class="note">Nakon svakog treninga Claude (Anthropic) napiše kratak komentar na hrvatskom: na vožnje iz Pedale i na sve ostalo što stigne na intervals.icu, npr. trčanje i plivanje sa sata. Komentari su u Napretku i u izvještaju vožnje.</p>
       <p class="note" id="coach-status"></p>
-      <label class="check note" style="display:flex"><input type="checkbox" id="coach-auto"> Komentiraj svaki trening automatski</label>
+      <label class="note" style="display:block;max-width:520px">Trener piše sam<select id="coach-mode" style="display:block;margin-top:5px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit">
+        <option value="week">Tjedni pregled subotom (preporučeno)</option><option value="each">Komentar nakon svakog treninga</option><option value="off">Ništa, samo kad ga pitam</option></select></label>
       <label class="note" style="display:block;max-width:520px;margin-top:10px">Bilješke za trenera (visina, ciljevi, ozljede, što želiš pratiti)
         <textarea id="coach-about" rows="4" style="display:block;width:100%;margin-top:5px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit;resize:vertical"></textarea></label>
       <h2 class="section-title">Sinkronizacija</h2>
@@ -854,7 +855,8 @@ const EN = new Map(Object.entries({
   "Besplatan servis za analizu treninga. Na intervals.icu otvori": "A free training analysis service. On intervals.icu open", ", stvori": ", create an", "i zalijepi ga ovdje.": "and paste it here.",
   "API ključ": "API key", "intervals.icu API ključ": "intervals.icu API key", "Spremi i provjeri": "Save and check", "Provjeravam…": "Checking…",
   "Automatski pošalji svaku spremljenu vožnju na intervals.icu": "Send every saved ride to intervals.icu automatically",
-  "Virtualni trener": "Virtual coach", "Trener": "Coach", "Komentiraj svaki trening automatski": "Comment on every session automatically",
+  "Virtualni trener": "Virtual coach", "Trener": "Coach", "Trener piše sam": "The coach writes on its own", "Tjedni pregled subotom (preporučeno)": "A weekly review on Saturdays (recommended)",
+  "Komentar nakon svakog treninga": "A comment after every session", "Ništa, samo kad ga pitam": "Nothing, only when I ask", "Tjedni pregled": "Weekly review", "Tjedni pregled sada": "Weekly review now",
   "Nakon svakog treninga Claude (Anthropic) napiše kratak komentar na hrvatskom: na vožnje iz Pedale i na sve ostalo što stigne na intervals.icu, npr. trčanje i plivanje sa sata. Komentari su u Napretku i u izvještaju vožnje.":
     "After every session Claude (Anthropic) writes a short comment in Croatian: on rides from Pedala and on everything else that reaches intervals.icu, such as runs and swims from a watch. Comments are under Progress and in the ride report.",
   "Bilješke za trenera (visina, ciljevi, ozljede, što želiš pratiti)": "Notes for the coach (height, goals, injuries, what you want to track)",
@@ -2345,7 +2347,8 @@ document.addEventListener("visibilitychange", () => { if(document.visibilityStat
    other activity that reaches intervals.icu (runs and swims from a watch…) when the app opens. Comments are kept in
    store "coach" (shared between devices) as { "ride:<id>" | "icu:<id>": { text | error | pending, at, title, date } }. */
 let coachServer = false;                                   // ANTHROPIC_API_KEY is set on Vercel
-const coachOn = () => coachServer && settings.coachAuto !== false && Date.now() > store.get("coachPause", 0);   // paused for 12 h when the credit runs out
+const coachMode = () => settings.coachMode || "week";   // week: a review on Saturdays; each: a comment after every session; off
+const coachOn = () => coachServer && coachMode() === "each" && Date.now() > store.get("coachPause", 0);   // paused for 12 h when the credit runs out
 const coachNotes = () => store.get("coach", {});
 function saveCoachNote(key, note){
   const all = { ...coachNotes(), [key]: note };
@@ -2383,6 +2386,25 @@ function coachAfterSave(r){
   if(!coachOn() || r.m.duration < 300) return;
   coachRide(r).then(t => t && notify(tr("Trener je komentirao vožnju (Napredak → Trener)"))).catch(() => {});
 }
+/* the weekly review: on Saturday (or the first time the app opens up to Monday) a look back at the last seven days */
+const lastSaturday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 1) % 7)); return d; };
+function coachWeekPayload(){
+  const sat = lastSaturday(), from = plusDays(sat, -6), to = plusDays(sat, 9), p = plan();
+  const sessions = p ? planSessions(p).filter(x => x.date >= from && x.date < to).map(x => ({ id: x.id, datum: x.d, trening: x.w.name, min: woMin(x.w),
+    stanje: x.done ? "odrađen" : x.skipped ? "preskočen" : x.past ? (x.optional ? "neobavezan, nije odrađen" : "propušten") : x.today ? "danas" : "predstoji" })) : null;
+  return { sessions, from };
+}
+async function coachWeek(manual = false){
+  const sat = lastSaturday(), key = "week:" + ymd(sat), note = coachNotes()[key];
+  if(!manual && (!coachServer || coachMode() !== "week" || Date.now() <= store.get("coachPause", 0) || Date.now() - sat > 3 * 864e5 || note && (note.text || note.pending || Date.now() - note.at < 12 * 36e5))) return null;
+  const { sessions, from } = coachWeekPayload(); let rides = [];
+  try{ rides = (await dbAll()).filter(r => r.start >= from.getTime()).sort((a, b) => a.start - b.start).map(r => ({ datum: ymd(new Date(r.start)), naziv: r.name,
+    min: Math.round(r.m.duration / 60), tss: r.m.tss, np: r.m.np, puls: r.m.avgHr || undefined,
+    intervali: (() => { const sc = (r.laps || []).filter(l => l.score != null && l.dur >= 30); return sc.length ? `${sc.filter(l => l.hit).length} od ${sc.length} u ±5% cilja` : undefined; })() })); }catch{}
+  return coachAsk(key, { action: "week", plan: sessions ? { sessions } : null, rides }, "Tjedni pregled", sat.getTime() + 12 * 36e5);
+}
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") coachWeek().catch(() => {}); });
+
 /* new activities on intervals.icu that did not come from Pedala: comment the newest two from the last week */
 async function coachCheck(){
   if(!coachOn() || !icuOn() || coachCheck.busy || Date.now() - (coachCheck.at || 0) < 10 * 60000) return;
@@ -2422,11 +2444,13 @@ function renderCoachBox(){
     box.innerHTML = `<h2 class="section-title" style="margin-top:6px">Trener</h2>
       <form class="field" id="coach-form" style="align-items:flex-end;margin-bottom:12px"><textarea id="coach-q" rows="3" placeholder="Pitaj trenera ili zatraži promjenu plana, npr. prehlađen sam, što s ovim tjednom?"
         style="flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit;resize:vertical"></textarea><button class="btn" type="submit">Pošalji</button></form>
+      <div class="dlg-acts" id="coach-week-row" style="justify-content:flex-start;margin:-4px 0 10px"><button class="btn small" type="button" id="coach-week-go">Tjedni pregled sada</button></div>
       <p class="note" id="coach-month" style="margin:-4px 0 10px"></p><div id="coach-thread" class="list" style="margin-bottom:16px"></div><h3 class="vsect">Komentari treninga</h3><div id="coach-list"></div>`;
+    $("#coach-week-go").onclick = () => coachWeek(true).catch(e => toast(e.message));
     $("#coach-form").onsubmit = e => { e.preventDefault(); const q = $("#coach-q").value.trim(); if(!q) return; $("#coach-q").value = ""; coachQuestion(q).catch(() => {}); };
     $("#coach-q").addEventListener("keydown", e => { if(e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#coach-form").requestSubmit(); });
   }
-  $("#coach-form").hidden = !coachServer;
+  $("#coach-form").hidden = $("#coach-week-row").hidden = !coachServer;
   const month = coachMonthUsd(); $("#coach-month").textContent = month ? `${tr("Trener ovaj mjesec")}: ≈ $${month.toFixed(2)}` : "";
   const list = Object.entries(coachNotes()).sort((a, b) => (b[1].date || b[1].at) - (a[1].date || a[1].at)).slice(0, 10), el = $("#coach-list");
   if(!coachServer && !list.length) el.innerHTML = `<p class="note">Trener nije uključen. Upute su u Postavkama, kod Virtualnog trenera.</p>`;
@@ -2512,10 +2536,10 @@ function fillCoach(){
   const st = $("#coach-status"); if(!st) return;
   st.innerHTML = coachServer ? "Trener je uključen (ANTHROPIC_API_KEY je postavljen na Vercelu). Za ostale treninge treba i intervals.icu ključ."
     : "Trener nije uključen. Na <b>console.anthropic.com</b> napravi API ključ, na Vercelu ga dodaj kao <b>ANTHROPIC_API_KEY</b> i napravi <b>Redeploy</b>. Jedan komentar stoji oko 6 centi, a mjesečni limit potrošnje postavi u Consoleu.";
-  $("#coach-auto").checked = settings.coachAuto !== false;
+  $("#coach-mode").value = coachMode();
   if(document.activeElement !== $("#coach-about")) $("#coach-about").value = settings.coachAbout || "";
 }
-$("#coach-auto").onchange = e => { settings.coachAuto = e.target.checked; store.set("settings", settings); };
+$("#coach-mode").onchange = e => { settings.coachMode = e.target.value; store.set("settings", settings); };
 $("#coach-about").addEventListener("change", e => { settings.coachAbout = e.target.value.trim(); store.set("settings", settings); });
 
 /* ============ training plan ============
@@ -3285,7 +3309,7 @@ window.addEventListener("beforeunload", e => { if(S.started){ e.preventDefault()
   if("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.register("/sw.js").catch(e => console.warn("sw", e));
   syncNow().finally(() => setTimeout(planToday, 1500));
   fetch("/api/coach").then(r => r.ok ? r.json() : {}).then(j => { coachServer = !!j.enabled; }).catch(() => {})
-    .finally(() => { fillCoach(); if($("#view-progress").classList.contains("active")) renderCoachBox(); setTimeout(coachCheck, 4000); });
+    .finally(() => { fillCoach(); if($("#view-progress").classList.contains("active")) renderCoachBox(); setTimeout(() => { coachCheck(); coachWeek().catch(() => {}); }, 4000); });
   fetch("/api/intervals").then(r => r.ok ? r.json() : {}).then(j => { icuServer = !!j.serverKey; }).catch(() => {})
     .finally(() => { syncIcu(); renderHistoryIfOpen(); if($("#view-settings").classList.contains("active")) renderIcu(); planIcuTick(); });
 })();
