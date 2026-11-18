@@ -31,7 +31,7 @@ Pravila:
 - Ako podataka nema dovoljno za neki zaključak, ne nagađaj.
 - Duljina: 80 do 160 riječi, običan tekst bez naslova i markdowna, najviše tri kratka odlomka.`;
 
-const SYSTEM_ASK = `Ti si osobni trener izdržljivosti (biciklizam, trčanje, plivanje) u aplikaciji Pedala. Sportaš ti piše izvan treninga: pitanje, kako se osjeća, ili želi nešto promijeniti u planu. Imaš njegov plan za idući period, treninge zadnjih tjedana, formu, svoje ranije komentare i dosadašnji razgovor.
+const SYSTEM_ASK = `Ti si osobni trener izdržljivosti (biciklizam, trčanje, plivanje) u aplikaciji Pedala. Sportaš ti piše izvan treninga: pitanje, kako se osjeća, ili želi nešto promijeniti u planu. Imaš njegov plan za ovaj tjedan, treninge zadnjih tjedana, formu, svoje ranije komentare i dosadašnji razgovor.
 
 Odgovor (polje answer):
 - na hrvatskom, toplo i izravno, u drugom licu jednine; najviše 150 riječi, običan tekst bez markdowna;
@@ -102,13 +102,15 @@ async function ask(b, icuKey, res){
   if(!q) return res.status(400).json({ error: "Nema pitanja" });
   const parts = [section("Sportaš", { ...pick(b.athlete || {}, ["ftp", "maxHr", "weight"]), danas: ymd(Date.now()) })];
   if(b.notes) parts.push(`## Sportaševe bilješke\n${String(b.notes).slice(0, 2000)}`);
-  if(b.plan) parts.push(section("Plan: treninzi koje možeš mijenjati (session_id) i njihovo stanje", b.plan.sessions || []),
-    section("Mogući treninzi za zamjenu (workout_id)", b.plan.options || []));
-  else parts.push("## Plan\nSportaš trenutno nema pokrenut plan, pa promjene plana nisu moguće.");
-  if(Array.isArray(b.rides) && b.rides.length) parts.push(section("Vožnje u Pedali zadnja 3 tjedna", b.rides.slice(0, 30)));
+  if(b.plan){
+    parts.push(section("Plan za ovaj tjedan: treninzi (id = session_id) i njihovo stanje", b.plan.sessions || []));
+    parts.push(b.plan.options?.length ? section("Mogući treninzi za zamjenu (id = workout_id)", b.plan.options)
+      : "## Zamjene\nPopis zamjena nije poslan: možeš predložiti samo skip ili restore. Ako bi trebalo zamijeniti trening drugim, reci sportašu neka to izričito zatraži.");
+  } else parts.push("## Plan\nSportaš trenutno nema pokrenut plan, pa promjene plana nisu moguće.");
+  if(Array.isArray(b.rides) && b.rides.length) parts.push(section("Vožnje u Pedali zadnja 3 tjedna", b.rides.slice(0, 15)));
   if(icuKey){ const ctx = await icuContext(icuKey); parts.push(...ctx.parts(() => true)); }
-  if(Array.isArray(b.comments) && b.comments.length) parts.push(section("Tvoji zadnji komentari treninga", b.comments.slice(0, 5)));
-  if(Array.isArray(b.chat) && b.chat.length) parts.push(section("Dosadašnji razgovor (od starijeg prema novijem)", b.chat.slice(-8)));
+  if(Array.isArray(b.comments) && b.comments.length) parts.push(section("Tvoji zadnji komentari treninga", b.comments.slice(0, 3)));
+  if(Array.isArray(b.chat) && b.chat.length) parts.push(section("Dosadašnji razgovor (od starijeg prema novijem)", b.chat.slice(-4)));
   const msg = await claude({ system: SYSTEM_ASK, content: parts.join("\n\n") + "\n\n## Sportaš sada piše\n" + q, format: ASK_SCHEMA });
   if(msg.stop_reason === "refusal") return res.status(422).json({ error: "Trener ovaj put nije odgovorio" });
   let out; try{ out = JSON.parse(msg.content.filter(c => c.type === "text").map(c => c.text).join("")); }catch{ return res.status(502).json({ error: "Trener je vratio neispravan odgovor" }); }
@@ -124,7 +126,8 @@ async function claude({ system, content, format }){
     max_tokens: 4000,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",                         // a declined request is retried on a fallback model
-    output_config: { effort: "medium", ...(format ? { format: { type: "json_schema", schema: format } } : {}) },
+    // effort low: short coaching answers, and thinking is most of the cost
+    output_config: { effort: "low", ...(format ? { format: { type: "json_schema", schema: format } } : {}) },
     system,
     messages: [{ role: "user", content }],
   });
@@ -142,15 +145,15 @@ function apiError(res, e){
   if(e instanceof Anthropic.APIError) return res.status(502).json({ error: `Anthropic greška ${e.status ?? ""}: ${e.message}`.slice(0, 300) });
   return res.status(502).json({ error: "Trener nije dostupan: " + e.message });
 }
-/* the last six weeks of activities and two weeks of wellness from intervals.icu (each part optional) */
+/* the last four weeks of activities and one week of wellness from intervals.icu (each part optional) */
 async function icuContext(key, oneId){
   const [acts, well, one] = await Promise.all([
-    icu(key, `/athlete/0/activities?oldest=${ymd(Date.now() - 42 * DAY)}&newest=${ymd(Date.now() + DAY)}`).catch(() => null),
-    icu(key, `/athlete/0/wellness?oldest=${ymd(Date.now() - 14 * DAY)}&newest=${ymd(Date.now())}`).catch(() => null),
+    icu(key, `/athlete/0/activities?oldest=${ymd(Date.now() - 28 * DAY)}&newest=${ymd(Date.now() + DAY)}`).catch(() => null),
+    icu(key, `/athlete/0/wellness?oldest=${ymd(Date.now() - 7 * DAY)}&newest=${ymd(Date.now())}`).catch(() => null),
     oneId ? icu(key, `/activity/${encodeURIComponent(oneId)}?intervals=true`).catch(() => null) : null,
   ]);
   return { one, parts: keep => [
-    Array.isArray(acts) && section("Svi treninzi zadnjih 6 tjedana (intervals.icu)", acts.filter(keep).map(a => pick({
+    Array.isArray(acts) && section("Svi treninzi zadnja 4 tjedna (intervals.icu)", acts.filter(keep).map(a => pick({
       datum: a.start_date_local, vrsta: a.type, naziv: a.name, min: a.moving_time && Math.round(a.moving_time / 60),
       km: a.distance && +(a.distance / 1000).toFixed(1), opterecenje: a.icu_training_load, puls: a.average_heartrate,
       snaga: a.icu_average_watts || a.average_watts }, null))),

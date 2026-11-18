@@ -2449,15 +2449,18 @@ const esc = t => String(t).replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "
 async function coachQuestion(q){
   const at = Date.now(); saveChat(c => c.push({ q, at, pending: true })); renderCoachThread();
   const p = plan(), now = Date.now();
-  const sessions = p ? planSessions(p).filter(x => x.date >= now - 7 * 864e5 && x.date <= now + 21 * 864e5).map(x => ({ id: x.id, datum: x.d, dan: x.day, tjedan: x.week,
-    trening: x.w.name, workout_id: x.w.id, min: woMin(x.w), stanje: x.done ? "odrađen" : x.skipped ? "preskočen" : x.past ? (x.optional ? "neobavezan, nije odrađen" : "propušten") : x.today ? "danas" : "predstoji", zamijenjen: x.swapped || undefined })) : null;
-  const options = [...new Map([...Object.values(PLAN_WO), ...BUILTIN].map(w => [w.id, w])).values()]
-    .map(w => ({ id: w.id, naziv: w.name, min: woMin(w), vrsta: w.cat, opis: String(w.desc || "").slice(0, 140) }));
-  let rides = []; try{ rides = (await dbAll()).filter(r => r.start > now - 21 * 864e5).sort((a, b) => b.start - a.start)
+  // kept short on purpose (cost): this week of the plan (and next week from Saturday on), the list of swaps only when a change is asked for
+  const mon = new Date(now); mon.setHours(0, 0, 0, 0); mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+  const until = plusDays(mon, mon.getTime() + 5 * 864e5 <= now ? 14 : 7);
+  const sessions = p ? planSessions(p).filter(x => x.date >= mon && x.date < until).map(x => ({ id: x.id, datum: x.d, trening: x.w.name, min: woMin(x.w),
+    stanje: x.done ? "odrađen" : x.skipped ? "preskočen" : x.past ? (x.optional ? "neobavezan, nije odrađen" : "propušten") : x.today ? "danas" : "predstoji", zamijenjen: x.swapped || undefined })) : null;
+  const wantsChange = /promijen|zamijen|preskoč|preskoc|pomakn|izbaci|umjesto|zamjen|ne mogu|nemam vremena|bolest|prehla|grip|putuj|na putu|odgod|lakš|laks|skrat|ozlijed|ozljed|boli|izmjen|drugi trening/i.test(q);
+  const options = wantsChange ? [...new Map(Object.values(PLAN_WO).map(w => [w.id, w])).values()].map(w => ({ id: w.id, naziv: w.name, min: woMin(w), opis: String(w.desc || "").slice(0, 70) })) : [];
+  let rides = []; if(!icuOn()) try{ rides = (await dbAll()).filter(r => r.start > now - 21 * 864e5).sort((a, b) => b.start - a.start)   // intervals.icu already has them
     .map(r => ({ datum: ymd(new Date(r.start)), naziv: r.name, min: Math.round(r.m.duration / 60), tss: r.m.tss, snaga: r.m.avgP, puls: r.m.avgHr || undefined })); }catch{}
-  const comments = Object.values(coachNotes()).filter(n => n.text).sort((a, b) => (b.date || b.at) - (a.date || a.at)).slice(0, 5)
-    .map(n => ({ trening: n.title, datum: ymd(new Date(n.date || n.at)), komentar: n.text }));
-  const chat = coachChat().filter(x => x.a).slice(-4).flatMap(x => [{ sportas: x.q }, { trener: x.a }]);
+  const comments = Object.values(coachNotes()).filter(n => n.text).sort((a, b) => (b.date || b.at) - (a.date || a.at)).slice(0, 3)
+    .map(n => ({ trening: n.title, datum: ymd(new Date(n.date || n.at)), komentar: n.text.slice(0, 600) }));
+  const chat = coachChat().filter(x => x.a).slice(-2).flatMap(x => [{ sportas: x.q.slice(0, 400) }, { trener: x.a.slice(0, 600) }]);
   try{
     const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "ask", question: q, icuKey: icuKey() || undefined,
       notes: settings.coachAbout || "", athlete: { ftp: settings.ftp, maxHr: settings.maxHr, weight: settings.weight }, plan: p ? { sessions, options } : null, rides, comments, chat }) });

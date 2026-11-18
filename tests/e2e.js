@@ -209,6 +209,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.deepEqual(await p.evaluate(() => plan().swap), { [first]: "p-rec" });
     assert.equal(await p.evaluate(id => planSessions().find(x => x.id === id).w.name, first), "Aktivni oporavak");
     assert.match(await p.textContent("#coach-thread"), /Primijenjeno/);
+    // a plain question: this week of the plan, no list of swaps, less effort
+    await p.evaluate(() => coachQuestion("Kako napredujem?")); const plain = srv.claude.at(-1);
+    assert.doesNotMatch(plain.messages[0].content, /Mogući treninzi/); assert.match(plain.messages[0].content, /Plan za ovaj tjedan/);
+    assert.equal(plain.output_config.effort, "low");
+    assert.ok((plain.messages[0].content.match(/"id":"w\d+-/g) || []).length <= 14, "one or two weeks of the plan");
     srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
   });
 
