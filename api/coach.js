@@ -6,6 +6,7 @@
 //   POST /api/coach { action: "comment", icuKey, notes, athlete, ride | icuId } -> { text, model }
 //     ride:  a ride recorded in Pedala (summary, laps, minute-by-minute power, cadence and heart rate)
 //     icuId: any activity on intervals.icu (runs and swims from a watch, outdoor rides…)
+//   POST /api/coach { action: "week", icuKey, notes, athlete, plan, rides } -> { text }   review of the last seven days (Saturdays)
 //   POST /api/coach { action: "ask", icuKey, notes, athlete, question, chat, plan, rides, comments }
 //     -> { answer, changes: [{ session_id, action: "replace" | "skip" | "restore", workout_id, reason }] }
 //     a question outside a session; changes to the plan are only proposals, the app applies them when the athlete confirms
@@ -45,6 +46,16 @@ Promjene plana (polje changes):
 - ne mijenjaj treninge koji su već odrađeni; reason kratko objašnjava zašto;
 - u odgovoru reci što predlažeš: promjene se primjenjuju tek kad ih sportaš potvrdi u aplikaciji.`;
 
+const SYSTEM_WEEK = `Ti si osobni trener izdržljivosti (biciklizam, trčanje, plivanje) u aplikaciji Pedala. Jednom tjedno, subotom, sportašu pišeš pregled proteklih sedam dana.
+
+Pregled:
+- što je odrađeno u odnosu na plan i koliko je bio dosljedan (neobavezni treninzi se ne broje kao propušteni);
+- kako napreduju bicikl, trčanje i plivanje, prema podacima (snaga, puls, tempo, opterećenje);
+- forma i oporavak: kondicija, umor, san, puls u mirovanju i HRV, ako ih ima;
+- na što paziti idući tjedan, s jednim ili dva konkretna savjeta za treninge koji slijede.
+
+Pravila: na hrvatskom, toplo i izravno, u drugom licu jednine; poštuj sportaševe bilješke i odluke; kod znakova ozljede, bolesti ili pretreniranosti reci to jasno, bez dijagnoza; ne nagađaj kad podataka nema. Duljina: 120 do 220 riječi, običan tekst bez naslova i markdowna, najviše četiri kratka odlomka.`;
+
 const ASK_SCHEMA = { type: "object", additionalProperties: false, required: ["answer", "changes"], properties: {
   answer: { type: "string" },
   changes: { type: "array", items: { type: "object", additionalProperties: false, required: ["session_id", "action", "workout_id", "reason"], properties: {
@@ -67,9 +78,10 @@ module.exports = async (req, res) => {
         id: String(a.id), type: a.type || "", name: a.name || "", start: a.start_date_local || "", external_id: a.external_id || null,
         minutes: a.moving_time ? Math.round(a.moving_time / 60) : null })) });
     }
-    if(b.action !== "comment" && b.action !== "ask") return res.status(400).json({ error: "Nepoznata akcija" });
+    if(!["comment", "ask", "week"].includes(b.action)) return res.status(400).json({ error: "Nepoznata akcija" });
     if(!enabled) return res.status(501).json({ error: "Trener nije uključen: na Vercelu dodaj ANTHROPIC_API_KEY i napravi Redeploy." });
     if(b.action === "ask") return ask(b, icuKey, res);
+    if(b.action === "week") return week(b, icuKey, res);
     if(!b.ride && !b.icuId) return res.status(400).json({ error: "Nema treninga za komentar" });
 
     // what the coach looks at; intervals.icu parts are optional (no key, or the service is down)
@@ -117,6 +129,20 @@ async function ask(b, icuKey, res){
   const ids = new Set((b.plan?.sessions || []).map(x => x.id)), opts = new Set((b.plan?.options || []).map(x => x.id));
   const changes = (out.changes || []).filter(c => ids.has(c.session_id) && (c.action !== "replace" || opts.has(c.workout_id)));   // only what the app can apply
   return res.status(200).json({ answer: String(out.answer || "").trim(), changes, model: msg.model, usage: usage(msg) });
+}
+
+/* Saturday review of the week: the plan around it, Pedala's rides, intervals.icu and wellness */
+async function week(b, icuKey, res){
+  const parts = [section("Sportaš", { ...pick(b.athlete || {}, ["ftp", "maxHr", "weight"]), danas: ymd(Date.now()) })];
+  if(b.notes) parts.push(`## Sportaševe bilješke\n${String(b.notes).slice(0, 2000)}`);
+  if(b.plan) parts.push(section("Plan: proteklih 7 dana i idućih 8, sa stanjem", (b.plan.sessions || []).slice(0, 40)));
+  if(Array.isArray(b.rides) && b.rides.length) parts.push(section("Vožnje u Pedali proteklih 7 dana", b.rides.slice(0, 15)));
+  if(icuKey){ const ctx = await icuContext(icuKey); parts.push(...ctx.parts(() => true)); }
+  const msg = await claude({ system: SYSTEM_WEEK, content: parts.join("\n\n") + "\n\nNapiši tjedni pregled." });
+  if(msg.stop_reason === "refusal") return res.status(422).json({ error: "Trener ovaj put nije napisao pregled" });
+  const text = msg.content.filter(c => c.type === "text").map(c => c.text).join("\n").trim();
+  if(!text) return res.status(502).json({ error: "Trener je vratio prazan pregled" });
+  return res.status(200).json({ text, model: msg.model, usage: usage(msg) });
 }
 
 async function claude({ system, content, format }){

@@ -30,7 +30,7 @@
 - **Progress:** fitness/fatigue/form (CTL/ATL/TSB), weekly volume, best powers, FTP over time.
 - **14-week training plan** (short weekday sessions, long Sunday Zone 2 ride; optionally two swims with technique drills, a brick run and an easy Friday run from 1 to 6 km, ticked off from intervals.icu) with progress tracking and a calendar file with reminders.
 - **intervals.icu upload** of every ride, `.FIT` export for Strava, GoldenCheetah and others.
-- **Virtual coach:** after every session Claude writes a short comment (in Croatian) on your Pedala rides and on everything else that reaches intervals.icu, such as runs and swims from a watch. You can also ask it questions or for a plan change ("I have a cold, what about this week?"); proposed changes are applied when you confirm them. Needs `ANTHROPIC_API_KEY`; about 6 cents per comment or answer.
+- **Virtual coach:** a weekly review every Saturday, or a short comment after every session (in Croatian), on your Pedala rides and on everything else that reaches intervals.icu, such as runs and swims from a watch. You can also ask it questions or for a plan change ("I have a cold, what about this week?"); proposed changes are applied when you confirm them. Needs `ANTHROPIC_API_KEY`; about 6 cents per comment or answer.
 - **Sync between phone and tablet** through Vercel Blob; backup and restore as a single `.json` file.
 
 ## Requirements
