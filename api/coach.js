@@ -150,7 +150,7 @@ async function icuContext(key, oneId){
       snaga: a.icu_average_watts || a.average_watts }, null))),
     Array.isArray(well) && section("Forma i oporavak (intervals.icu wellness, po danima)", well.map(w => pick({
       datum: w.id, kondicija: w.ctl && Math.round(w.ctl), umor: w.atl && Math.round(w.atl), puls_mirovanje: w.restingHR, hrv: w.hrv,
-      san_h: w.sleepSecs && +(w.sleepSecs / 3600).toFixed(1), tezina: w.weight }, null))),
+      san_h: w.sleepSecs && +(w.sleepSecs / 3600).toFixed(1), ocjena_sna: w.sleepScore, spremnost: w.readiness, tezina: w.weight }, null))),
   ].filter(Boolean) };
 }
 
