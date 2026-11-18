@@ -92,7 +92,7 @@ module.exports = async (req, res) => {
     if(msg.stop_reason === "refusal") return res.status(422).json({ error: "Trener ovaj put nije napisao komentar" });
     const text = msg.content.filter(c => c.type === "text").map(c => c.text).join("\n").trim();
     if(!text) return res.status(502).json({ error: "Trener je vratio prazan komentar" });
-    return res.status(200).json({ text, model: msg.model });
+    return res.status(200).json({ text, model: msg.model, usage: usage(msg) });
   }catch(e){ return apiError(res, e); }
 };
 
@@ -114,7 +114,7 @@ async function ask(b, icuKey, res){
   let out; try{ out = JSON.parse(msg.content.filter(c => c.type === "text").map(c => c.text).join("")); }catch{ return res.status(502).json({ error: "Trener je vratio neispravan odgovor" }); }
   const ids = new Set((b.plan?.sessions || []).map(x => x.id)), opts = new Set((b.plan?.options || []).map(x => x.id));
   const changes = (out.changes || []).filter(c => ids.has(c.session_id) && (c.action !== "replace" || opts.has(c.workout_id)));   // only what the app can apply
-  return res.status(200).json({ answer: String(out.answer || "").trim(), changes, model: msg.model });
+  return res.status(200).json({ answer: String(out.answer || "").trim(), changes, model: msg.model, usage: usage(msg) });
 }
 
 async function claude({ system, content, format }){
@@ -128,6 +128,11 @@ async function claude({ system, content, format }){
     system,
     messages: [{ role: "user", content }],
   });
+}
+/* tokens and an estimate in dollars at Claude Opus 5.5 prices ($4 / $20 per million), so the app can show what an answer cost */
+function usage(msg){
+  const u = msg.usage || {}, input = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0), output = u.output_tokens || 0;
+  return { input, output, usd: +((input * 4 + output * 20) / 1e6).toFixed(4) };
 }
 function apiError(res, e){
   if(e instanceof Anthropic.AuthenticationError) return res.status(500).json({ error: "Anthropic ne prihvaća ANTHROPIC_API_KEY" });

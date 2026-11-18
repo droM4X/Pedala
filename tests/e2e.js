@@ -202,6 +202,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.equal(sent.output_config.format.type, "json_schema");
     assert.match(sent.messages[0].content, /Prehlađen sam/); assert.match(sent.messages[0].content, /"workout_id":"p-rec"|"id":"p-rec"/);
     assert.match(await p.textContent("#coach-thread"), /Odmori se/);
+    assert.match(await p.textContent("#coach-thread"), /≈ \$0\.0[0-9]{2}/, "what the answer cost"); assert.match(await p.textContent("#coach-month"), /≈ \$0\.0/);
     assert.equal(await p.locator("#coach-thread li").count(), 1, "a change for a session that does not exist is dropped");
     assert.ok(!(await p.evaluate(() => plan().swap)), "nothing changes before confirming");
     await p.click("#coach-thread [data-apply]");
@@ -230,6 +231,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.evaluate(() => { store.set("coach", {}); coachCheck.at = 0; return coachCheck(); });   // comments synced from the earlier coach test
     await p.waitForFunction(() => store.get("coach", {})["icu:i777"]?.text, null, { timeout: 15000 });
     assert.match(srv.claude.find(b => b.messages[0].content.includes("Jutarnje trčanje") && b.messages[0].content.includes("Trening koji komentiraš (intervals.icu)")).messages[0].content, /Što je plan tražio[\s\S]*1 km lagano/);
+    // swims and runs added to a running plan count only from the day they were added
+    assert.equal(await p.evaluate(() => { const q = { ...plan(), extraFrom: ymd(new Date()) }; return planSessions(q).filter(x => !x.w.segs && x.d < q.extraFrom).length; }), 0);
     await p.evaluate(() => planUpdate(q => { q.extra = false; }));
     assert.equal(await p.evaluate(() => planSessions().length), 42, "swims and runs can be switched off");
     srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
