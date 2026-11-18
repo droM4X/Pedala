@@ -99,7 +99,7 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
       content: [], stop_reason: "refusal", stop_details: { type: "refusal", category: null }, usage: { input_tokens: 1, output_tokens: 0 } }), { headers: { "content-type": "application/json" } }); };
     try{
       assert.equal((await callCoach("POST", { action: "comment", ride: coachRide, notes: "190 cm" })).status, 422);
-      assert.equal(sent.model, "claude-opus-5-5"); assert.equal(sent.output_config.effort, "medium");
+      assert.equal(sent.model, "claude-opus-5-5"); assert.equal(sent.output_config.effort, "low");
       assert.match(sent.messages[0].content, /190 cm/); assert.match(sent.messages[0].content, /Sweet spot/);
     }finally{ global.fetch = realFetch; delete process.env.ANTHROPIC_API_KEY; }
   });
