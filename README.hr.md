@@ -32,6 +32,7 @@
 - **Napredak:** forma (CTL/ATL/TSB), tjedni volumen, najbolje snage, FTP kroz vrijeme.
 - **Plan od 14 tjedana:**
   - kratki treninzi preko tjedna, duga nedjeljna vožnja u zoni 2;
+  - po želji dva plivanja s vježbama tehnike, brick trčanje utorkom i lagano trčanje petkom od 1 do 6 km, koji se otkvače sami s intervals.icu;
   - praćenje napretka i kalendar (`.ics`) s podsjetnicima.
 - **Slanje na intervals.icu** nakon svake vožnje i izvoz u `.FIT`.
 - **Virtualni trener:** nakon svakog treninga Claude napiše kratak komentar na vožnje iz Pedale i na sve ostalo što stigne na intervals.icu, npr. trčanje i plivanje sa sata. Možeš ga i pitati ili zatražiti promjenu plana („prehlađen sam, što s ovim tjednom?“); predložene promjene primjenjuju se kad ih potvrdiš. Treba `ANTHROPIC_API_KEY`; oko 6 centi po komentaru ili odgovoru.

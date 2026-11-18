@@ -64,11 +64,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const monday = await p.evaluate(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); });
     await p.evaluate(m => store.set("plan", { id: PLAN.id, start: m, done: {}, skipped: {}, times: { wk: "18:00", sun: "09:00" }, remind: 120 }), monday);
     const max = await p.evaluate(() => Math.max(...PLAN.weeks.flatMap(w => w.slice(0, 2)).map(k => totalDur(PLAN_WO["p-" + k])))); assert.ok(max <= 1800, "weekday sessions are 30 min at most");
-    const today = await p.evaluate(() => planSessions().find(s => s.today));
+    const today = await p.evaluate(() => planSessions().find(s => s.today && isRide(s)));
     const ics = await p.evaluate(() => planIcs());
-    assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, 42); assert.equal((ics.match(/TRIGGER:-PT120M/g) || []).length, 42);
+    assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, 98, "42 rides, 28 swims, 28 runs"); assert.equal((ics.match(/TRIGGER:-PT120M/g) || []).length, 98);
     if(today){
-      await p.evaluate(() => rideSession(planSessions().find(s => s.today)));
+      await p.evaluate(() => rideSession(planSessions().find(s => s.today && isRide(s))));
       await p.click("#chip-trainer"); await p.click("#c-sim"); await p.click("#btn-start");
       await p.waitForFunction(() => document.querySelector("#dlg-summary").open, null, { timeout: 120000 });
       await p.click("#sum-save"); await p.waitForTimeout(800);
@@ -79,6 +79,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
   await test("sync: a second device gets the ride and plan progress", async () => {
     const a = await open(), b = await open();
+    await a.evaluate(() => { if(!plan()) store.set("plan", { id: PLAN.id, start: ymd(new Date()), done: {}, skipped: {} }); });
     await a.evaluate(() => syncNow()); await b.evaluate(() => syncNow()); await b.waitForTimeout(800);
     assert.ok(await b.evaluate(async () => (await dbAll()).length) >= 1, "rides arrived");
     assert.ok(await b.evaluate(() => !!plan()), "plan arrived");
@@ -207,6 +208,26 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.deepEqual(await p.evaluate(() => plan().swap), { [first]: "p-rec" });
     assert.equal(await p.evaluate(id => planSessions().find(x => x.id === id).w.name, first), "Aktivni oporavak");
     assert.match(await p.textContent("#coach-thread"), /Primijenjeno/);
+    srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
+  });
+
+  await test("plan: swims and runs are in the plan and tick off from intervals.icu, the coach sees the day's target", async () => {
+    srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
+    const p = await open();
+    await p.evaluate(() => { settings.icuKey = "goodkey"; store.set("settings", settings);
+      const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - 4);   // today is the Friday of week 1
+      store.set("plan", { id: PLAN.id, start: ymd(d), done: {}, skipped: {}, extra: true }); });
+    const wk1 = await p.evaluate(() => planSessions().filter(x => x.week === 1).map(x => x.day + ":" + (x.w.sport || "ride")));
+    assert.deepEqual(wk1, ["mon:swim", "tue:ride", "tue2:run", "wed:swim", "thu:ride", "fri:run", "sun:ride"]);
+    assert.match(await p.evaluate(() => planSessions().find(x => x.id === "w1-mon").w.desc), /klizanje na prsima/);
+    assert.equal(await p.evaluate(() => planSessions().find(x => x.id === "w5-fri").w.name), "Trčanje · 2,5 km lagano");
+    await p.click('[data-view="plan"]'); await p.waitForFunction(() => plan().done?.["w1-fri"], null, { timeout: 10000 });
+    assert.equal(await p.evaluate(() => plan().done["w1-fri"]), "icu:i777", "today's run from the watch ticks off Friday's run");
+    await p.evaluate(() => { store.set("coach", {}); coachCheck.at = 0; return coachCheck(); });   // comments synced from the earlier coach test
+    await p.waitForFunction(() => store.get("coach", {})["icu:i777"]?.text, null, { timeout: 15000 });
+    assert.match(srv.claude.find(b => b.messages[0].content.includes("Jutarnje trčanje") && b.messages[0].content.includes("Trening koji komentiraš (intervals.icu)")).messages[0].content, /Što je plan tražio[\s\S]*1 km lagano/);
+    await p.evaluate(() => planUpdate(q => { q.extra = false; }));
+    assert.equal(await p.evaluate(() => planSessions().length), 42, "swims and runs can be switched off");
     srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
   });
 

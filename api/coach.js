@@ -83,6 +83,7 @@ module.exports = async (req, res) => {
       if(b.icuId){
         if(!ctx.one) return res.status(404).json({ error: "Trening nije pronađen na intervals.icu" });
         parts.push(section("Trening koji komentiraš (intervals.icu)", trimIcuActivity(ctx.one)));
+        if(b.planned) parts.push(section("Što je plan tražio za taj dan", b.planned));
       }
       parts.push(...ctx.parts(a => String(a.id) !== String(b.icuId) && (!exclude || a.external_id !== exclude)));
     } else if(b.icuId) return res.status(401).json({ error: "Za treninge s intervals.icu treba intervals.icu ključ" });
