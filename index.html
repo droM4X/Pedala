@@ -245,13 +245,17 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
 .week.now{outline:2px solid var(--z2)}
 .week h4{margin:0 0 6px;font:600 16px/1.2 var(--num);display:flex;justify-content:space-between;gap:8px}
 .week h4 small{font:500 12px/1.4 var(--ui);color:var(--muted)}
-.sess{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.sess{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:6px}
+.sess .swim b::before{content:"🏊 "} .sess .run b::before{content:"🏃 "}
+.weeks .sess button b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+#sess-sub{white-space:pre-line}
 .sess button{text-align:left;border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:6px 8px;color:var(--text);font-size:13px;min-width:0}
 .sess button b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sess button small{color:var(--muted)}
 .sess .done{border-color:var(--z3);background:rgba(47,191,113,.16)}
 .sess .missed{border-color:var(--z5)}
 .sess .skipped{opacity:.45}
+.sess .opt:not(.done){border-style:dashed}
 .sess .today{outline:2px solid var(--z2);outline-offset:1px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
 .toast.show{opacity:1}
@@ -531,6 +535,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
     <div class="scroll"><div class="wrap">
       <h1>Napredak</h1>
       <p class="lead">Računa se iz vožnji spremljenih u ovom pregledniku.</p>
+      <div id="coach-box"></div>
       <div id="pg-empty" class="list" hidden><div class="item"><div><h3>Još nema vožnji</h3><p>Spremi nekoliko vožnji i ovdje ćeš vidjeti formu, volumen i najbolje snage.</p></div></div></div>
       <div id="pg-body">
         <div class="weekbar" id="pg-totals"></div>
@@ -581,6 +586,12 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <div class="field" style="max-width:520px;margin:10px 0"><input id="icu-key" type="text" autocomplete="off" spellcheck="false" placeholder="API ključ" aria-label="intervals.icu API ključ"><button class="btn small" id="btn-icu" type="button">Spremi i provjeri</button></div>
       <p class="note" id="icu-status"></p>
       <label class="check note" style="display:flex"><input type="checkbox" id="icu-auto"> Automatski pošalji svaku spremljenu vožnju na intervals.icu</label>
+      <h2 class="section-title">Virtualni trener</h2>
+      <p class="note">Nakon svakog treninga Claude (Anthropic) napiše kratak komentar na hrvatskom: na vožnje iz Pedale i na sve ostalo što stigne na intervals.icu, npr. trčanje i plivanje sa sata. Komentari su u Napretku i u izvještaju vožnje.</p>
+      <p class="note" id="coach-status"></p>
+      <label class="check note" style="display:flex"><input type="checkbox" id="coach-auto"> Komentiraj svaki trening automatski</label>
+      <label class="note" style="display:block;max-width:520px;margin-top:10px">Bilješke za trenera (visina, ciljevi, ozljede, što želiš pratiti)
+        <textarea id="coach-about" rows="4" style="display:block;width:100%;margin-top:5px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit;resize:vertical"></textarea></label>
       <h2 class="section-title">Sinkronizacija</h2>
       <p class="note" id="sync-status">Provjeravam…</p>
       <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" type="button" id="btn-sync">Sinkroniziraj sada</button></div>
@@ -630,6 +641,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
   <h2 id="rep-title"></h2>
   <p id="rep-sub"></p>
   <div class="sum" id="rep-grid"></div>
+  <div id="rep-coach"></div>
   <div id="rep-body"></div>
   <div class="dlg-acts" style="margin-top:16px"><button class="btn" data-close>Zatvori</button></div>
 </dialog>
@@ -660,7 +672,7 @@ const fmtTime = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s/36
   return h ? `${h}:${String(m).padStart(2,"0")}:${String(x).padStart(2,"0")}` : `${m}:${String(x).padStart(2,"0")}`; };
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),2600); }
 /* keys shared between devices through api/sync.js; each change is time-stamped so the newest one wins */
-const SYNCED = ["settings", "plan", "workouts", "routes", "ytChannels", "ytPlaylists"];
+const SYNCED = ["settings", "plan", "workouts", "routes", "ytChannels", "ytPlaylists", "coach", "coachChat"];
 const store = {
   get(k, d){ try{ const v = localStorage.getItem("pedala."+k); return v==null ? d : JSON.parse(v); }catch{ return d; } },
   set(k, v){
@@ -784,7 +796,8 @@ const EN = new Map(Object.entries({
   "6 × (1 min na 110%, 1 min lagano). Lakše, pred završni test.": "6 × (1 min at 110%, 1 min easy). Easier, before the final test.",
   "20 minuta laganog okretanja na 52% FTP-a.": "20 minutes of easy spinning at 52% of FTP.", "Lagano, s dva kratka buđenja od 1 minute na FTP-u.": "Easy, with two short 1-minute wake-ups at FTP.",
   "Mirna vožnja u zoni 2 (65% FTP-a). Razgovorni tempo, kadenca 85–95.": "Steady Zone 2 ride (65% of FTP). Conversational pace, cadence 85–95.",
-  "Zona 2": "Zone 2", "Uto": "Tue", "Čet": "Thu", "Ned": "Sun", "Danas": "Today", "prag": "threshold", "duga vožnja": "long ride",
+  "Zona 2": "Zone 2", "Pon": "Mon", "Sri": "Wed", "Pet": "Fri", "plivanje": "swim", "trčanje": "run", "brick": "brick",
+  "Plivanje i trčanje u planu": "Swims and runs in the plan", "Plan: trening sa sata je otkvačen": "Plan: a session from your watch was ticked off", "Uto": "Tue", "Čet": "Thu", "Ned": "Sun", "Danas": "Today", "prag": "threshold", "duga vožnja": "long ride",
   "lakši": "easier", "odrađeno": "done", "preskočeno": "skipped", "propušteno": "missed", "h vožnje": "h ridden", "dosljednost": "consistency",
   "Početak (ponedjeljak)": "Start (Monday)", "Pokreni plan": "Start plan", "Vozi sada": "Ride now", "Više": "More",
   "Plan je završen 🎉": "Plan complete 🎉", "Odradi ramp test ako već nisi i postavi novi FTP.": "Do the ramp test if you haven't yet, and set your new FTP.",
@@ -841,6 +854,21 @@ const EN = new Map(Object.entries({
   "Besplatan servis za analizu treninga. Na intervals.icu otvori": "A free training analysis service. On intervals.icu open", ", stvori": ", create an", "i zalijepi ga ovdje.": "and paste it here.",
   "API ključ": "API key", "intervals.icu API ključ": "intervals.icu API key", "Spremi i provjeri": "Save and check", "Provjeravam…": "Checking…",
   "Automatski pošalji svaku spremljenu vožnju na intervals.icu": "Send every saved ride to intervals.icu automatically",
+  "Virtualni trener": "Virtual coach", "Trener": "Coach", "Komentiraj svaki trening automatski": "Comment on every session automatically",
+  "Nakon svakog treninga Claude (Anthropic) napiše kratak komentar na hrvatskom: na vožnje iz Pedale i na sve ostalo što stigne na intervals.icu, npr. trčanje i plivanje sa sata. Komentari su u Napretku i u izvještaju vožnje.":
+    "After every session Claude (Anthropic) writes a short comment in Croatian: on rides from Pedala and on everything else that reaches intervals.icu, such as runs and swims from a watch. Comments are under Progress and in the ride report.",
+  "Bilješke za trenera (visina, ciljevi, ozljede, što želiš pratiti)": "Notes for the coach (height, goals, injuries, what you want to track)",
+  "Trener je uključen (ANTHROPIC_API_KEY je postavljen na Vercelu). Za ostale treninge treba i intervals.icu ključ.": "The coach is on (ANTHROPIC_API_KEY is set on Vercel). Other activities also need an intervals.icu key.",
+  "Trener nije uključen. Na": "The coach is off. On", "napravi API ključ, na Vercelu ga dodaj kao": "create an API key, add it on Vercel as", "i napravi": "and",
+  ". Jedan komentar stoji oko 6 centi, a mjesečni limit potrošnje postavi u Consoleu.": ". One comment costs about 6 cents; set a monthly spend limit in the Console.",
+  "Trener nije uključen. Upute su u Postavkama, kod Virtualnog trenera.": "The coach is off. See Settings → Virtual coach.",
+  "Komentari će se pojaviti nakon sljedećeg treninga.": "Comments will show up after your next session.", "Trener piše komentar…": "The coach is writing…",
+  "Komentar nije uspio": "Comment failed", "Na Anthropic računu nema kredita. Nadoplati ga na console.anthropic.com → Billing.": "There is no credit left on the Anthropic account. Top it up at console.anthropic.com → Billing.", "Pokušaj ponovno": "Try again", "Komentar trenera": "Coach's comment",
+  "Trener je komentirao vožnju (Napredak → Trener)": "The coach commented on your ride (Progress → Coach)",
+  "Pitaj trenera": "Ask the coach", "Pošalji": "Send", "Komentari treninga": "Session comments", "Ti": "You", "Trener piše odgovor…": "The coach is writing…",
+  "Odgovor nije uspio": "No answer", "Prijedlog promjene plana": "Proposed plan change", "Primijeni": "Apply", "Primijenjeno": "Applied", "Plan je promijenjen": "Plan changed",
+  "zamijeni s": "swap for", "preskoči": "skip", "vrati izvorni trening": "restore the original session", "Vrati izvorni": "Restore original", "zamjena": "swapped",
+  "Pitaj trenera ili zatraži promjenu plana, npr. prehlađen sam, što s ovim tjednom?": "Ask the coach or ask for a plan change, e.g. I have a cold, what about this week?",
   "Ključ je postavljen na Vercelu (INTERVALS_API_KEY). Klikni Spremi i provjeri za provjeru.": "The key is set on Vercel (INTERVALS_API_KEY). Click Save and check to test it.",
   "Nije povezano.": "Not connected.", "Ključ je upisan, ali još nije provjeren.": "The key is entered but not checked yet.",
   "intervals.icu odspojen": "intervals.icu disconnected", "intervals.icu povezan": "intervals.icu connected", "intervals.icu ne prihvaća ovaj API ključ": "intervals.icu does not accept this API key",
@@ -2156,6 +2184,7 @@ function chart(cv, min, max, fmt = v => Math.round(v)){
 }
 let progressRides = [];
 async function renderProgress(){
+  renderCoachBox();
   try{ progressRides = await dbAll(); }catch(e){ console.warn(e); progressRides = []; }
   progressRides.sort((a, b) => a.start - b.start);
   drawProgress();
@@ -2311,6 +2340,174 @@ $("#icu-auto").onchange = e => { settings.icuAuto = e.target.checked; store.set(
 window.addEventListener("online", () => syncIcu());
 document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") syncIcu(); });
 
+/* ============ virtual coach (api/coach.js, Claude) ============
+   After every training session the coach writes a short comment: rides saved in Pedala right after saving, and every
+   other activity that reaches intervals.icu (runs and swims from a watch…) when the app opens. Comments are kept in
+   store "coach" (shared between devices) as { "ride:<id>" | "icu:<id>": { text | error | pending, at, title, date } }. */
+let coachServer = false;                                   // ANTHROPIC_API_KEY is set on Vercel
+const coachOn = () => coachServer && settings.coachAuto !== false && Date.now() > store.get("coachPause", 0);   // paused for 12 h when the credit runs out
+const coachNotes = () => store.get("coach", {});
+function saveCoachNote(key, note){
+  const all = { ...coachNotes(), [key]: note };
+  const keep = Object.entries(all).sort((a, b) => (b[1].date || b[1].at) - (a[1].date || a[1].at)).slice(0, 80);
+  store.set("coach", Object.fromEntries(keep));
+}
+/* a ride as the coach sees it: summary, laps and power, cadence and heart rate minute by minute */
+function coachRidePayload(r){
+  const n = r.samples.length, step = n > 7200 ? 120 : 60, rows = [];
+  for(let i = 0; i < n; i += step){ const s = r.samples.slice(i, i + step), hr = s.filter(x => x[3]);
+    rows.push([Math.round(i / 60), Math.round(s.reduce((a, x) => a + x[1], 0) / s.length), Math.round(s.reduce((a, x) => a + x[2], 0) / s.length), hr.length ? Math.round(hr.reduce((a, x) => a + x[3], 0) / hr.length) : null]); }
+  const w = findWorkout(r.workoutId), sess = planSessions().find(x => plan()?.done?.[x.id] === r.id);
+  const { best, ...m } = r.m;
+  return { id: r.id, name: r.name, start: new Date(r.start).toISOString(), desc: w?.desc, route: r.route || undefined, ftp: r.ftp, maxHr: r.maxHr,
+    plan: sess ? { tjedan: sess.week, dan: sess.day, trening: sess.w.name } : undefined,
+    m: { ...m, trajanje_min: Math.round(m.duration / 60), najbolje_w: best },
+    laps: (r.laps || []).filter(l => l.dur >= 20).map(l => ({ naziv: l.name, s: l.dur, snaga: l.avgP, cilj: l.tgt, vrsta_cilja: l.kind, ostvareno_posto: l.score,
+      puls: l.avgHr || null, kadenca: l.avgCad, cilj_kadenca: l.cadTgt, uputa: l.note })),
+    minutes: { korak_s: step, stupci: ["min", "W", "rpm", "bpm"], podaci: rows } };
+}
+async function coachAsk(key, payload, title, date){
+  const old = coachNotes()[key]; if(old?.pending && Date.now() - old.at < 3 * 60000) return null;
+  saveCoachNote(key, { pending: true, at: Date.now(), title, date }); renderCoachViews();
+  try{
+    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "comment", icuKey: icuKey() || undefined,
+      notes: settings.coachAbout || "", athlete: { ftp: settings.ftp, maxHr: settings.maxHr, weight: settings.weight }, ...payload }) });
+    const j = await r.json().catch(() => ({}));
+    if(r.status === 402) store.set("coachPause", Date.now() + 12 * 36e5);
+    if(!r.ok) throw new Error(j.error || "greška " + r.status);
+    saveCoachNote(key, { text: j.text, at: Date.now(), title, date }); renderCoachViews(); return j.text;
+  }catch(e){ saveCoachNote(key, { error: e.message, at: Date.now(), title, date }); renderCoachViews(); throw e; }
+}
+const coachRide = r => coachAsk("ride:" + r.id, { ride: coachRidePayload(r) }, r.name, r.start);
+function coachAfterSave(r){
+  if(!coachOn() || r.m.duration < 300) return;
+  coachRide(r).then(t => t && notify(tr("Trener je komentirao vožnju (Napredak → Trener)"))).catch(() => {});
+}
+/* new activities on intervals.icu that did not come from Pedala: comment the newest two from the last week */
+async function coachCheck(){
+  if(!coachOn() || !icuOn() || coachCheck.busy || Date.now() - (coachCheck.at || 0) < 10 * 60000) return;
+  coachCheck.busy = true; coachCheck.at = Date.now();
+  try{
+    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "list", icuKey: icuKey() || undefined }) });
+    if(!r.ok) return;
+    const { activities = [] } = await r.json(), notes = coachNotes(), mine = (await dbAll()).map(x => x.start);
+    const todo = activities.map(a => ({ ...a, t: Date.parse(a.start) }))
+      .filter(a => !String(a.external_id || "").startsWith("r-") && !mine.some(t => Math.abs(t - a.t) < 5 * 60000)   // Pedala's own rides
+        && a.t > Date.now() - 7 * 864e5 && (a.minutes == null || a.minutes >= 5)
+        && (!notes["icu:" + a.id] || notes["icu:" + a.id].error && Date.now() - notes["icu:" + a.id].at > 12 * 36e5))
+      .sort((a, b) => b.t - a.t).slice(0, 2);
+    for(const a of todo){
+      const x = planSessions().find(s => !isRide(s) && s.w.sport === ICU_SPORT[a.type] && s.d === String(a.start).slice(0, 10));
+      const planned = x ? { trening: x.w.name, opis: x.w.desc, min: woMin(x.w), km: x.w.km } : undefined;
+      try{ await coachAsk("icu:" + a.id, { icuId: a.id, planned }, a.name || a.type, a.t); }catch{ break; } }
+  }catch(e){ console.warn("coach", e); }
+  finally{ coachCheck.busy = false; }
+}
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") coachCheck(); });
+const coachDate = t => new Date(t).toLocaleString(LOC, { weekday: "short", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" });
+function coachNoteHtml(n){
+  return n.text ? `<p data-notr style="white-space:pre-line;color:var(--text);margin:6px 0 0">${n.text.replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c])}</p>`
+    : n.pending ? `<p>${tr("Trener piše komentar…")}</p>` : `<p style="color:var(--z5)">${tr("Komentar nije uspio")}: ${String(n.error).replace(/[<>&]/g, "")}</p>`;
+}
+function renderCoachBox(){
+  const box = $("#coach-box"); if(!box) return;
+  if(!box.dataset.ready){   // built once, so a refresh never wipes a question being typed
+    box.dataset.ready = 1;
+    box.innerHTML = `<h2 class="section-title" style="margin-top:6px">Trener</h2>
+      <form class="field" id="coach-form" style="align-items:flex-end;margin-bottom:12px"><textarea id="coach-q" rows="3" placeholder="Pitaj trenera ili zatraži promjenu plana, npr. prehlađen sam, što s ovim tjednom?"
+        style="flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit;resize:vertical"></textarea><button class="btn" type="submit">Pošalji</button></form>
+      <div id="coach-thread" class="list" style="margin-bottom:16px"></div><h3 class="vsect">Komentari treninga</h3><div id="coach-list"></div>`;
+    $("#coach-form").onsubmit = e => { e.preventDefault(); const q = $("#coach-q").value.trim(); if(!q) return; $("#coach-q").value = ""; coachQuestion(q).catch(() => {}); };
+    $("#coach-q").addEventListener("keydown", e => { if(e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#coach-form").requestSubmit(); });
+  }
+  $("#coach-form").hidden = !coachServer;
+  const list = Object.entries(coachNotes()).sort((a, b) => (b[1].date || b[1].at) - (a[1].date || a[1].at)).slice(0, 10), el = $("#coach-list");
+  if(!coachServer && !list.length) el.innerHTML = `<p class="note">Trener nije uključen. Upute su u Postavkama, kod Virtualnog trenera.</p>`;
+  else if(!list.length) el.innerHTML = `<p class="note">Komentari će se pojaviti nakon sljedećeg treninga.</p>`;
+  else el.innerHTML = `<div class="list">` + list.map(([k, n]) => `<div class="item" data-k="${k}"><div><h3></h3>${coachNoteHtml(n)}</div>${n.error && coachServer ? `<div class="acts"><button class="btn small" data-retry>Pokušaj ponovno</button></div>` : ""}</div>`).join("") + `</div>`;
+  el.querySelectorAll("[data-k]").forEach(item => {
+    const k = item.dataset.k, n = coachNotes()[k];
+    item.querySelector("h3").textContent = `${tr(n.title || "Trening")} · ${coachDate(n.date || n.at)}`;
+    item.querySelector("[data-retry]")?.addEventListener("click", async () => {
+      if(k.startsWith("icu:")) coachAsk(k, { icuId: k.slice(4) }, n.title, n.date).catch(() => {});
+      else { const r = (await dbAll()).find(x => "ride:" + x.id === k); if(r) coachRide(r).catch(() => {}); }
+    });
+  });
+  renderCoachThread();
+}
+/* ---- questions outside a session; the coach may propose plan changes, applied when the rider confirms ---- */
+const coachChat = () => store.get("coachChat", []);
+function saveChat(fn){ const c = coachChat(); fn(c); store.set("coachChat", c.slice(-20)); }
+const esc = t => String(t).replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]);
+async function coachQuestion(q){
+  const at = Date.now(); saveChat(c => c.push({ q, at, pending: true })); renderCoachThread();
+  const p = plan(), now = Date.now();
+  const sessions = p ? planSessions(p).filter(x => x.date >= now - 7 * 864e5 && x.date <= now + 21 * 864e5).map(x => ({ id: x.id, datum: x.d, dan: x.day, tjedan: x.week,
+    trening: x.w.name, workout_id: x.w.id, min: woMin(x.w), stanje: x.done ? "odrađen" : x.skipped ? "preskočen" : x.past ? (x.optional ? "neobavezan, nije odrađen" : "propušten") : x.today ? "danas" : "predstoji", zamijenjen: x.swapped || undefined })) : null;
+  const options = [...new Map([...Object.values(PLAN_WO), ...BUILTIN].map(w => [w.id, w])).values()]
+    .map(w => ({ id: w.id, naziv: w.name, min: woMin(w), vrsta: w.cat, opis: String(w.desc || "").slice(0, 140) }));
+  let rides = []; try{ rides = (await dbAll()).filter(r => r.start > now - 21 * 864e5).sort((a, b) => b.start - a.start)
+    .map(r => ({ datum: ymd(new Date(r.start)), naziv: r.name, min: Math.round(r.m.duration / 60), tss: r.m.tss, snaga: r.m.avgP, puls: r.m.avgHr || undefined })); }catch{}
+  const comments = Object.values(coachNotes()).filter(n => n.text).sort((a, b) => (b.date || b.at) - (a.date || a.at)).slice(0, 5)
+    .map(n => ({ trening: n.title, datum: ymd(new Date(n.date || n.at)), komentar: n.text }));
+  const chat = coachChat().filter(x => x.a).slice(-4).flatMap(x => [{ sportas: x.q }, { trener: x.a }]);
+  try{
+    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "ask", question: q, icuKey: icuKey() || undefined,
+      notes: settings.coachAbout || "", athlete: { ftp: settings.ftp, maxHr: settings.maxHr, weight: settings.weight }, plan: p ? { sessions, options } : null, rides, comments, chat }) });
+    const j = await r.json().catch(() => ({}));
+    if(!r.ok) throw new Error(j.error || "greška " + r.status);
+    saveChat(c => { const x = c.find(y => y.at === at); if(x){ delete x.pending; x.a = j.answer; x.changes = j.changes || []; } });
+  }catch(e){ saveChat(c => { const x = c.find(y => y.at === at); if(x){ delete x.pending; x.error = e.message; } }); }
+  renderCoachThread();
+}
+function changeText(c){
+  const x = planSessions().find(s => s.id === c.session_id), w = c.workout_id && findWorkout(c.workout_id);
+  const where = x ? `${tr(x.label)} ${shortDate(x.date)} · ${x.w.name}` : c.session_id;
+  const what = c.action === "replace" ? `${tr("zamijeni s")} „${w?.name || c.workout_id}“` : c.action === "skip" ? tr("preskoči") : tr("vrati izvorni trening");
+  return `<b>${esc(where)}</b>: ${esc(what)}${c.reason ? ` <span data-notr>(${esc(c.reason)})</span>` : ""}`;
+}
+function applyChanges(at){
+  const x = coachChat().find(y => y.at === at); if(!x?.changes?.length || !plan()) return;
+  planUpdate(p => { for(const c of x.changes){
+    if(c.action === "replace"){ p.swap = { ...p.swap, [c.session_id]: c.workout_id }; if(p.skipped) delete p.skipped[c.session_id]; }
+    else if(c.action === "skip") p.skipped = { ...p.skipped, [c.session_id]: true };
+    else { if(p.swap) delete p.swap[c.session_id]; if(p.skipped) delete p.skipped[c.session_id]; }
+  } });
+  saveChat(c => { const y = c.find(z => z.at === at); if(y) y.applied = Date.now(); });
+  toast(tr("Plan je promijenjen")); renderCoachThread();
+}
+function renderCoachThread(){
+  const el = $("#coach-thread"); if(!el) return;
+  const items = coachChat().slice(-5).reverse();
+  el.innerHTML = items.map(x => `<div class="item" data-at="${x.at}"><div>
+      <p data-notr style="white-space:pre-line;margin:0"><b style="color:var(--text)">${tr("Ti")}:</b> ${esc(x.q)}</p>
+      ${x.pending ? `<p>${tr("Trener piše odgovor…")}</p>` : x.error ? `<p style="color:var(--z5)">${tr("Odgovor nije uspio")}: ${esc(x.error)}</p>`
+        : `<p data-notr style="white-space:pre-line;color:var(--text);margin:6px 0 0"><b>${tr("Trener")}:</b> ${esc(x.a)}</p>`}
+      ${x.changes?.length ? `<p style="margin-top:8px">${tr("Prijedlog promjene plana")}:</p><ul style="margin:4px 0 0;padding-left:18px;color:var(--muted);font-size:14px">${x.changes.map(c => `<li>${changeText(c)}</li>`).join("")}</ul>` : ""}
+    </div>${x.changes?.length ? `<div class="acts">${x.applied ? `<span class="note">${tr("Primijenjeno")} ✓</span>` : `<button class="btn small primary" data-apply>${tr("Primijeni")}</button>`}</div>` : ""}</div>`).join("");
+  el.querySelectorAll("[data-apply]").forEach(b => b.onclick = () => applyChanges(+b.closest("[data-at]").dataset.at));
+}
+function renderRepCoach(r){
+  const box = $("#rep-coach"); if(!box) return; box.dataset.ride = r.id;
+  const n = coachNotes()["ride:" + r.id];
+  box.innerHTML = n ? `<div class="rep"><h3>Trener</h3>${coachNoteHtml(n)}</div>`
+    : coachServer ? `<div class="dlg-acts" style="justify-content:flex-start;margin:4px 0 0"><button class="btn small" id="rep-coach-go">Komentar trenera</button></div>` : "";
+  $("#rep-coach-go")?.addEventListener("click", () => coachRide(r).catch(e => toast(e.message)));
+}
+async function renderCoachViews(){
+  if($("#view-progress").classList.contains("active")) renderCoachBox();
+  const box = $("#rep-coach"); if($("#dlg-report").open && box.dataset.ride){ const r = (await dbAll()).find(x => x.id === box.dataset.ride); if(r) renderRepCoach(r); }
+}
+function fillCoach(){
+  const st = $("#coach-status"); if(!st) return;
+  st.innerHTML = coachServer ? "Trener je uključen (ANTHROPIC_API_KEY je postavljen na Vercelu). Za ostale treninge treba i intervals.icu ključ."
+    : "Trener nije uključen. Na <b>console.anthropic.com</b> napravi API ključ, na Vercelu ga dodaj kao <b>ANTHROPIC_API_KEY</b> i napravi <b>Redeploy</b>. Jedan komentar stoji oko 6 centi, a mjesečni limit potrošnje postavi u Consoleu.";
+  $("#coach-auto").checked = settings.coachAuto !== false;
+  if(document.activeElement !== $("#coach-about")) $("#coach-about").value = settings.coachAbout || "";
+}
+$("#coach-auto").onchange = e => { settings.coachAuto = e.target.checked; store.set("settings", settings); };
+$("#coach-about").addEventListener("change", e => { settings.coachAbout = e.target.value.trim(); store.set("settings", settings); });
+
 /* ============ training plan ============
    "Održivi 14 tjedana", adapted: the Tuesday threshold and Thursday VO2max sessions last 30 minutes at most
    and get harder through density instead of length; the Sunday Zone 2 ride grows from 50 min to 3 h.
@@ -2351,6 +2548,42 @@ const PLAN = { id: "odrzivi14", name: "Održivi 14 tjedana", weeks: [
   ["t9", "v9", "z140"], ["t10", "v10", "z155"], ["t11", "v11", "z170"], ["rec", "op", "z75"],
   ["t13", "v13", "z180"], ["rec", "op", "b-ramp"]], deload: [4, 8, 12, 14] };
 const PLAN_DAYS = [["tue", 1, "Uto"], ["thu", 3, "Čet"], ["sun", 6, "Ned"]];
+/* Swims, the brick run and the easy run sit around the rides; they are done outside Pedala and tick off by
+   themselves when a matching activity reaches intervals.icu. Swims start with simple drills; the Friday run
+   grows from 1 to 6 km over the 14 weeks (10 km is a later goal), easier in the deload weeks. */
+const RUN_KM = [1, 1.5, 2, 1.5, 2.5, 3, 3.5, 2.5, 4, 4.5, 5, 3.5, 5.5, 6];
+const BRICK_MIN = [5, 5, 7, 5, 8, 10, 10, 7, 12, 12, 15, 10, 15, 15];
+const SWIM_TECH_MIN = [30, 30, 30, 30, 35, 35, 35, 30, 40, 40, 40, 30, 40, 40], SWIM_EASY_MIN = [30, 30, 35, 30, 35, 40, 40, 30, 40, 45, 45, 30, 45, 45];
+const km1 = n => UI === "hr" ? String(n).replace(".", ",") : String(n);
+function extraWorkout(kind, wi){
+  const deload = PLAN.deload.includes(wi + 1);
+  if(kind === "swimTech" && wi === 13) return { id: "x-swimtest", sport: "swim", min: 30, name: ui("Test · 400 m plivanja", "Test · 400 m swim"),
+    desc: ui("Upliv 200 m lagano i 4 × 25 m klizanje. Zatim 400 m u komadu, ravnomjerno i bez stajanja ako ide (ako ne ide, stani na kraju bazena koliko treba i zapiši koliko si puta stao). Zapiši vrijeme: to je polazna točka za plivanje u idućem bloku. Na kraju 100 m opušteno.",
+      "Warm up 200 m easy and 4 × 25 m glide. Then 400 m in one go, evenly and without stopping if you can (if not, rest at the wall as needed and note how often you stopped). Note your time: it is the starting point for swimming in the next block. Finish with 100 m relaxed.") };
+  if(kind === "swimTech"){
+    const main = deload ? "6 × 50 m" : wi < 4 ? "8 × 50 m" : wi < 8 ? "10 × 50 m" : "6 × 100 m";
+    return { id: `x-swimtech-${wi + 1}`, sport: "swim", min: SWIM_TECH_MIN[wi], name: ui("Plivanje · tehnika", "Swim · technique"),
+      desc: ui(`Upliv 200 m lagano, s odmorima po potrebi.\nVježbe, svaka 4 × 25 m s 20–30 s odmora:\n1) klizanje na prsima: ruke ispružene naprijed, lice u vodi, polako izdiši kroz nos;\n2) noge s daskom: opušteni gležnjevi, udarac iz kuka, ne iz koljena;\n3) plivanje na boku: donja ruka ispružena naprijed, 6 udaraca nogama, pa okreni glavu za udah;\n4) kraul s izdahom u vodi i udahom na svaki treći zaveslaj (ako ne ide, na svaki drugi).\nGlavni dio: ${main} mirno, 30 s odmora.\nNa kraju 100 m opušteno.`,
+        `Warm up 200 m easy, resting as needed.\nDrills, 4 × 25 m each with 20–30 s rest:\n1) glide on your front: arms stretched forward, face in the water, breathe out slowly through your nose;\n2) kick with a board: loose ankles, kick from the hip, not the knee;\n3) side kick: lower arm stretched forward, 6 kicks, then turn your head to breathe;\n4) front crawl breathing out in the water and in every third stroke (every second if that is too hard).\nMain set: ${main} easy, 30 s rest.\nFinish with 100 m relaxed.`) };
+  }
+  if(kind === "swimEasy"){
+    const main = deload ? ui("4 × 50 m", "4 × 50 m") : wi < 4 ? ui("4 × 100 m (ili 8 × 50 m)", "4 × 100 m (or 8 × 50 m)") : wi < 8 ? "5 × 100 m" : ui("3 × 200 m s 45 s odmora", "3 × 200 m with 45 s rest");
+    return { id: `x-swimeasy-${wi + 1}`, sport: "swim", optional: true, min: SWIM_EASY_MIN[wi], name: ui("Plivanje · lagano (neobavezno)", "Swim · easy (optional)"),
+      desc: ui(`Upliv 200 m. Glavni dio: ${main} mirno, 30 s odmora, zatim plivaj u komadu koliko ide opušteno. Na kraju 4 × 25 m klizanje na prsima. Cilj je ravnomjeran ritam i disanje, ne brzina.`,
+        `Warm up 200 m. Main set: ${main} easy, 30 s rest, then swim continuously for as long as it stays relaxed. Finish with 4 × 25 m glide on your front. The aim is an even rhythm and breathing, not speed.`) };
+  }
+  if(kind === "brick") return { id: `x-brick-${wi + 1}`, sport: "run", min: BRICK_MIN[wi], name: ui(`Brick · ${BRICK_MIN[wi]} min trčanja`, `Brick · ${BRICK_MIN[wi]} min run`),
+    desc: ui("Odmah nakon vožnje: tenisice i lagano trčanje. Cilj je naviknuti noge na prijelaz s bicikla, ne tempo. Prve minute noge su teške, to je normalno.",
+      "Straight after the ride: running shoes on and an easy run. The aim is to get your legs used to switching from the bike, not pace. Heavy legs for the first minutes are normal.") };
+  if(wi === 13) return { id: "x-run5k", sport: "run", km: 5, min: 40, name: ui("Test · 5 km trčanja", "Test · 5 km run"),
+    desc: ui("10 min lagano s par kratkih ubrzanja, zatim 5 km najbrže što možeš ravnomjerno održati: prvi kilometar suzdržano, zadnji najjači. Ne idi do boli; ako nešto počne boljeti, uspori ili stani. Na kraju 10 min hodanja i laganog trčanja. Vrijeme i prosječni puls su polazna točka za idući blok.",
+      "10 min easy with a few short strides, then 5 km as fast as you can hold evenly: hold back on the first kilometre, finish strongest. Don't push through pain; if something starts to hurt, slow down or stop. Finish with 10 min of walking and easy running. Your time and average heart rate are the starting point for the next block.") };
+  const k = RUN_KM[wi];
+  return { id: `x-run-${wi + 1}`, sport: "run", km: k, min: Math.round(k * 8), name: ui(`Trčanje · ${km1(k)} km lagano`, `Run · ${k} km easy`),
+    desc: ui("Jako lagano, tempom na kojem možeš pričati (puls u zoni 2). Ako puls naraste, hodaj minutu pa nastavi; kombinacija trčanja i hodanja je u redu. Ako nešto boli i sutradan (koljeno, potkoljenica, Ahilova tetiva), idući tjedan ne povećavaj.",
+      "Very easy, at a pace you can talk at (heart rate in zone 2). If your heart rate climbs, walk for a minute and carry on; mixing running and walking is fine. If something still hurts the next day (knee, shin, Achilles), don't increase next week.") };
+}
+const PLAN_EXTRA = [["mon", 0, "Pon", "swimTech"], ["tue2", 1.5, "Uto", "brick"], ["wed", 2, "Sri", "swimEasy"], ["fri", 4, "Pet", "run"]];
 
 const plan = () => store.get("plan", null);
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -2358,16 +2591,22 @@ const fromYmd = t => { const [y, m, d] = t.split("-").map(Number); return new Da
 const plusDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const shortDay = d => d.toLocaleDateString(LOC, { weekday: "short", day: "numeric", month: "numeric" });
 function nextMonday(){ const d = new Date(); d.setHours(0, 0, 0, 0); return plusDays(d, ((8 - d.getDay()) % 7) || 7); }
-/* every session of the running plan with its date and state */
+/* every session of the running plan with its date and state, in order; rides have w.segs, swims and runs w.sport */
 function planSessions(p = plan()){
   if(!p) return [];
   const start = fromYmd(p.start), today = ymd(new Date()), out = [];
-  PLAN.weeks.forEach((wk, i) => PLAN_DAYS.forEach(([day, off, label], j) => {
-    const date = plusDays(start, i * 7 + off), w = PLAN_WO[wk[j].startsWith("b-") ? wk[j] : "p-" + wk[j]], id = `w${i + 1}-${day}`, d = ymd(date);
-    out.push({ id, week: i + 1, day, label, date, d, w, done: !!p.done?.[id], skipped: !!p.skipped?.[id], today: d === today, past: d < today });
-  }));
-  return out;
+  const add = (i, day, off, label, orig) => {
+    const date = plusDays(start, i * 7 + Math.floor(off)), id = `w${i + 1}-${day}`, d = ymd(date);
+    const sw = p.swap?.[id] && findWorkout(p.swap[id]), w = sw || orig;   // swapped for another workout (by the coach or by hand)
+    out.push({ id, week: i + 1, day, label, date, d, w, off, swapped: !!sw, optional: !!w.optional, done: !!p.done?.[id], skipped: !!p.skipped?.[id], today: d === today, past: d < today });
+  };
+  PLAN.weeks.forEach((wk, i) => {
+    PLAN_DAYS.forEach(([day, off, label], j) => add(i, day, off, label, PLAN_WO[wk[j].startsWith("b-") ? wk[j] : "p-" + wk[j]]));
+    if(p.extra !== false) PLAN_EXTRA.forEach(([day, off, label, kind]) => add(i, day, off, label, extraWorkout(kind, i)));
+  });
+  return out.sort((a, b) => a.week - b.week || a.off - b.off);
 }
+const isRide = x => !!x.w.segs;
 function planUpdate(fn){ const p = plan(); if(!p) return; fn(p); store.set("plan", p); renderPlan(); }
 /* a saved ride of a plan workout ticks off the nearest open session with that workout (±4 days) */
 function planMarkRide(r){
@@ -2377,7 +2616,7 @@ function planMarkRide(r){
   if(s) planUpdate(p => { p.done = { ...p.done, [s.id]: r.id }; if(p.skipped) delete p.skipped[s.id]; });
   return s || null;
 }
-const woMin = w => Math.round(totalDur(w) / 60);
+const woMin = w => w.segs ? Math.round(totalDur(w) / 60) : w.min;
 function rideSession(s){ setWorkout(s.w); $("#dlg-sess").open && $("#dlg-sess").close(); }
 
 function renderPlan(){
@@ -2387,24 +2626,27 @@ function renderPlan(){
     box.innerHTML = `<div class="plan-card"><h3>${PLAN.name}</h3>
       <p>${ui("Utorkom prag (threshold), četvrtkom VO2max, oba do 30 minuta: teže postaju gušćim intervalima, ne dužim treningom. Nedjeljom vožnja u zoni 2 raste od 50 minuta do 3 sata. Tjedni 4, 8 i 12 su lakši, a 14. završava ramp testom.",
         "Threshold on Tuesdays, VO2max on Thursdays, both 30 minutes at most: they get harder through denser intervals, not longer sessions. The Sunday Zone 2 ride grows from 50 minutes to 3 hours. Weeks 4, 8 and 12 are easier, and week 14 ends with a ramp test.")}</p>
-      <p>${ui("Najduži trening preko tjedna", "Longest weekday session")}: ${Math.max(...tw.flatMap(w => w.slice(0, 2)).map(woMin))} min · ${ui("najduža nedjelja", "longest Sunday")}: ${Math.max(...tw.map(w => woMin(w[2])))} min · ${ui("ukupno", "total")} ${tw.length * 3} ${ui("treninga", "sessions")}.</p>
+      <p>${ui("Uz to plivanje ponedjeljkom (tehnika) i srijedom (lagano, neobavezno), kratko brick trčanje utorkom nakon vožnje i lagano trčanje petkom od 1 do 6 km. Zadnji tjedan su testovi: 400 m plivanja, 5 km trčanja i ramp test, kao polazna točka za idući blok. Plivanje i trčanje radiš izvan Pedale, a otkvače se sami kad stignu na intervals.icu.",
+        "Plus swims on Monday (technique) and Wednesday (easy, optional), a short brick run after Tuesday's ride and an easy run on Friday that grows from 1 to 6 km. The last week is tests: a 400 m swim, a 5 km run and the ramp test, as the starting point for the next block. Swims and runs happen outside Pedala and tick off by themselves when they reach intervals.icu.")}</p>
+      <p>${ui("Najduži trening preko tjedna", "Longest weekday session")}: ${Math.max(...tw.flatMap(w => w.slice(0, 2)).map(woMin))} min · ${ui("najduža nedjelja", "longest Sunday")}: ${Math.max(...tw.map(w => woMin(w[2])))} min · ${ui("ukupno", "total")} ${tw.length * 3} ${ui("vožnji", "rides")}.</p>
       <div class="row"><label>Početak (ponedjeljak) <input type="date" id="plan-start" value="${ymd(nextMonday())}"></label><button class="btn primary" id="plan-go">Pokreni plan</button></div></div>`;
     $("#plan-go").onclick = () => { const v = $("#plan-start").value; if(!v) return;
       const d = fromYmd(v); if(d.getDay() !== 1 && !confirm(tr("Plan je složen od ponedjeljka. Ipak krenuti od " + shortDay(d) + "?"))) return;
-      store.set("plan", { id: PLAN.id, start: v, done: {}, skipped: {}, times: { wk: "18:00", sun: "09:00" }, remind: 120 }); renderPlan(); };
+      store.set("plan", { id: PLAN.id, start: v, done: {}, skipped: {}, extra: true, times: { wk: "18:00", sun: "09:00" }, remind: 120 }); renderPlan(); };
     return;
   }
-  const ss = planSessions(p), done = ss.filter(x => x.done), missed = ss.filter(x => x.past && !x.done && !x.skipped);
+  const ss = planSessions(p), done = ss.filter(x => x.done), missed = ss.filter(x => x.past && !x.done && !x.skipped && !x.optional);
+  const total = ss.filter(x => !x.optional || x.done).length;   // optional sessions count only when done
   const week = Math.min(PLAN.weeks.length, Math.max(1, Math.floor((new Date() - fromYmd(p.start)) / (7 * 864e5)) + 1));
-  const next = ss.find(x => !x.done && !x.skipped && !x.past), hours = done.reduce((a, x) => a + totalDur(x.w), 0) / 3600;
+  const next = ss.find(x => !x.done && !x.skipped && !x.past), hours = done.filter(isRide).reduce((a, x) => a + totalDur(x.w), 0) / 3600;
   const started = new Date() >= fromYmd(p.start), end = plusDays(fromYmd(p.start), PLAN.weeks.length * 7 - 1);
   box.innerHTML = `<div class="plan-card"><h3>${PLAN.name}</h3>
       <p>${started ? `Tjedan ${week} od ${PLAN.weeks.length}` : `Počinje ${shortDay(fromYmd(p.start))}`} · ${shortDay(fromYmd(p.start))} – ${shortDay(end)}</p>
-      <div class="pbar"><i style="width:${Math.round(done.length / ss.length * 100)}%"></i></div>
-      <div class="pstats"><span><b>${done.length}</b>od ${ss.length} odrađeno</span><span><b>${missed.length}</b>propušteno</span><span><b>${hours.toFixed(1).replace(".", ",")}</b>h vožnje</span>${done.length + missed.length ? `<span><b>${Math.round(done.length / (done.length + missed.length) * 100)}%</b>dosljednost</span>` : ""}</div></div>
-    ${next ? `<div class="plan-card"><p>${next.today ? "Danas" : shortDay(next.date)} · ${next.day === "sun" ? "duga vožnja" : next.day === "tue" ? "prag" : "VO2max"}</p>
+      <div class="pbar"><i style="width:${Math.round(done.length / total * 100)}%"></i></div>
+      <div class="pstats"><span><b>${done.length}</b>od ${total} odrađeno</span><span><b>${missed.length}</b>propušteno</span><span><b>${hours.toFixed(1).replace(".", ",")}</b>h vožnje</span>${done.length + missed.length ? `<span><b>${Math.round(done.length / (done.length + missed.length) * 100)}%</b>dosljednost</span>` : ""}</div></div>
+    ${next ? `<div class="plan-card"><p>${next.today ? "Danas" : shortDay(next.date)} · ${next.w.sport === "swim" ? "plivanje" : next.day === "tue2" ? "brick" : next.w.sport === "run" ? "trčanje" : next.day === "sun" ? "duga vožnja" : next.day === "tue" ? "prag" : "VO2max"}</p>
       <h3>${next.w.name}${/\d (min|h)$/.test(next.w.name) ? "" : ` · ${woMin(next.w)} min`}</h3><p>${next.w.desc}</p>
-      <div class="row"><button class="btn primary" id="plan-ride">Vozi sada</button><button class="btn small" id="plan-next-more">Više</button></div></div>` : `<div class="plan-card"><h3>Plan je završen 🎉</h3><p>Odradi ramp test ako već nisi i postavi novi FTP.</p></div>`}
+      <div class="row">${isRide(next) ? `<button class="btn primary" id="plan-ride">Vozi sada</button>` : `<button class="btn primary" id="plan-done-next">Označi odrađeno</button>`}<button class="btn small" id="plan-next-more">Više</button></div></div>` : `<div class="plan-card"><h3>Plan je završen 🎉</h3><p>Odradi ramp test ako već nisi i postavi novi FTP.</p></div>`}
     <div class="weeks" id="plan-weeks"></div>
     <div class="plan-card" style="margin-top:12px"><h3>Kalendar i podsjetnik</h3>
       <p>Preuzmi plan kao kalendar (.ics) i uvezi ga u Google Kalendar. Svaki trening dobiva podsjetnik prije početka.</p>
@@ -2415,42 +2657,68 @@ function renderPlan(){
       </div>
       <div class="row"><button class="btn" id="plan-ics">Preuzmi kalendar (.ics)</button></div>
       <p style="margin-top:10px">Google Kalendar kod uvoza zanemaruje podsjetnike iz datoteke, pa ga postavi ovako: na računalu u Google Kalendaru napravi novi kalendar <b>Pedala</b>, u njegovim postavkama pod <b>Obavijesti o događajima</b> dodaj obavijest (npr. 2 sata prije), pa <b>Postavke → Uvoz i izvoz</b> uvezi datoteku u kalendar Pedala. Samsung Kalendar i Outlook čitaju podsjetnik iz same datoteke.</p></div>
-    <div class="plan-card"><div class="row" style="margin-top:0"><button class="btn small" id="plan-restart">Promijeni početak</button><button class="btn small danger" id="plan-stop">Završi plan</button></div></div>`;
+    <div class="plan-card"><div class="row" style="margin-top:0"><label class="check note" style="display:flex;margin-right:auto"><input type="checkbox" id="plan-extra"${p.extra !== false ? " checked" : ""}> Plivanje i trčanje u planu</label><button class="btn small" id="plan-ask">Pitaj trenera</button><button class="btn small" id="plan-restart">Promijeni početak</button><button class="btn small danger" id="plan-stop">Završi plan</button></div></div>`;
   const weeks = $("#plan-weeks");
   PLAN.weeks.forEach((_, i) => {
     const wk = ss.filter(x => x.week === i + 1), el = document.createElement("div");
     el.className = "week" + (started && i + 1 === week ? " now" : "");
-    el.innerHTML = `<h4><span>Tjedan ${i + 1}${PLAN.deload.includes(i + 1) ? (i === 13 ? " · test" : " · lakši") : ""}</span><small>${shortDay(wk[0].date)} – ${shortDay(wk[2].date)}</small></h4><div class="sess"></div>`;
+    el.innerHTML = `<h4><span>Tjedan ${i + 1}${PLAN.deload.includes(i + 1) ? (i === 13 ? " · test" : " · lakši") : ""}</span><small>${shortDay(wk[0].date)} – ${shortDay(wk.at(-1).date)}</small></h4><div class="sess"></div>`;
     for(const x of wk){
       const b = document.createElement("button"); b.type = "button";
-      b.className = [x.done && "done", x.skipped && "skipped", !x.done && !x.skipped && x.past && "missed", x.today && "today"].filter(Boolean).join(" ");
+      b.className = [x.w.sport, x.done && "done", x.skipped && "skipped", !x.done && !x.skipped && !x.optional && x.past && "missed", x.optional && "opt", x.today && "today"].filter(Boolean).join(" ");
       b.innerHTML = `<small>${tr(x.label)} ${shortDate(x.date)} ${x.done ? "✓" : x.skipped ? "–" : ""}</small><b></b><small>${woMin(x.w)} min</small>`;
       b.querySelector("b").textContent = x.w.name; b.onclick = () => openSession(x);
       el.querySelector(".sess").append(b);
     }
     weeks.append(el);
   });
-  if(next){ $("#plan-ride").onclick = () => rideSession(next); $("#plan-next-more").onclick = () => openSession(next); }
+  if(next){ $("#plan-ride") && ($("#plan-ride").onclick = () => rideSession(next)); $("#plan-done-next") && ($("#plan-done-next").onclick = () => planUpdate(q => { q.done = { ...q.done, [next.id]: true }; }));
+    $("#plan-next-more").onclick = () => openSession(next); }
+  $("#plan-extra").onchange = e => planUpdate(q => { q.extra = e.target.checked; });
+  planIcuTick();
   const saveTimes = () => planUpdate(q => { q.times = { wk: $("#plan-twk").value || "18:00", sun: $("#plan-tsun").value || "09:00" }; q.remind = +$("#plan-remind").value; });
   ["#plan-twk", "#plan-tsun", "#plan-remind"].forEach(id => $(id).onchange = saveTimes);
   $("#plan-ics").onclick = () => downloadIcs();
+  $("#plan-ask").onclick = () => { showView("progress"); setTimeout(() => { $("#coach-q")?.focus(); $("#coach-box")?.scrollIntoView({ block: "start" }); }, 50); };
   $("#plan-restart").onclick = () => { const v = prompt(tr("Novi početak plana (GGGG-MM-DD, ponedjeljak):"), p.start); if(v && /^\d{4}-\d{2}-\d{2}$/.test(v)) planUpdate(q => { q.start = v; }); };
   $("#plan-stop").onclick = () => { if(confirm(tr("Završiti plan? Vožnje ostaju u Povijesti."))){ store.set("plan", null); renderPlan(); } };
 }
 function openSession(x){
   $("#sess-title").textContent = x.w.name;
-  $("#sess-sub").textContent = `${shortDay(x.date)} · tjedan ${x.week} · ${woMin(x.w)} min${x.done ? " · odrađeno" : x.skipped ? " · preskočeno" : ""} — ${x.w.desc}`;
+  $("#sess-sub").textContent = `${shortDay(x.date)} · tjedan ${x.week} · ${woMin(x.w)} min${x.swapped ? " · zamjena" : ""}${x.done ? " · odrađeno" : x.skipped ? " · preskočeno" : ""}${x.w.segs ? " — " : "\n\n"}${x.w.desc}`;
   const acts = $("#sess-acts"); acts.innerHTML = "";
   const add = (label, cls, fn) => { const b = document.createElement("button"); b.className = "btn " + cls; b.textContent = label; b.onclick = () => { fn(); $("#dlg-sess").close(); }; acts.append(b); };
   add("Zatvori", "", () => {});
+  if(x.swapped && !x.done) add("Vrati izvorni", "", () => planUpdate(p => { delete p.swap[x.id]; }));
   if(x.done || x.skipped) add("Poništi", "", () => planUpdate(p => { delete p.done[x.id]; delete p.skipped[x.id]; }));
   else { add("Preskoči", "", () => planUpdate(p => { p.skipped = { ...p.skipped, [x.id]: true }; })); add("Označi odrađeno", "", () => planUpdate(p => { p.done = { ...p.done, [x.id]: true }; })); }
-  add("Vozi", "primary", () => rideSession(x));
+  if(isRide(x)) add("Vozi", "primary", () => rideSession(x));
+  $("#sess-prof").hidden = !isRide(x);
   $("#dlg-sess").showModal();
-  requestAnimationFrame(() => { const [g, W, H] = sizeCanvas($("#sess-prof")); g.clearRect(0, 0, W, H);
+  if(isRide(x)) requestAnimationFrame(() => { const [g, W, H] = sizeCanvas($("#sess-prof")); g.clearRect(0, 0, W, H);
     drawWorkoutBlocks(g, x.w, W, H, Math.max(1.3, ...x.w.segs.map(s => Math.max(toWatts(x.w, s.lo), toWatts(x.w, s.hi)) / settings.ftp)) * 1.05, 1); });
 }
 $("#dlg-sess").addEventListener("click", e => { if(e.target === $("#dlg-sess")) $("#dlg-sess").close(); });
+
+/* swims and runs from a watch tick off their session when they reach intervals.icu (same day, same sport) */
+const ICU_SPORT = { Swim: "swim", OpenWaterSwim: "swim", Run: "run", VirtualRun: "run", TrailRun: "run" };
+async function planIcuTick(){
+  const p = plan(); if(!p || p.extra === false || !icuOn() || planIcuTick.busy || Date.now() - (planIcuTick.at || 0) < 10 * 60000) return;
+  const open = planSessions(p).filter(x => !isRide(x) && !x.done && !x.skipped && x.date <= Date.now() && x.date > Date.now() - 10 * 864e5);
+  if(!open.length) return;
+  planIcuTick.busy = true; planIcuTick.at = Date.now();
+  try{
+    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "list", icuKey: icuKey() || undefined }) });
+    if(!r.ok) return;
+    const { activities = [] } = await r.json(), used = new Set(Object.values(p.done || {})), hits = {};
+    for(const x of open){
+      const a = activities.find(a => ICU_SPORT[a.type] === x.w.sport && String(a.start).slice(0, 10) === x.d && !used.has("icu:" + a.id));
+      if(a){ hits[x.id] = "icu:" + a.id; used.add("icu:" + a.id); }
+    }
+    if(Object.keys(hits).length){ planUpdate(q => { q.done = { ...q.done, ...hits }; }); toast(tr("Plan: trening sa sata je otkvačen")); }
+  }catch(e){ console.warn("plan icu", e); }
+  finally{ planIcuTick.busy = false; }
+}
 
 /* the plan as an iCalendar file with a reminder (VALARM) on every session */
 function planIcs(p = plan()){
@@ -2461,7 +2729,9 @@ function planIcs(p = plan()){
   const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Pedala//Plan//HR", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:Pedala"];
   for(const x of planSessions(p)){
     const [hh, mm] = (x.day === "sun" ? p.times?.sun || "09:00" : p.times?.wk || "18:00").split(":").map(Number);
-    const st = new Date(x.date); st.setHours(hh, mm, 0, 0); const en = new Date(st.getTime() + totalDur(x.w) * 1000);
+    const st = new Date(x.date); st.setHours(hh, mm, 0, 0);
+    if(x.day === "tue2"){ const r = planSessions(p).find(y => y.week === x.week && y.day === "tue"); st.setTime(st.getTime() + woMin(r.w) * 60000); }
+    const en = new Date(st.getTime() + woMin(x.w) * 60000);
     L.push("BEGIN:VEVENT", `UID:${p.id}-${p.start}-${x.id}@pedala`, `DTSTAMP:${utc(new Date())}`, `DTSTART:${loc(st)}`, `DTEND:${loc(en)}`,
       `SUMMARY:${esc(`Pedala: ${tr(x.w.name)} (${woMin(x.w)} min)`)}`, `DESCRIPTION:${esc(`${ui("Tjedan", "Week")} ${x.week}. ${tr(x.w.desc)}\n${location.origin}/`)}`, `URL:${location.origin}/`,
       "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc(ui("Trening: ", "Workout: ") + tr(x.w.name))}`, `TRIGGER:-PT${p.remind || 120}M`, "END:VALARM", "END:VEVENT");
@@ -2476,7 +2746,8 @@ function downloadIcs(){
 /* once a day: what the plan says for today */
 function planToday(){
   const x = planSessions().find(s => s.today && !s.done && !s.skipped);
-  if(x && store.get("planToldOn", "") !== x.d){ store.set("planToldOn", x.d); notify(ui(`Danas po planu: ${x.w.name} · ${woMin(x.w)} min. Otvori Plan → Vozi sada.`, `Today's plan: ${tr(x.w.name)} · ${woMin(x.w)} min. Open Plan → Ride now.`)); }
+  if(x && store.get("planToldOn", "") !== x.d){ store.set("planToldOn", x.d); notify(isRide(x) ? ui(`Danas po planu: ${x.w.name} · ${woMin(x.w)} min. Otvori Plan → Vozi sada.`, `Today's plan: ${tr(x.w.name)} · ${woMin(x.w)} min. Open Plan → Ride now.`)
+    : ui(`Danas po planu: ${x.w.name} · oko ${woMin(x.w)} min.`, `Today's plan: ${x.w.name} · about ${woMin(x.w)} min.`)); }
 }
 
 /* ============ sync (api/sync.js, Vercel Blob) ============
@@ -2567,7 +2838,7 @@ function reportHeader(r){
 async function openReport(r){
   $("#rep-title").textContent = r.name;
   $("#rep-sub").textContent = new Date(r.start).toLocaleString(LOC);
-  $("#rep-grid").innerHTML = reportHeader(r);
+  $("#rep-grid").innerHTML = reportHeader(r); renderRepCoach(r);
   $("#rep-body").innerHTML = ""; $("#dlg-report").showModal();
   renderReport($("#rep-body"), r);
 }
@@ -2665,13 +2936,13 @@ $("#sum-save").onclick = async () => {
   try{ await dbPut(pendingRide); toast(toIcu ? "Vožnja spremljena, šaljem na intervals.icu" : "Vožnja spremljena"); navigator.storage?.persist?.().catch(() => {}); }catch(e){ toast("Spremanje nije uspjelo: " + e.message); return; }
   const r = pendingRide; $("#dlg-summary").close(); resetRide();
   const sess = planMarkRide(r); if(sess) toast(`Plan: ${sess.w.name} odrađen`);
-  syncNow();
+  syncNow(); coachAfterSave(r);
   if(toIcu) syncIcu(); else if(confirm(tr("Skinuti .FIT datoteku sada?"))) downloadFit(r); };
 $("#sum-discard").onclick = () => { if(confirm(tr("Odbaciti vožnju bez spremanja?"))){ $("#dlg-summary").close(); resetRide(); } };
 $("#sum-resume").onclick = () => { $("#dlg-summary").close(); start(); };
 
 /* ============ settings ============ */
-function fillSettings(){ const f = $("#settings-form"); f.ftp.value = settings.ftp; f.weight.value = settings.weight; f.beep.checked = settings.beep; f.pauseVideo.checked = settings.pauseVideo; f.autoPause.checked = settings.autoPause; f.ytKey.value = settings.ytKey || ""; f.chainring.value = settings.chainring; f.cog.value = settings.cog; f.maxHr.value = settings.maxHr; f.voice.checked = settings.voice; f.uiLang.value = UI; fillVoices(); }
+function fillSettings(){ const f = $("#settings-form"); f.ftp.value = settings.ftp; f.weight.value = settings.weight; f.beep.checked = settings.beep; f.pauseVideo.checked = settings.pauseVideo; f.autoPause.checked = settings.autoPause; f.ytKey.value = settings.ytKey || ""; f.chainring.value = settings.chainring; f.cog.value = settings.cog; f.maxHr.value = settings.maxHr; f.voice.checked = settings.voice; f.uiLang.value = UI; fillVoices(); fillCoach(); }
 $("#settings-form").addEventListener("input", e => { const f = e.currentTarget;
   const ftp = +f.ftp.value, wt = +f.weight.value; if(ftp >= 80 && ftp <= 600) settings.ftp = ftp; if(wt >= 30 && wt <= 200) settings.weight = wt;
   settings.beep = f.beep.checked; settings.pauseVideo = f.pauseVideo.checked; settings.autoPause = f.autoPause.checked; settings.ytKey = f.ytKey.value.trim();
@@ -3002,8 +3273,10 @@ window.addEventListener("beforeunload", e => { if(S.started){ e.preventDefault()
   autoConnect();
   if("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.register("/sw.js").catch(e => console.warn("sw", e));
   syncNow().finally(() => setTimeout(planToday, 1500));
+  fetch("/api/coach").then(r => r.ok ? r.json() : {}).then(j => { coachServer = !!j.enabled; }).catch(() => {})
+    .finally(() => { fillCoach(); if($("#view-progress").classList.contains("active")) renderCoachBox(); setTimeout(coachCheck, 4000); });
   fetch("/api/intervals").then(r => r.ok ? r.json() : {}).then(j => { icuServer = !!j.serverKey; }).catch(() => {})
-    .finally(() => { syncIcu(); renderHistoryIfOpen(); if($("#view-settings").classList.contains("active")) renderIcu(); });
+    .finally(() => { syncIcu(); renderHistoryIfOpen(); if($("#view-settings").classList.contains("active")) renderIcu(); planIcuTick(); });
 })();
 window.__pedala = { S, parseZwo, parseGpx, setRoute, routes, gradeAt, trainerGrade, clickKeys, onClickPress, encodeFit, metrics, allWorkouts, setWorkout, GEARS };
 </script>

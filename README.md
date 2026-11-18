@@ -28,8 +28,9 @@
 **After the ride**
 - **Ride report** like Zwift's: power by zone with heart rate, interval scores, power distribution, time in HR zones, power curve against the last 90 days.
 - **Progress:** fitness/fatigue/form (CTL/ATL/TSB), weekly volume, best powers, FTP over time.
-- **14-week training plan** (short weekday sessions, long Sunday Zone 2 ride) with progress tracking and a calendar file with reminders.
+- **14-week training plan** (short weekday sessions, long Sunday Zone 2 ride; optionally two swims with technique drills, a brick run and an easy Friday run from 1 to 6 km, ticked off from intervals.icu) with progress tracking and a calendar file with reminders.
 - **intervals.icu upload** of every ride, `.FIT` export for Strava, GoldenCheetah and others.
+- **Virtual coach:** after every session Claude writes a short comment (in Croatian) on your Pedala rides and on everything else that reaches intervals.icu, such as runs and swims from a watch. You can also ask it questions or for a plan change ("I have a cold, what about this week?"); proposed changes are applied when you confirm them. Needs `ANTHROPIC_API_KEY`; about 6 cents per comment or answer.
 - **Sync between phone and tablet** through Vercel Blob; backup and restore as a single `.json` file.
 
 ## Requirements
@@ -49,6 +50,7 @@ Web Bluetooth works in **Chrome or Edge on Android, Windows, macOS, Linux and Ch
 | `PEDALA_USER` | Login name (default `admin`) |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 key for searching videos, channels and playlists. In Google Cloud set *Application restrictions: None* and *API restrictions: YouTube Data API v3* (the key is used by the server, not the browser). |
 | `INTERVALS_API_KEY` | intervals.icu API key (*Settings → Developer Settings* on intervals.icu) |
+| `ANTHROPIC_API_KEY` | Claude API key from console.anthropic.com for the virtual coach (optional). Set a monthly spend limit in the Console. |
 | `BLOB_READ_WRITE_TOKEN` | Added by Vercel when you create a Blob store: **Storage → Create → Blob**, *Private*, tick *Add a read-write token*. Enables sync between devices. |
 
 Every deploy is private to its owner: rides, plans and keys stay in your browser and your Vercel project.
@@ -69,7 +71,7 @@ Croatian announcements need a Croatian text-to-speech voice (Android: *Text-to-s
 
 ## Development
 
-The app is a single `index.html` with no build step. The server side is four small files: `middleware.js` (login), `api/sync.js` (Vercel Blob), `api/intervals.js` and `api/youtube.js` (proxies that keep keys on the server).
+The app is a single `index.html` with no build step. The server side is five small files: `middleware.js` (login), `api/sync.js` (Vercel Blob), `api/intervals.js`, `api/youtube.js` and `api/coach.js` (proxies that keep keys on the server).
 
 ```bash
 npm install

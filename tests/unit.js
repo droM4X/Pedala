@@ -78,6 +78,32 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
     delete process.env.BLOB_READ_WRITE_TOKEN; assert.equal((await call("GET", "/api/sync")).status, 501); process.env.BLOB_READ_WRITE_TOKEN = "test";
   });
 
+  /* ---------- api/coach.js ---------- */
+  const coach = require("../api/coach.js"), realFetch = global.fetch;
+  const callCoach = async (method, body) => { let out; await coach({ method, body }, { setHeader(){}, status(c){ this.c = c; return this; }, json(o){ out = { status: this.c, body: o }; } }); return out; };
+  const coachRide = { id: "r-9", name: "Sweet spot", start: "2026-11-17T18:00:00Z", m: { duration: 1620, avgP: 134 }, laps: [], minutes: { podaci: [[0, 89, 59, 120]] } };
+  await test("coach: off without ANTHROPIC_API_KEY", async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    assert.deepEqual((await callCoach("GET")).body, { enabled: false });
+    assert.equal((await callCoach("POST", { action: "comment", ride: coachRide })).status, 501);
+  });
+  await test("coach: no credit left gives a clear 402", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    global.fetch = async () => new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "Your credit balance is too low to access the Anthropic API." } }), { status: 400, headers: { "content-type": "application/json" } });
+    try{ const r = await callCoach("POST", { action: "comment", ride: coachRide }); assert.equal(r.status, 402); assert.match(r.body.error, /nema kredita/); }
+    finally{ global.fetch = realFetch; delete process.env.ANTHROPIC_API_KEY; }
+  });
+  await test("coach: a refusal is reported, not shown as a comment", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test"; let sent;
+    global.fetch = async (url, opt) => { sent = JSON.parse(opt.body); return new Response(JSON.stringify({ id: "m", type: "message", role: "assistant", model: "claude-opus-5-5",
+      content: [], stop_reason: "refusal", stop_details: { type: "refusal", category: null }, usage: { input_tokens: 1, output_tokens: 0 } }), { headers: { "content-type": "application/json" } }); };
+    try{
+      assert.equal((await callCoach("POST", { action: "comment", ride: coachRide, notes: "190 cm" })).status, 422);
+      assert.equal(sent.model, "claude-opus-5-5"); assert.equal(sent.output_config.effort, "medium");
+      assert.match(sent.messages[0].content, /190 cm/); assert.match(sent.messages[0].content, /Sweet spot/);
+    }finally{ global.fetch = realFetch; delete process.env.ANTHROPIC_API_KEY; }
+  });
+
   for(const [s, n, e] of results) console.log(`${s === "ok" ? "✓" : "✗"} ${n}${e ? "\n    " + e.message : ""}`);
   const failed = results.filter(r => r[0] !== "ok").length;
   console.log(`\n${results.length - failed} passed, ${failed} failed`);

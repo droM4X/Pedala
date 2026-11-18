@@ -64,11 +64,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const monday = await p.evaluate(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); });
     await p.evaluate(m => store.set("plan", { id: PLAN.id, start: m, done: {}, skipped: {}, times: { wk: "18:00", sun: "09:00" }, remind: 120 }), monday);
     const max = await p.evaluate(() => Math.max(...PLAN.weeks.flatMap(w => w.slice(0, 2)).map(k => totalDur(PLAN_WO["p-" + k])))); assert.ok(max <= 1800, "weekday sessions are 30 min at most");
-    const today = await p.evaluate(() => planSessions().find(s => s.today));
+    const today = await p.evaluate(() => planSessions().find(s => s.today && isRide(s)));
     const ics = await p.evaluate(() => planIcs());
-    assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, 42); assert.equal((ics.match(/TRIGGER:-PT120M/g) || []).length, 42);
+    assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, 98, "42 rides, 28 swims, 28 runs"); assert.equal((ics.match(/TRIGGER:-PT120M/g) || []).length, 98);
     if(today){
-      await p.evaluate(() => rideSession(planSessions().find(s => s.today)));
+      await p.evaluate(() => rideSession(planSessions().find(s => s.today && isRide(s))));
       await p.click("#chip-trainer"); await p.click("#c-sim"); await p.click("#btn-start");
       await p.waitForFunction(() => document.querySelector("#dlg-summary").open, null, { timeout: 120000 });
       await p.click("#sum-save"); await p.waitForTimeout(800);
@@ -79,6 +79,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
   await test("sync: a second device gets the ride and plan progress", async () => {
     const a = await open(), b = await open();
+    await a.evaluate(() => { if(!plan()) store.set("plan", { id: PLAN.id, start: ymd(new Date()), done: {}, skipped: {} }); });
     await a.evaluate(() => syncNow()); await b.evaluate(() => syncNow()); await b.waitForTimeout(800);
     assert.ok(await b.evaluate(async () => (await dbAll()).length) >= 1, "rides arrived");
     assert.ok(await b.evaluate(() => !!plan()), "plan arrived");
@@ -162,6 +163,76 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.evaluate(() => { settings.clickMap = { "dOLDPD:b5": -1 }; });
     assert.equal(await p.evaluate(() => clickRoleOf("pod-dOLDPD")), "minus");
     await p.context().close();
+  });
+
+  await test("coach: a saved ride and a run from intervals.icu each get a comment, Pedala's own upload does not", async () => {
+    srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
+    const p = await open({ settings: { ftp: 160, maxHr: 185, weight: 100, coachAbout: "190 cm, vraćam se nakon pauze" } });
+    await p.click('[data-view="settings"]'); await p.fill("#icu-key", "goodkey"); await p.click("#btn-icu"); await p.waitForTimeout(600);
+    assert.match(await p.textContent("#coach-status"), /uključen \(ANTHROPIC_API_KEY/);
+    await p.click("#chip-trainer"); await p.click("#c-sim"); await p.evaluate(() => setWorkout(allWorkouts().find(w => w.id === "b-ss")));
+    await p.click("#btn-start"); await p.waitForTimeout(4000); await p.click("#btn-end"); await p.waitForTimeout(500); await p.click("#sum-save");
+    await p.waitForFunction(() => Object.entries(store.get("coach", {})).some(([k, n]) => k.startsWith("ride:") && n.text), null, { timeout: 15000 });
+    const ride = srv.claude.find(b => b.messages[0].content.includes("Pedala, trenažer"));
+    assert.ok(ride, "the ride was sent to the coach");
+    assert.equal(ride.model, "claude-opus-5-5"); assert.equal(ride.fallbacks, "default");
+    assert.match(ride.messages[0].content, /190 cm, vraćam se nakon pauze/); assert.match(ride.messages[0].content, /po_minutama/);
+    assert.match(ride.messages[0].content, /Jutarnje trčanje/, "the last six weeks from intervals.icu are included");
+    // the run from the watch gets its own comment when the app checks intervals.icu
+    await p.evaluate(() => { coachCheck.at = 0; return coachCheck(); });
+    await p.waitForFunction(() => store.get("coach", {})["icu:i777"]?.text, null, { timeout: 15000 });
+    assert.ok(!(await p.evaluate(() => store.get("coach", {})["icu:i555"])), "Pedala's own upload is not commented twice");
+    await p.click('[data-view="progress"]'); await p.waitForTimeout(500);
+    assert.equal(await p.locator("#coach-box .item").count(), 2);
+    assert.match(await p.textContent("#coach-box"), /Dobar trening/);
+    await p.click('[data-view="history"]'); await p.waitForTimeout(400); await p.locator("[data-rep]").first().click(); await p.waitForTimeout(600);
+    assert.match(await p.textContent("#rep-coach"), /Dobar trening/);
+    srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
+  });
+
+  await test("coach: a question gets an answer, a proposed plan change is applied only after confirming", async () => {
+    srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
+    const p = await open();
+    const first = await p.evaluate(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+      store.set("plan", { id: PLAN.id, start: ymd(d), done: {}, skipped: {}, times: { wk: "18:00", sun: "09:00" }, remind: 120 }); return planSessions()[0].id; });
+    await p.click('[data-view="progress"]'); await p.waitForTimeout(800);
+    await p.fill("#coach-q", "Prehlađen sam, što s ovim tjednom?"); await p.click("#coach-form button");
+    await p.waitForFunction(() => coachChat().at(-1)?.a, null, { timeout: 15000 });
+    const sent = srv.claude.at(-1);
+    assert.equal(sent.output_config.format.type, "json_schema");
+    assert.match(sent.messages[0].content, /Prehlađen sam/); assert.match(sent.messages[0].content, /"workout_id":"p-rec"|"id":"p-rec"/);
+    assert.match(await p.textContent("#coach-thread"), /Odmori se/);
+    assert.equal(await p.locator("#coach-thread li").count(), 1, "a change for a session that does not exist is dropped");
+    assert.ok(!(await p.evaluate(() => plan().swap)), "nothing changes before confirming");
+    await p.click("#coach-thread [data-apply]");
+    assert.deepEqual(await p.evaluate(() => plan().swap), { [first]: "p-rec" });
+    assert.equal(await p.evaluate(id => planSessions().find(x => x.id === id).w.name, first), "Aktivni oporavak");
+    assert.match(await p.textContent("#coach-thread"), /Primijenjeno/);
+    srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
+  });
+
+  await test("plan: swims and runs are in the plan and tick off from intervals.icu, the coach sees the day's target", async () => {
+    srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
+    const p = await open();
+    await p.evaluate(() => { settings.icuKey = "goodkey"; store.set("settings", settings);
+      const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - 4);   // today is the Friday of week 1
+      store.set("plan", { id: PLAN.id, start: ymd(d), done: {}, skipped: {}, extra: true }); });
+    const wk1 = await p.evaluate(() => planSessions().filter(x => x.week === 1).map(x => x.day + ":" + (x.w.sport || "ride")));
+    assert.deepEqual(wk1, ["mon:swim", "tue:ride", "tue2:run", "wed:swim", "thu:ride", "fri:run", "sun:ride"]);
+    assert.match(await p.evaluate(() => planSessions().find(x => x.id === "w1-mon").w.desc), /klizanje na prsima/);
+    assert.equal(await p.evaluate(() => planSessions().find(x => x.id === "w5-fri").w.name), "Trčanje · 2,5 km lagano");
+    assert.deepEqual(await p.evaluate(() => planSessions().filter(x => x.week === 14 && !x.w.segs).map(x => x.w.name)),
+      ["Test · 400 m plivanja", "Brick · 15 min trčanja", "Plivanje · lagano (neobavezno)", "Test · 5 km trčanja"], "week 14: tests for the next block");
+    assert.ok(await p.evaluate(() => planSessions().find(x => x.id === "w1-wed").optional), "Wednesday swim is optional");
+    await p.click('[data-view="plan"]'); await p.waitForFunction(() => plan().done?.["w1-fri"], null, { timeout: 10000 });
+    assert.equal(await p.locator(".sess .opt.missed").count(), 0, "a past optional swim is not missed"); assert.equal(await p.locator(".sess .opt").count() > 0, true);
+    assert.equal(await p.evaluate(() => plan().done["w1-fri"]), "icu:i777", "today's run from the watch ticks off Friday's run");
+    await p.evaluate(() => { store.set("coach", {}); coachCheck.at = 0; return coachCheck(); });   // comments synced from the earlier coach test
+    await p.waitForFunction(() => store.get("coach", {})["icu:i777"]?.text, null, { timeout: 15000 });
+    assert.match(srv.claude.find(b => b.messages[0].content.includes("Jutarnje trčanje") && b.messages[0].content.includes("Trening koji komentiraš (intervals.icu)")).messages[0].content, /Što je plan tražio[\s\S]*1 km lagano/);
+    await p.evaluate(() => planUpdate(q => { q.extra = false; }));
+    assert.equal(await p.evaluate(() => planSessions().length), 42, "swims and runs can be switched off");
+    srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
   });
 
   await test("feed: favourite channel videos and own playlist", async () => {
