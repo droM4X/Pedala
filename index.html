@@ -798,7 +798,9 @@ const EN = new Map(Object.entries({
   "20 minuta laganog okretanja na 52% FTP-a.": "20 minutes of easy spinning at 52% of FTP.", "Lagano, s dva kratka buđenja od 1 minute na FTP-u.": "Easy, with two short 1-minute wake-ups at FTP.",
   "Mirna vožnja u zoni 2 (65% FTP-a). Razgovorni tempo, kadenca 85–95.": "Steady Zone 2 ride (65% of FTP). Conversational pace, cadence 85–95.",
   "Zona 2": "Zone 2", "Pon": "Mon", "Sri": "Wed", "Pet": "Fri", "plivanje": "swim", "trčanje": "run", "brick": "brick",
-  "Plivanje i trčanje u planu": "Swims and runs in the plan", "Plan: trening sa sata je otkvačen": "Plan: a session from your watch was ticked off", "Uto": "Tue", "Čet": "Thu", "Ned": "Sun", "Danas": "Today", "prag": "threshold", "duga vožnja": "long ride",
+  "Plivanje i trčanje u planu": "Swims and runs in the plan", "Potraži na intervals.icu": "Look on intervals.icu",
+  "intervals.icu nije povezan na ovom uređaju (Postavke → intervals.icu)": "intervals.icu is not connected on this device (Settings → intervals.icu)", "intervals.icu se ne javlja": "intervals.icu is not answering",
+  "Na intervals.icu za te dane postoji samo": "On intervals.icu those days only have", "Na intervals.icu još nema treninga za taj dan. Polar Flow ponekad kasni; probaj kasnije.": "intervals.icu has no activity for that day yet. Polar Flow is sometimes late; try again later.", "Plan: trening sa sata je otkvačen": "Plan: a session from your watch was ticked off", "Uto": "Tue", "Čet": "Thu", "Ned": "Sun", "Danas": "Today", "prag": "threshold", "duga vožnja": "long ride",
   "lakši": "easier", "odrađeno": "done", "preskočeno": "skipped", "propušteno": "missed", "h vožnje": "h ridden", "dosljednost": "consistency",
   "Početak (ponedjeljak)": "Start (Monday)", "Pokreni plan": "Start plan", "Vozi sada": "Ride now", "Više": "More",
   "Plan je završen 🎉": "Plan complete 🎉", "Odradi ramp test ako već nisi i postavi novi FTP.": "Do the ramp test if you haven't yet, and set your new FTP.",
@@ -2419,7 +2421,7 @@ async function coachCheck(){
         && (!notes["icu:" + a.id] || notes["icu:" + a.id].error && Date.now() - notes["icu:" + a.id].at > 12 * 36e5))
       .sort((a, b) => b.t - a.t).slice(0, 2);
     for(const a of todo){
-      const x = planSessions().find(s => !isRide(s) && s.w.sport === ICU_SPORT[a.type] && s.d === String(a.start).slice(0, 10));
+      const x = planSessions().find(s => !isRide(s) && s.w.sport === icuSport(a.type) && s.d === String(a.start).slice(0, 10));
       const planned = x ? { trening: x.w.name, opis: x.w.desc, min: woMin(x.w), km: x.w.km } : undefined;
       try{ await coachAsk("icu:" + a.id, { icuId: a.id, planned }, a.name || a.type, a.t); }catch{ break; } }
   }catch(e){ console.warn("coach", e); }
@@ -2727,6 +2729,7 @@ function openSession(x){
   if(x.done || x.skipped) add("Poništi", "", () => planUpdate(p => { delete p.done[x.id]; delete p.skipped[x.id]; }));
   else { add("Preskoči", "", () => planUpdate(p => { p.skipped = { ...p.skipped, [x.id]: true }; })); add("Označi odrađeno", "", () => planUpdate(p => { p.done = { ...p.done, [x.id]: true }; })); }
   if(isRide(x)) add("Vozi", "primary", () => rideSession(x));
+  else if(!x.done && !x.skipped && x.date <= Date.now()) add("Potraži na intervals.icu", "primary", () => planIcuTick(true));
   $("#sess-prof").hidden = !isRide(x);
   $("#dlg-sess").showModal();
   if(isRide(x)) requestAnimationFrame(() => { const [g, W, H] = sizeCanvas($("#sess-prof")); g.clearRect(0, 0, W, H);
@@ -2735,24 +2738,33 @@ function openSession(x){
 $("#dlg-sess").addEventListener("click", e => { if(e.target === $("#dlg-sess")) $("#dlg-sess").close(); });
 
 /* swims and runs from a watch tick off their session when they reach intervals.icu (same day, same sport) */
-const ICU_SPORT = { Swim: "swim", OpenWaterSwim: "swim", Run: "run", VirtualRun: "run", TrailRun: "run" };
-async function planIcuTick(){
-  const p = plan(); if(!p || p.extra === false || !icuOn() || planIcuTick.busy || Date.now() - (planIcuTick.at || 0) < 10 * 60000) return;
+/* intervals.icu activity type → sport of a plan session ("Run", "TrailRun", "VirtualRun", "Swim", "OpenWaterSwim"…) */
+const icuSport = type => /swim/i.test(type || "") ? "swim" : /run/i.test(type || "") ? "run" : null;
+/* manual: from the session dialog, says what it found; otherwise at most every 2 minutes, quietly */
+async function planIcuTick(manual = false){
+  const p = plan(); if(!p || p.extra === false || planIcuTick.busy) return;
+  if(!icuOn()){ if(manual) toast(tr("intervals.icu nije povezan na ovom uređaju (Postavke → intervals.icu)")); return; }
+  if(!manual && Date.now() - (planIcuTick.at || 0) < 2 * 60000) return;
   const open = planSessions(p).filter(x => !isRide(x) && !x.done && !x.skipped && x.date <= Date.now() && x.date > Date.now() - 10 * 864e5);
   if(!open.length) return;
   planIcuTick.busy = true; planIcuTick.at = Date.now();
   try{
     const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "list", icuKey: icuKey() || undefined }) });
-    if(!r.ok) return;
+    if(!r.ok){ if(manual) toast(tr("intervals.icu se ne javlja") + " (" + r.status + ")"); return; }
     const { activities = [] } = await r.json(), used = new Set(Object.values(p.done || {})), hits = {};
     for(const x of open){
-      const a = activities.find(a => ICU_SPORT[a.type] === x.w.sport && String(a.start).slice(0, 10) === x.d && !used.has("icu:" + a.id));
+      const a = activities.find(a => icuSport(a.type) === x.w.sport && String(a.start).slice(0, 10) === x.d && !used.has("icu:" + a.id));
       if(a){ hits[x.id] = "icu:" + a.id; used.add("icu:" + a.id); }
     }
     if(Object.keys(hits).length){ planUpdate(q => { q.done = { ...q.done, ...hits }; }); toast(tr("Plan: trening sa sata je otkvačen")); }
-  }catch(e){ console.warn("plan icu", e); }
+    else if(manual){
+      const today = activities.filter(a => open.some(x => String(a.start).slice(0, 10) === x.d)).map(a => `${a.type} ${String(a.start).slice(5, 10)}`);
+      toast(today.length ? tr("Na intervals.icu za te dane postoji samo") + ": " + today.join(", ") : tr("Na intervals.icu još nema treninga za taj dan. Polar Flow ponekad kasni; probaj kasnije."));
+    }
+  }catch(e){ console.warn("plan icu", e); if(manual) toast(e.message); }
   finally{ planIcuTick.busy = false; }
 }
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") planIcuTick(); });
 
 /* the plan as an iCalendar file with a reminder (VALARM) on every session */
 function planIcs(p = plan()){

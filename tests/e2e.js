@@ -234,6 +234,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.click('[data-view="plan"]'); await p.waitForFunction(() => plan().done?.["w1-fri"], null, { timeout: 10000 });
     assert.equal(await p.locator(".sess .opt.missed").count(), 0, "a past optional swim is not missed"); assert.equal(await p.locator(".sess .opt").count() > 0, true);
     assert.equal(await p.evaluate(() => plan().done["w1-fri"]), "icu:i777", "today's run from the watch ticks off Friday's run");
+    assert.deepEqual(await p.evaluate(() => ["Run", "TrailRun", "Swim", "OpenWaterSwim", "Ride"].map(icuSport)), ["run", "run", "swim", "swim", null]);
     await p.evaluate(() => { store.set("coach", {}); coachCheck.at = 0; return coachCheck(); });   // comments synced from the earlier coach test
     await p.waitForFunction(() => store.get("coach", {})["icu:i777"]?.text, null, { timeout: 15000 });
     assert.match(srv.claude.find(b => b.messages[0].content.includes("Jutarnje trčanje") && b.messages[0].content.includes("Trening koji komentiraš (intervals.icu)")).messages[0].content, /Što je plan tražio[\s\S]*1 km lagano/);
