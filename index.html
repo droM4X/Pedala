@@ -256,6 +256,9 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
 .sess .missed{border-color:var(--z5)}
 .sess .skipped{opacity:.45}
 .sess .opt:not(.done){border-style:dashed}
+.sess .strength b::before{content:"💪 "}
+#wk-cd{font:700 min(26vw,120px)/1 var(--num);text-align:center;margin:8px 0 12px;font-variant-numeric:tabular-nums;color:var(--z2)}
+#dlg-strength[data-kind="work"] #wk-cd{color:var(--z3)} #dlg-strength[data-kind="rest"] #wk-name{color:var(--muted)}
 .sess .today{outline:2px solid var(--z2);outline-offset:1px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
 .toast.show{opacity:1}
@@ -654,6 +657,17 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
   <div class="dlg-acts" id="sess-acts"></div>
 </dialog>
 
+<dialog id="dlg-strength" class="wide">
+  <p class="note" id="wk-title" style="margin:0 0 4px"></p>
+  <p id="wk-phase" style="margin:0;font-weight:600"></p>
+  <h2 id="wk-name" style="margin:4px 0 6px"></h2>
+  <p id="wk-cue" style="min-height:2.9em"></p>
+  <div id="wk-cd"></div>
+  <div class="pbar"><i id="wk-bar" style="width:0%"></i></div>
+  <p class="note" id="wk-next" style="margin:8px 0 14px"></p>
+  <div class="dlg-acts"><button class="btn danger" id="wk-end">Završi</button><button class="btn" id="wk-skip">Preskoči</button><button class="btn primary" id="wk-pause">Pauza</button></div>
+</dialog>
+
 <dialog id="dlg-click">
   <h2>Postavi dijelove Clicka</h2>
   <p id="clk-step">Pritisni tipku za težu brzinu (+).</p>
@@ -674,17 +688,20 @@ const fmtTime = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s/36
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),2600); }
 /* keys shared between devices through api/sync.js; each change is time-stamped so the newest one wins */
 const SYNCED = ["settings", "plan", "workouts", "routes", "ytChannels", "ytPlaylists", "coach", "coachChat"];
+/* profiles: a second person logged in (pedala_ns cookie, set by middleware.js) keeps everything under their own name */
+const NS = (() => { try{ const m = document.cookie.match(/(?:^|;\s*)pedala_ns=([^;]+)/); return m ? decodeURIComponent(m[1]).replace(/[^\w-]/g, "") : ""; }catch{ return ""; } })();
+const LS = "pedala." + (NS ? NS + "." : "");
 const store = {
-  get(k, d){ try{ const v = localStorage.getItem("pedala."+k); return v==null ? d : JSON.parse(v); }catch{ return d; } },
+  get(k, d){ try{ const v = localStorage.getItem(LS+k); return v==null ? d : JSON.parse(v); }catch{ return d; } },
   set(k, v){
     try{
-      localStorage.setItem("pedala."+k, JSON.stringify(v));
-      if(SYNCED.includes(k) && !store.quiet){ const at = store.get("syncAt", {}); at[k] = Date.now(); localStorage.setItem("pedala.syncAt", JSON.stringify(at)); syncSoon(); }
+      localStorage.setItem(LS+k, JSON.stringify(v));
+      if(SYNCED.includes(k) && !store.quiet){ const at = store.get("syncAt", {}); at[k] = Date.now(); localStorage.setItem(LS+"syncAt", JSON.stringify(at)); syncSoon(); }
       return true;
     }catch{ return false; }
   }
 };
-let HAD_SETTINGS = false; try{ HAD_SETTINGS = localStorage.getItem("pedala.settings") != null; }catch{}
+let HAD_SETTINGS = false; try{ HAD_SETTINGS = localStorage.getItem(LS+"settings") != null; }catch{}
 const settings = Object.assign({ ftp: 230, weight: 80, chainring: 34, cog: 14, clickMap: {}, beep: true, pauseVideo: true, autoPause: true, maxHr: 185, voice: true }, store.get("settings", {}));
 /* ============ language ============
    The interface is written in Croatian; with English picked (Settings → Language, or a browser that is not set to
@@ -798,7 +815,10 @@ const EN = new Map(Object.entries({
   "20 minuta laganog okretanja na 52% FTP-a.": "20 minutes of easy spinning at 52% of FTP.", "Lagano, s dva kratka buđenja od 1 minute na FTP-u.": "Easy, with two short 1-minute wake-ups at FTP.",
   "Mirna vožnja u zoni 2 (65% FTP-a). Razgovorni tempo, kadenca 85–95.": "Steady Zone 2 ride (65% of FTP). Conversational pace, cadence 85–95.",
   "Zona 2": "Zone 2", "Pon": "Mon", "Sri": "Wed", "Pet": "Fri", "plivanje": "swim", "trčanje": "run", "brick": "brick",
-  "Plivanje i trčanje u planu": "Swims and runs in the plan", "Potraži na intervals.icu": "Look on intervals.icu",
+  "Plivanje i trčanje u planu": "Swims and runs in the plan", "Snaga kod kuće": "Strength at home", "snaga": "strength", "Zagrijavanje": "Warm-up", "Istezanje": "Stretching",
+  "Odmor": "Rest", "Odmor između krugova": "Rest between rounds", "Krug": "Round", "vježba": "exercise", "Sljedeće": "Next", "Zadnja vježba": "Last exercise",
+  "Trening snage je odrađen": "Strength session done", "Završiti trening? Ako je odrađena barem polovica, računa se kao odrađen.": "End the session? It counts as done if at least half of it is.",
+  "Završiti plan?": "End the plan?", "Potraži na intervals.icu": "Look on intervals.icu",
   "intervals.icu nije povezan na ovom uređaju (Postavke → intervals.icu)": "intervals.icu is not connected on this device (Settings → intervals.icu)", "intervals.icu se ne javlja": "intervals.icu is not answering",
   "Na intervals.icu za te dane postoji samo": "On intervals.icu those days only have", "Na intervals.icu još nema treninga za taj dan. Polar Flow ponekad kasni; probaj kasnije.": "intervals.icu has no activity for that day yet. Polar Flow is sometimes late; try again later.", "Plan: trening sa sata je otkvačen": "Plan: a session from your watch was ticked off", "Uto": "Tue", "Čet": "Thu", "Ned": "Sun", "Danas": "Today", "prag": "threshold", "duga vožnja": "long ride",
   "lakši": "easier", "odrađeno": "done", "preskočeno": "skipped", "propušteno": "missed", "h vožnje": "h ridden", "dosljednost": "consistency",
@@ -1219,7 +1239,7 @@ function parseZwo(text, fileName){
 
 const totalDur = w => w.segs.reduce((a, s) => a + s.d, 0);
 const allWorkouts = () => [...BUILTIN, ...store.get("workouts", [])];
-const findWorkout = id => allWorkouts().find(w => w.id === id) || PLAN_WO[id] || null;
+const findWorkout = id => allWorkouts().find(w => w.id === id) || PLAN_WO[id] || (/^s-[ABC]-\d+$/.test(id || "") ? strengthWorkout(id[2], +id.slice(4) - 1) : null);
 const segFrac = (w, s, frac) => s.lo + (s.hi - s.lo) * frac;
 const toWatts = (w, v) => w.abs ? v : v * settings.ftp;
 
@@ -1653,7 +1673,7 @@ function encodeFit(ride){
 }
 
 /* ============ IndexedDB ============ */
-const db = (() => { let p; return () => p ||= new Promise((res, rej) => { const r = indexedDB.open("pedala", 1);
+const db = (() => { let p; return () => p ||= new Promise((res, rej) => { const r = indexedDB.open(NS ? "pedala-" + NS : "pedala", 1);
   r.onupgradeneeded = () => r.result.createObjectStore("rides", { keyPath: "id" }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); })();
 async function dbAll(){ const d = await db(); return new Promise((res, rej) => { const q = d.transaction("rides").objectStore("rides").getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
 async function dbPut(v){ const d = await db(); return new Promise((res, rej) => { const t = d.transaction("rides","readwrite"); t.objectStore("rides").put(v); t.oncomplete = res; t.onerror = () => rej(t.error); }); }
@@ -2120,6 +2140,16 @@ function renderWorkouts(){
     requestAnimationFrame(() => { const cv = el.querySelector("canvas"); const [g, W, H] = sizeCanvas(cv);
       const maxF = Math.max(1.3, ...w.segs.map(s => Math.max(toWatts(w, s.lo), toWatts(w, s.hi)) / settings.ftp)) * 1.05; drawWorkoutBlocks(g, w, W, H, maxF, 1); });
   } }
+  const sp = plan(), wi = isStrengthPlan(sp) ? Math.max(0, Math.min(STRENGTH.weeks - 1, Math.floor((Date.now() - fromYmd(sp.start)) / (7 * 864e5)))) : 0;
+  const h = document.createElement("h3"); h.className = "vsect"; h.textContent = tr("Snaga kod kuće"); isStrengthPlan(sp) ? list.prepend(h) : list.append(h);
+  let at = h;
+  for(const k of ["A", "B", "C"]){
+    const w = strengthWorkout(k, wi), el = document.createElement("div"); el.className = "item";
+    el.innerHTML = `<div><h3></h3><p style="white-space:pre-line"></p></div><div class="acts"><button class="btn small primary">${tr("Kreni")}</button></div>`;
+    el.querySelector("h3").textContent = `${w.name} · ${w.min} min`; el.querySelector("p").textContent = w.desc.split("\n")[0];
+    el.querySelector("button").onclick = () => startStrength(w);
+    at.after(el); at = el;
+  }
 }
 function estimateTss(w){
   const fakes = []; let t = 0;
@@ -2481,7 +2511,9 @@ async function coachQuestion(q){
   const sessions = p ? planSessions(p).filter(x => x.date >= mon && x.date < until).map(x => ({ id: x.id, datum: x.d, trening: x.w.name, min: woMin(x.w),
     stanje: x.done ? "odrađen" : x.skipped ? "preskočen" : x.past ? (x.optional ? "neobavezan, nije odrađen" : "propušten") : x.today ? "danas" : "predstoji", zamijenjen: x.swapped || undefined })) : null;
   const wantsChange = /promijen|zamijen|preskoč|preskoc|pomakn|izbaci|umjesto|zamjen|ne mogu|nemam vremena|bolest|prehla|grip|putuj|na putu|odgod|lakš|laks|skrat|ozlijed|ozljed|boli|izmjen|drugi trening/i.test(q);
-  const options = wantsChange ? [...new Map(Object.values(PLAN_WO).map(w => [w.id, w])).values()].map(w => ({ id: w.id, naziv: w.name, min: woMin(w), opis: String(w.desc || "").slice(0, 70) })) : [];
+  const wi = p ? Math.max(0, Math.min(planWeeks(p) - 1, Math.floor((now - fromYmd(p.start)) / (7 * 864e5)))) : 0;
+  const options = wantsChange && isStrengthPlan(p) ? ["A", "B", "C"].map(k => strengthWorkout(k, wi)).map(w => ({ id: w.id, naziv: w.name, min: w.min }))
+    : wantsChange ? [...new Map(Object.values(PLAN_WO).map(w => [w.id, w])).values()].map(w => ({ id: w.id, naziv: w.name, min: woMin(w), opis: String(w.desc || "").slice(0, 70) })) : [];
   let rides = []; if(!icuOn()) try{ rides = (await dbAll()).filter(r => r.start > now - 21 * 864e5).sort((a, b) => b.start - a.start)   // intervals.icu already has them
     .map(r => ({ datum: ymd(new Date(r.start)), naziv: r.name, min: Math.round(r.m.duration / 60), tss: r.m.tss, snaga: r.m.avgP, puls: r.m.avgHr || undefined })); }catch{}
   const comments = Object.values(coachNotes()).filter(n => n.text).sort((a, b) => (b.date || b.at) - (a.date || a.at)).slice(0, 3)
@@ -2636,6 +2668,10 @@ function planSessions(p = plan()){
     const sw = p.swap?.[id] && findWorkout(p.swap[id]), w = sw || orig;   // swapped for another workout (by the coach or by hand)
     out.push({ id, week: i + 1, day, label, date, d, w, off, swapped: !!sw, optional: !!w.optional, done: !!p.done?.[id], skipped: !!p.skipped?.[id], today: d === today, past: d < today });
   };
+  if(isStrengthPlan(p)){
+    for(let i = 0; i < STRENGTH.weeks; i++) STRENGTH.days.forEach(([day, off, label, k]) => add(i, day, off, label, strengthWorkout(k, i)));
+    return out.sort((a, b) => a.week - b.week || a.off - b.off);
+  }
   PLAN.weeks.forEach((wk, i) => {
     PLAN_DAYS.forEach(([day, off, label], j) => add(i, day, off, label, PLAN_WO[wk[j].startsWith("b-") ? wk[j] : "p-" + wk[j]]));
     if(p.extra !== false) PLAN_EXTRA.forEach(([day, off, label, kind]) => { if(!p.extraFrom || ymd(plusDays(start, i * 7 + Math.floor(off))) >= p.extraFrom) add(i, day, off, label, extraWorkout(kind, i)); });
@@ -2659,13 +2695,22 @@ function renderPlan(){
   const box = $("#plan-body"), p = plan();
   if(!p){
     const tw = PLAN.weeks.map(w => w.map(k => PLAN_WO[k.startsWith("b-") ? k : "p-" + k]));
-    box.innerHTML = `<div class="plan-card"><h3>${PLAN.name}</h3>
+    const sw = [0, 4, 8].map(i => strengthWorkout("A", i));
+    box.innerHTML = `<div class="plan-card"><h3>${ui("Snaga kod kuće · 12 tjedana", "Strength at home · 12 weeks")}</h3>
+      <p>${ui("Tri kružna treninga tjedno s vlastitom težinom (ponedjeljak noge i stražnjica, srijeda gornji dio i trup, petak cijelo tijelo). Treba samo prostirka i stolica. Rad raste od 30 s s 30 s odmora do 45 s s 15 s odmora, a tjedni 4, 8 i 12 su lakši. Aplikacija vodi svaki trening: odbrojava, najavljuje vježbe i otkvači ga u planu.",
+        "Three bodyweight circuits a week (Monday legs and glutes, Wednesday upper body and core, Friday full body). All you need is a mat and a chair. Work grows from 30 s with 30 s rest to 45 s with 15 s rest, and weeks 4, 8 and 12 are easier. The app guides every session: it counts down, announces the exercises and ticks it off in the plan.")}</p>
+      <p>${ui("Trajanje", "Length")}: ${sw.map(w => w.min).join(" → ")} min</p>
+      <div class="row"><label>Početak (ponedjeljak) <input type="date" id="plan-start-s" value="${ymd(nextMonday())}"></label><button class="btn primary" id="plan-go-s">Pokreni plan</button></div></div>
+      <div class="plan-card"><h3>${PLAN.name}</h3>
       <p>${ui("Utorkom prag (threshold), četvrtkom VO2max, oba do 30 minuta: teže postaju gušćim intervalima, ne dužim treningom. Nedjeljom vožnja u zoni 2 raste od 50 minuta do 3 sata. Tjedni 4, 8 i 12 su lakši, a 14. završava ramp testom.",
         "Threshold on Tuesdays, VO2max on Thursdays, both 30 minutes at most: they get harder through denser intervals, not longer sessions. The Sunday Zone 2 ride grows from 50 minutes to 3 hours. Weeks 4, 8 and 12 are easier, and week 14 ends with a ramp test.")}</p>
       <p>${ui("Uz to plivanje ponedjeljkom (tehnika) i srijedom (lagano, neobavezno), kratko brick trčanje utorkom nakon vožnje i lagano trčanje petkom od 1 do 6 km. Zadnji tjedan su testovi: 400 m plivanja, 5 km trčanja i ramp test, kao polazna točka za idući blok. Plivanje i trčanje radiš izvan Pedale, a otkvače se sami kad stignu na intervals.icu.",
         "Plus swims on Monday (technique) and Wednesday (easy, optional), a short brick run after Tuesday's ride and an easy run on Friday that grows from 1 to 6 km. The last week is tests: a 400 m swim, a 5 km run and the ramp test, as the starting point for the next block. Swims and runs happen outside Pedala and tick off by themselves when they reach intervals.icu.")}</p>
       <p>${ui("Najduži trening preko tjedna", "Longest weekday session")}: ${Math.max(...tw.flatMap(w => w.slice(0, 2)).map(woMin))} min · ${ui("najduža nedjelja", "longest Sunday")}: ${Math.max(...tw.map(w => woMin(w[2])))} min · ${ui("ukupno", "total")} ${tw.length * 3} ${ui("vožnji", "rides")}.</p>
       <div class="row"><label>Početak (ponedjeljak) <input type="date" id="plan-start" value="${ymd(nextMonday())}"></label><button class="btn primary" id="plan-go">Pokreni plan</button></div></div>`;
+    $("#plan-go-s").onclick = () => { const v = $("#plan-start-s").value; if(!v) return;
+      const d = fromYmd(v); if(d.getDay() !== 1 && !confirm(tr("Plan je složen od ponedjeljka. Ipak krenuti od " + shortDay(d) + "?"))) return;
+      store.set("plan", { id: STRENGTH.id, start: v, done: {}, skipped: {}, times: { wk: "18:00", sun: "09:00" }, remind: 120 }); renderPlan(); };
     $("#plan-go").onclick = () => { const v = $("#plan-start").value; if(!v) return;
       const d = fromYmd(v); if(d.getDay() !== 1 && !confirm(tr("Plan je složen od ponedjeljka. Ipak krenuti od " + shortDay(d) + "?"))) return;
       store.set("plan", { id: PLAN.id, start: v, done: {}, skipped: {}, extra: true, extraFrom: v, times: { wk: "18:00", sun: "09:00" }, remind: 120 }); renderPlan(); };
@@ -2673,32 +2718,33 @@ function renderPlan(){
   }
   const ss = planSessions(p), done = ss.filter(x => x.done), missed = ss.filter(x => x.past && !x.done && !x.skipped && !x.optional);
   const total = ss.filter(x => !x.optional || x.done).length;   // optional sessions count only when done
-  const week = Math.min(PLAN.weeks.length, Math.max(1, Math.floor((new Date() - fromYmd(p.start)) / (7 * 864e5)) + 1));
+  const strong = isStrengthPlan(p), NW = planWeeks(p), pname = strong ? ui("Snaga kod kuće · 12 tjedana", "Strength at home · 12 weeks") : PLAN.name;
+  const week = Math.min(NW, Math.max(1, Math.floor((new Date() - fromYmd(p.start)) / (7 * 864e5)) + 1));
   const next = ss.find(x => !x.done && !x.skipped && !x.past), hours = done.filter(isRide).reduce((a, x) => a + totalDur(x.w), 0) / 3600;
-  const started = new Date() >= fromYmd(p.start), end = plusDays(fromYmd(p.start), PLAN.weeks.length * 7 - 1);
-  box.innerHTML = `<div class="plan-card"><h3>${PLAN.name}</h3>
-      <p>${started ? `Tjedan ${week} od ${PLAN.weeks.length}` : `Počinje ${shortDay(fromYmd(p.start))}`} · ${shortDay(fromYmd(p.start))} – ${shortDay(end)}</p>
+  const started = new Date() >= fromYmd(p.start), end = plusDays(fromYmd(p.start), NW * 7 - 1);
+  box.innerHTML = `<div class="plan-card"><h3>${pname}</h3>
+      <p>${started ? `Tjedan ${week} od ${NW}` : `Počinje ${shortDay(fromYmd(p.start))}`} · ${shortDay(fromYmd(p.start))} – ${shortDay(end)}</p>
       <div class="pbar"><i style="width:${Math.round(done.length / total * 100)}%"></i></div>
-      <div class="pstats"><span><b>${done.length}</b>od ${total} odrađeno</span><span><b>${missed.length}</b>propušteno</span><span><b>${hours.toFixed(1).replace(".", ",")}</b>h vožnje</span>${done.length + missed.length ? `<span><b>${Math.round(done.length / (done.length + missed.length) * 100)}%</b>dosljednost</span>` : ""}</div></div>
-    ${next ? `<div class="plan-card"><p>${next.today ? "Danas" : shortDay(next.date)} · ${next.w.sport === "swim" ? "plivanje" : next.day === "tue2" ? "brick" : next.w.sport === "run" ? "trčanje" : next.day === "sun" ? "duga vožnja" : next.day === "tue" ? "prag" : "VO2max"}</p>
+      <div class="pstats"><span><b>${done.length}</b>od ${total} odrađeno</span><span><b>${missed.length}</b>propušteno</span>${strong ? "" : `<span><b>${hours.toFixed(1).replace(".", ",")}</b>h vožnje</span>`}${done.length + missed.length ? `<span><b>${Math.round(done.length / (done.length + missed.length) * 100)}%</b>dosljednost</span>` : ""}</div></div>
+    ${next ? `<div class="plan-card"><p>${next.today ? "Danas" : shortDay(next.date)} · ${next.w.sport === "strength" ? "snaga" : next.w.sport === "swim" ? "plivanje" : next.day === "tue2" ? "brick" : next.w.sport === "run" ? "trčanje" : next.day === "sun" ? "duga vožnja" : next.day === "tue" ? "prag" : "VO2max"}</p>
       <h3>${next.w.name}${/\d (min|h)$/.test(next.w.name) ? "" : ` · ${woMin(next.w)} min`}</h3><p>${next.w.desc}</p>
-      <div class="row">${isRide(next) ? `<button class="btn primary" id="plan-ride">Vozi sada</button>` : `<button class="btn primary" id="plan-done-next">Označi odrađeno</button>`}<button class="btn small" id="plan-next-more">Više</button></div></div>` : `<div class="plan-card"><h3>Plan je završen 🎉</h3><p>Odradi ramp test ako već nisi i postavi novi FTP.</p></div>`}
+      <div class="row">${isRide(next) ? `<button class="btn primary" id="plan-ride">Vozi sada</button>` : next.w.steps ? `<button class="btn primary" id="plan-go-next">Kreni</button>` : `<button class="btn primary" id="plan-done-next">Označi odrađeno</button>`}<button class="btn small" id="plan-next-more">Više</button></div></div>` : `<div class="plan-card"><h3>Plan je završen 🎉</h3><p>${strong ? ui("Bravo! Pitaj trenera kako dalje.", "Well done! Ask the coach what's next.") : "Odradi ramp test ako već nisi i postavi novi FTP."}</p></div>`}
     <div class="weeks" id="plan-weeks"></div>
     <div class="plan-card" style="margin-top:12px"><h3>Kalendar i podsjetnik</h3>
       <p>Preuzmi plan kao kalendar (.ics) i uvezi ga u Google Kalendar. Svaki trening dobiva podsjetnik prije početka.</p>
       <div class="row">
-        <label>Uto i Čet u <input type="time" id="plan-twk" value="${p.times?.wk || "18:00"}"></label>
-        <label>Nedjeljom u <input type="time" id="plan-tsun" value="${p.times?.sun || "09:00"}"></label>
+        <label>${strong ? ui("Treninzi u", "Sessions at") : "Uto i Čet u"} <input type="time" id="plan-twk" value="${p.times?.wk || "18:00"}"></label>
+        <label${strong ? " hidden" : ""}>Nedjeljom u <input type="time" id="plan-tsun" value="${p.times?.sun || "09:00"}"></label>
         <label>Podsjetnik <select id="plan-remind">${[[30, "30 min"], [60, "1 h"], [120, "2 h"], [240, "4 h"], [720, "12 h"]].map(([v, t]) => `<option value="${v}"${v === (p.remind || 120) ? " selected" : ""}>${t}</option>`).join("")}</select> prije</label>
       </div>
       <div class="row"><button class="btn" id="plan-ics">Preuzmi kalendar (.ics)</button></div>
       <p style="margin-top:10px">Google Kalendar kod uvoza zanemaruje podsjetnike iz datoteke, pa ga postavi ovako: na računalu u Google Kalendaru napravi novi kalendar <b>Pedala</b>, u njegovim postavkama pod <b>Obavijesti o događajima</b> dodaj obavijest (npr. 2 sata prije), pa <b>Postavke → Uvoz i izvoz</b> uvezi datoteku u kalendar Pedala. Samsung Kalendar i Outlook čitaju podsjetnik iz same datoteke.</p></div>
-    <div class="plan-card"><div class="row" style="margin-top:0"><label class="check note" style="display:flex;margin-right:auto"><input type="checkbox" id="plan-extra"${p.extra !== false ? " checked" : ""}> Plivanje i trčanje u planu</label><button class="btn small" id="plan-ask">Pitaj trenera</button><button class="btn small" id="plan-restart">Promijeni početak</button><button class="btn small danger" id="plan-stop">Završi plan</button></div></div>`;
+    <div class="plan-card"><div class="row" style="margin-top:0"><label class="check note" style="display:flex;margin-right:auto"${strong ? " hidden" : ""}><input type="checkbox" id="plan-extra"${p.extra !== false ? " checked" : ""}> Plivanje i trčanje u planu</label><button class="btn small" id="plan-ask">Pitaj trenera</button><button class="btn small" id="plan-restart">Promijeni početak</button><button class="btn small danger" id="plan-stop">Završi plan</button></div></div>`;
   const weeks = $("#plan-weeks");
-  PLAN.weeks.forEach((_, i) => {
+  for(let i = 0; i < NW; i++){
     const wk = ss.filter(x => x.week === i + 1), el = document.createElement("div");
     el.className = "week" + (started && i + 1 === week ? " now" : "");
-    el.innerHTML = `<h4><span>Tjedan ${i + 1}${PLAN.deload.includes(i + 1) ? (i === 13 ? " · test" : " · lakši") : ""}</span><small>${shortDay(wk[0].date)} – ${shortDay(wk.at(-1).date)}</small></h4><div class="sess"></div>`;
+    el.innerHTML = `<h4><span>Tjedan ${i + 1}${(strong ? STRENGTH.deload : PLAN.deload).includes(i + 1) ? (!strong && i === 13 ? " · test" : " · lakši") : ""}</span><small>${shortDay(wk[0].date)} – ${shortDay(wk.at(-1).date)}</small></h4><div class="sess"></div>`;
     for(const x of wk){
       const b = document.createElement("button"); b.type = "button";
       b.className = [x.w.sport, x.done && "done", x.skipped && "skipped", !x.done && !x.skipped && !x.optional && x.past && "missed", x.optional && "opt", x.today && "today"].filter(Boolean).join(" ");
@@ -2707,8 +2753,9 @@ function renderPlan(){
       el.querySelector(".sess").append(b);
     }
     weeks.append(el);
-  });
+  }
   if(next){ $("#plan-ride") && ($("#plan-ride").onclick = () => rideSession(next)); $("#plan-done-next") && ($("#plan-done-next").onclick = () => planUpdate(q => { q.done = { ...q.done, [next.id]: true }; }));
+    $("#plan-go-next") && ($("#plan-go-next").onclick = () => startStrength(next.w, next.id));
     $("#plan-next-more").onclick = () => openSession(next); }
   $("#plan-extra").onchange = e => planUpdate(q => { q.extra = e.target.checked; if(q.extra) q.extraFrom = ymd(new Date()); });   // not missed for the weeks before
   planIcuTick();
@@ -2717,7 +2764,7 @@ function renderPlan(){
   $("#plan-ics").onclick = () => downloadIcs();
   $("#plan-ask").onclick = () => { showView("progress"); setTimeout(() => { $("#coach-q")?.focus(); $("#coach-box")?.scrollIntoView({ block: "start" }); }, 50); };
   $("#plan-restart").onclick = () => { const v = prompt(tr("Novi početak plana (GGGG-MM-DD, ponedjeljak):"), p.start); if(v && /^\d{4}-\d{2}-\d{2}$/.test(v)) planUpdate(q => { q.start = v; }); };
-  $("#plan-stop").onclick = () => { if(confirm(tr("Završiti plan? Vožnje ostaju u Povijesti."))){ store.set("plan", null); renderPlan(); } };
+  $("#plan-stop").onclick = () => { if(confirm(tr(strong ? "Završiti plan?" : "Završiti plan? Vožnje ostaju u Povijesti."))){ store.set("plan", null); renderPlan(); } };
 }
 function openSession(x){
   $("#sess-title").textContent = x.w.name;
@@ -2729,7 +2776,8 @@ function openSession(x){
   if(x.done || x.skipped) add("Poništi", "", () => planUpdate(p => { delete p.done[x.id]; delete p.skipped[x.id]; }));
   else { add("Preskoči", "", () => planUpdate(p => { p.skipped = { ...p.skipped, [x.id]: true }; })); add("Označi odrađeno", "", () => planUpdate(p => { p.done = { ...p.done, [x.id]: true }; })); }
   if(isRide(x)) add("Vozi", "primary", () => rideSession(x));
-  else if(!x.done && !x.skipped && x.date <= Date.now()) add("Potraži na intervals.icu", "primary", () => planIcuTick(true));
+  else if(x.w.steps && !x.skipped) add("Kreni", "primary", () => startStrength(x.w, x.id));
+  if(!isRide(x) && !x.done && !x.skipped && x.date <= Date.now()) add("Potraži na intervals.icu", "primary", () => planIcuTick(true));
   $("#sess-prof").hidden = !isRide(x);
   $("#dlg-sess").showModal();
   if(isRide(x)) requestAnimationFrame(() => { const [g, W, H] = sizeCanvas($("#sess-prof")); g.clearRect(0, 0, W, H);
@@ -2737,12 +2785,114 @@ function openSession(x){
 }
 $("#dlg-sess").addEventListener("click", e => { if(e.target === $("#dlg-sess")) $("#dlg-sess").close(); });
 
+/* ============ strength at home ============
+   A 12-week plan of three bodyweight circuits a week (A: legs and glutes, B: upper body and core, C: full body),
+   needing only a mat and a chair. Work and rest grow from 30/30 s over three rounds to 45/15 s over four;
+   weeks 4, 8 and 12 have a round less. Sessions run in a guided player with a countdown and voice cues, and a
+   strength session recorded on a watch ticks off by itself once it reaches intervals.icu. */
+const EX = {
+  squat:     [["Čučanj", "Squat"], ["Stopala u širini ramena, kukovi unatrag kao da sjedaš, koljena prate prste, leđa ravna.", "Feet shoulder-width, hips back as if sitting down, knees over toes, back straight."]],
+  lunge:     [["Iskorak unazad, naizmjenično", "Reverse lunge, alternating"], ["Korak unatrag i spusti stražnje koljeno prema podu; prednje koljeno iznad stopala.", "Step back and lower the back knee towards the floor; front knee above the foot."]],
+  bridge:    [["Most za stražnjicu", "Glute bridge"], ["Na leđima, stopala na podu: podigni kukove i stisni stražnjicu, pa se polako spusti.", "On your back, feet on the floor: lift your hips and squeeze your glutes, then lower slowly."]],
+  sideLunge: [["Iskorak u stranu, naizmjenično", "Side lunge, alternating"], ["Široki korak u stranu, sjedni na tu nogu, druga ostaje ispružena.", "Wide step to the side, sit into that leg, the other stays straight."]],
+  wallSit:   [["Sjedenje uz zid", "Wall sit"], ["Leđa uz zid, koljena pod pravim kutom (ili više ako je preteško).", "Back against the wall, knees at a right angle (or higher if that is too hard)."]],
+  calf:      [["Podizanje na prste", "Calf raise"], ["Polako gore na prste i polako dolje; drži se za stolicu.", "Slowly up onto your toes and slowly down; hold a chair."]],
+  pushup:    [["Sklek", "Push-up"], ["Na koljenima ili uz rub stola ako je teško; tijelo ravno, prsa prema podu.", "On your knees or against a table edge if it is hard; body straight, chest towards the floor."]],
+  dips:      [["Propadanje na stolici", "Chair dips"], ["Dlanovi na rub stolice iza sebe, savij laktove unatrag i podigni se.", "Hands on the chair edge behind you, bend your elbows back and push up."]],
+  superman:  [["Superman", "Superman"], ["Na trbuhu: podigni ruke i noge malo od poda, pogled prema podu.", "On your front: lift arms and legs slightly off the floor, look at the floor."]],
+  plank:     [["Plank na podlakticama", "Forearm plank"], ["Laktovi ispod ramena, tijelo ravno od glave do peta; može i na koljenima.", "Elbows under shoulders, body straight from head to heels; on your knees is fine."]],
+  sidePlank: [["Bočni plank, pola vremena svaka strana", "Side plank, half the time each side"], ["Na podlaktici i boku stopala (ili koljena), kukovi gore.", "On your forearm and the side of your foot (or knee), hips up."]],
+  deadBug:   [["Mrtva buba", "Dead bug"], ["Na leđima, ruke i koljena gore: polako ispruži suprotnu ruku i nogu, donji dio leđa ostaje na podu.", "On your back, arms and knees up: slowly stretch out the opposite arm and leg, lower back stays on the floor."]],
+  climber:   [["Penjač", "Mountain climber"], ["U položaju skleka naizmjence privlači koljena prsima; brzina po osjećaju.", "In a push-up position, bring your knees to your chest in turn; pace by feel."]],
+  tap:       [["Plank s dodirom ramena", "Plank shoulder taps"], ["U položaju skleka naizmjence dodirni suprotno rame; kukovi mirni.", "In a push-up position, touch the opposite shoulder in turn; hips still."]],
+};
+const WARMUP = [[["Hodanje u mjestu, koljena gore", "Marching on the spot, knees up"], 60], [["Krugovi rukama naprijed i natrag", "Arm circles forwards and back"], 30],
+  [["Krugovi kukovima", "Hip circles"], 30], [["Čučanj do pola, polako", "Half squat, slowly"], 30], [["Iskorak unazad, lagano", "Easy reverse lunge"], 30], [["Zamasi nogama uz zid", "Leg swings at a wall"], 30]];
+const COOLDOWN = [[["Istezanje prednje lože, lijeva noga", "Quad stretch, left leg"], 30], [["Istezanje prednje lože, desna noga", "Quad stretch, right leg"], 30],
+  [["Istezanje stražnje lože, sjedeći", "Hamstring stretch, seated"], 40], [["Istezanje prsa uz okvir vrata", "Chest stretch in a doorway"], 30], [["Istezanje leđa: sjedni na pete, ruke naprijed", "Back stretch: sit on your heels, arms forward"], 40]];
+const CIRCUITS = { A: ["squat", "lunge", "bridge", "sideLunge", "wallSit", "calf"], B: ["pushup", "dips", "superman", "plank", "sidePlank", "deadBug"], C: ["squat", "pushup", "lunge", "climber", "tap", "bridge"] };
+const CIRCUIT_NAME = { A: ["noge i stražnjica", "legs and glutes"], B: ["gornji dio i trup", "upper body and core"], C: ["cijelo tijelo", "full body"] };
+const STRENGTH = { id: "snaga12", weeks: 12, deload: [4, 8, 12], days: [["mon", 0, "Pon", "A"], ["wed", 2, "Sri", "B"], ["fri", 4, "Pet", "C"]] };
+const ROUND_REST = 60;
+function strengthWorkout(k, wi){
+  const ph = wi < 4 ? 0 : wi < 8 ? 1 : 2, [work, rest] = [[30, 30], [40, 20], [45, 15]][ph], rounds = [3, 3, 4][ph] - (STRENGTH.deload.includes(wi + 1) ? 1 : 0);
+  const steps = WARMUP.map(([n, s]) => ({ kind: "warm", n, s }));
+  for(let r = 1; r <= rounds; r++){
+    CIRCUITS[k].forEach((e, j) => { steps.push({ kind: "work", n: EX[e][0], c: EX[e][1], s: work, r, rounds, j: j + 1, of: CIRCUITS[k].length });
+      if(j < CIRCUITS[k].length - 1) steps.push({ kind: "rest", s: rest }); });
+    if(r < rounds) steps.push({ kind: "rest", s: ROUND_REST, long: true });
+  }
+  steps.push(...COOLDOWN.map(([n, s]) => ({ kind: "cool", n, s })));
+  const names = CIRCUITS[k].map(e => ui(...EX[e][0]).toLowerCase());
+  return { id: `s-${k}-${wi + 1}`, sport: "strength", strength: k, steps, min: Math.round(steps.reduce((a, x) => a + x.s, 0) / 60),
+    name: ui(`Snaga ${k} · ${CIRCUIT_NAME[k][0]}`, `Strength ${k} · ${CIRCUIT_NAME[k][1]}`),
+    desc: ui(`${rounds} kruga: ${names.join(", ")}.\n${work} s vježbe, ${rest} s odmora, minuta odmora između krugova.\nZagrijavanje 4 min na početku i istezanje 3 min na kraju. Treba samo prostirka i stolica. Aplikacija vodi trening i najavljuje vježbe.`,
+      `${rounds} rounds: ${names.join(", ")}.\n${work} s work, ${rest} s rest, a minute's rest between rounds.\nA 4-minute warm-up at the start and 3 minutes of stretching at the end. All you need is a mat and a chair. The app guides the session and announces each exercise.`) };
+}
+const isStrengthPlan = p => p?.id === STRENGTH.id;
+const planWeeks = p => isStrengthPlan(p) ? STRENGTH.weeks : PLAN.weeks.length;
+
+/* ---- guided player ---- */
+const WK = { steps: [], i: -1, left: 0, done: 0, total: 0, paused: false, timer: null, last: 0, sess: null, w: null };
+function startStrength(w, sess = null){
+  Object.assign(WK, { steps: w.steps, i: -1, done: 0, total: w.steps.reduce((a, x) => a + x.s, 0), paused: false, sess, w, last: performance.now() });
+  $("#wk-title").textContent = w.name; $("#wk-pause").textContent = tr("Pauza");
+  $("#dlg-sess").open && $("#dlg-sess").close();
+  $("#dlg-strength").showModal(); wakeLock(); wkNext();
+  clearInterval(WK.timer); WK.timer = setInterval(wkTick, 200);
+}
+function wkNext(){
+  if(WK.i >= 0) WK.done += WK.steps[WK.i].s;
+  WK.i++;
+  const st = WK.steps[WK.i];
+  if(!st) return wkFinish(true);
+  WK.left = st.s; WK.beeped = 4;
+  const nx = WK.steps.slice(WK.i + 1).find(x => x.kind !== "rest");
+  const name = x => x.n ? ui(...x.n) : "", spoken = x => x.n ? L(...x.n) : "";
+  $("#wk-phase").textContent = st.kind === "warm" ? tr("Zagrijavanje") : st.kind === "cool" ? tr("Istezanje") : st.kind === "rest" ? tr("Odmor")
+    : `${tr("Krug")} ${st.r}/${st.rounds} · ${tr("vježba")} ${st.j}/${st.of}`;
+  $("#wk-name").textContent = st.kind === "rest" ? (st.long ? tr("Odmor između krugova") : tr("Odmor")) : name(st);
+  $("#wk-cue").textContent = st.c ? ui(...st.c) : "";
+  $("#wk-next").textContent = nx ? `${tr("Sljedeće")}: ${name(nx)}` : tr("Zadnja vježba");
+  $("#dlg-strength").dataset.kind = st.kind;
+  if(st.kind === "rest") say(() => L(`Odmor. Sljedeće: ${spoken(nx)}.`, `Rest. Next: ${spoken(nx)}.`));
+  else say(() => st.kind === "work" ? L(`${spoken(st)}, ${st.s} sekundi.`, `${spoken(st)}, ${st.s} seconds.`) : spoken(st));
+  wkRender();
+}
+function wkTick(){
+  const now = performance.now(), dt = (now - WK.last) / 1000 * SIM_SPEED; WK.last = now;
+  if(WK.paused || WK.i < 0) return;
+  WK.left -= dt;
+  const s = Math.ceil(WK.left), st = WK.steps[WK.i];
+  if(s <= 3 && s >= 1 && s < WK.beeped && st.kind !== "warm" && st.kind !== "cool"){ WK.beeped = s; if(settings.beep) beep(s === 1 ? 880 : 520, .08); }
+  if(WK.left <= 0) wkNext(); else wkRender();
+}
+function wkRender(){
+  $("#wk-cd").textContent = fmtTime(Math.max(0, Math.ceil(WK.left)));
+  const st = WK.steps[WK.i]; $("#wk-bar").style.width = Math.min(100, (WK.done + (st ? st.s - WK.left : 0)) / WK.total * 100) + "%";
+}
+function wkFinish(complete){
+  clearInterval(WK.timer); WK.timer = null;
+  const share = (WK.done + (WK.steps[WK.i] ? WK.steps[WK.i].s - WK.left : 0)) / WK.total;
+  if($("#dlg-strength").open) $("#dlg-strength").close();
+  if(complete || share >= .5){
+    if(complete) say(() => L("Trening je gotov. Bravo.", "Workout complete. Well done."));
+    if(WK.sess && plan()) planUpdate(p => { p.done = { ...p.done, [WK.sess]: "app:" + Date.now() }; if(p.skipped) delete p.skipped[WK.sess]; });
+    toast(tr("Trening snage je odrađen"));
+  }
+  WK.i = -1;
+}
+$("#wk-pause").onclick = () => { WK.paused = !WK.paused; $("#wk-pause").textContent = tr(WK.paused ? "Nastavi" : "Pauza"); };
+$("#wk-skip").onclick = () => { WK.left = 0; wkTick(); };
+$("#wk-end").onclick = () => { if(confirm(tr("Završiti trening? Ako je odrađena barem polovica, računa se kao odrađen."))) wkFinish(false); };
+$("#dlg-strength").addEventListener("cancel", e => { e.preventDefault(); $("#wk-end").click(); });
+
 /* swims and runs from a watch tick off their session when they reach intervals.icu (same day, same sport) */
 /* intervals.icu activity type → sport of a plan session ("Run", "TrailRun", "VirtualRun", "Swim", "OpenWaterSwim"…) */
-const icuSport = type => /swim/i.test(type || "") ? "swim" : /run/i.test(type || "") ? "run" : null;
+const icuSport = type => /swim/i.test(type || "") ? "swim" : /run/i.test(type || "") ? "run" : /weight|strength/i.test(type || "") ? "strength" : null;
 /* manual: from the session dialog, says what it found; otherwise at most every 2 minutes, quietly */
 async function planIcuTick(manual = false){
-  const p = plan(); if(!p || p.extra === false || planIcuTick.busy) return;
+  const p = plan(); if(!p || p.extra === false && !isStrengthPlan(p) || planIcuTick.busy) return;
   if(!icuOn()){ if(manual) toast(tr("intervals.icu nije povezan na ovom uređaju (Postavke → intervals.icu)")); return; }
   if(!manual && Date.now() - (planIcuTick.at || 0) < 2 * 60000) return;
   const open = planSessions(p).filter(x => !isRide(x) && !x.done && !x.skipped && x.date <= Date.now() && x.date > Date.now() - 10 * 864e5);
@@ -2829,7 +2979,7 @@ async function syncNow(){
       if(JSON.stringify(mine) !== JSON.stringify(sec.data)){ applySection(k, sec.data); changed = true; }
       at[k] = sec.at;
     }
-    localStorage.setItem("pedala.syncAt", JSON.stringify(at));
+    localStorage.setItem(LS+"syncAt", JSON.stringify(at));
     const dead = new Set(j.deleted || []); store.set("syncDeleted", deleted.filter(id => !dead.has(id)));
     const local = await dbAll(), have = new Set(local.map(x => x.id)), server = new Set(j.rides || []);
     for(const id of dead) if(have.has(id)){ await dbDel(id); changed = true; }

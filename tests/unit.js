@@ -39,6 +39,21 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
     process.env.PEDALA_PASSWORD = "nova"; assert.equal((await withCookie()).status, 401);
     process.env.PEDALA_PASSWORD = "Tajna-šifra 1";
   });
+  await test("middleware: a second profile logs in with its own password and gets its own namespace", async () => {
+    process.env.PEDALA_USER2 = "ana"; process.env.PEDALA_PASSWORD2 = "druga";
+    const post = body => mw(req("/__login", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body }));
+    assert.match((await post("user=ana&password=" + encodeURIComponent("Tajna-šifra 1") + "&next=/")).headers.get("location"), /e=1/, "not with the main password");
+    const ok = await post("user=ana&password=druga&next=/"), set = ok.headers.getSetCookie();
+    assert.match(set[0], /^pedala_session=ana\./); assert.match(set[1], /^pedala_ns=ana;/); assert.doesNotMatch(set[1], /HttpOnly/);
+    assert.equal(await mw(req("/api/sync", { headers: { cookie: set[0].split(";")[0] } })), undefined);
+    assert.equal((await mw(req("/api/sync", { headers: { cookie: set[0].split(";")[0].replace("ana.", "rider.") } }))).status, 401, "a token is only good for its own user");
+    const main = (await post("user=rider&password=" + encodeURIComponent("Tajna-šifra 1") + "&next=/")).headers.getSetCookie();
+    assert.match(main[1], /^pedala_ns=; .*Max-Age=0/, "the main user has no namespace");
+  });
+  await test("middleware: a session cookie from before profiles still works", async () => {
+    const legacy = (await import("node:crypto")).createHmac("sha256", "Tajna-šifra 1").update("pedala-session:rider").digest("base64url");
+    assert.equal(await mw(req("/api/sync", { headers: { cookie: "pedala_session=" + legacy } })), undefined);
+  });
   await test("middleware: without PEDALA_PASSWORD nobody gets in", async () => {
     const saved = process.env.PEDALA_PASSWORD; delete process.env.PEDALA_PASSWORD;
     assert.equal((await mw(req("/"))).status, 503); process.env.PEDALA_PASSWORD = saved;
@@ -73,6 +88,16 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
   await test("sync: a deleted ride is removed everywhere", async () => {
     const m = (await call("POST", "/api/sync", { action: "state", sections: {}, deleted: ["r-2"] })).body;
     assert.deepEqual(m.rides, ["r-1"]); assert.ok(!store.has("rides/r-2.json"));
+  });
+  await test("sync: a second profile has its own rides and plan", async () => {
+    const anaCall = async (method, url, body) => { let out; await sync({ method, url, body, headers: { cookie: "pedala_session=ana.x" } }, { setHeader(){}, status(c){ this.c = c; return this; }, json(o){ out = { status: this.c, body: o }; } }); return out; };
+    assert.equal((await anaCall("POST", "/api/sync", { action: "ride", ride: ride("r-ana") })).status, 200);
+    const mine = (await anaCall("POST", "/api/sync", { action: "state", sections: {} })).body;
+    assert.deepEqual(mine.rides, ["r-ana"]); assert.deepEqual(mine.sections, {});
+    assert.ok(store.has("u/ana/rides/r-ana.json"));
+    const main = (await call("POST", "/api/sync", { action: "state", sections: {} })).body;
+    assert.ok(!main.rides.includes("r-ana"), "the main user does not see her rides");
+    assert.equal((await anaCall("GET", "/api/sync?ride=r-1")).status, 404);
   });
   await test("sync: without a Blob token it reports 501", async () => {
     delete process.env.BLOB_READ_WRITE_TOKEN; assert.equal((await call("GET", "/api/sync")).status, 501); process.env.BLOB_READ_WRITE_TOKEN = "test";

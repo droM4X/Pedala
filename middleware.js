@@ -1,6 +1,9 @@
 // Vercel Routing Middleware: a login in front of the whole site, api/ included.
 // Username is PEDALA_USER (default "admin"), password is PEDALA_PASSWORD, both set in
 // Vercel → Project → Settings → Environment Variables. Without a password nobody gets in.
+// More people, each with their own data: PEDALA_USER2 / PEDALA_PASSWORD2 … up to 5 (see lib/session.js).
+// Their session cookie is "<user>.<token>", plus a readable pedala_ns=<name> that tells the app which local
+// storage to use on the device.
 // A successful login leaves a signed cookie for a year, so the installed app does not ask again
 // after it is closed. Changing PEDALA_PASSWORD logs every device out.
 // The login page is in Croatian for browsers set to Croatian (or a close language), in English otherwise.
@@ -8,24 +11,40 @@ export const config = { matcher: "/:path*" };
 
 /* Chrome fetches these without the login when it installs the app, and they hold nothing private */
 const PUBLIC = /^\/(manifest\.webmanifest|sw\.js|icons\/[\w.-]+\.png)$/;
-const COOKIE = "pedala_session", YEAR = 365 * 24 * 3600;
+const COOKIE = "pedala_session", NS = "pedala_ns", YEAR = 365 * 24 * 3600;
+function users(){
+  const out = [{ n: 1, user: process.env.PEDALA_USER || "admin", pass: process.env.PEDALA_PASSWORD }];
+  for(let n = 2; n <= 5; n++) if(process.env["PEDALA_USER" + n] && process.env["PEDALA_PASSWORD" + n])
+    out.push({ n, user: process.env["PEDALA_USER" + n], pass: process.env["PEDALA_PASSWORD" + n] });
+  return out;
+}
+const slug = user => String(user).toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 32) || "x";
+const sessionCookies = (u, token) => [`${COOKIE}=${encodeURIComponent(u.user)}.${token}; Path=/; Max-Age=${YEAR}; HttpOnly; Secure; SameSite=Lax`,
+  u.n === 1 ? `${NS}=; Path=/; Max-Age=0; Secure; SameSite=Lax` : `${NS}=${slug(u.user)}; Path=/; Max-Age=${YEAR}; Secure; SameSite=Lax`];
+/* the logged-in user, or null */
+async function sessionUser(request, all){
+  const c = cookie(request, COOKIE), i = c.lastIndexOf(".");
+  if(i < 0){ const main = all[0]; return c && same(c, await sign(main.user, main.pass)) ? main : null; }   // a session from before profiles
+  let name; try{ name = decodeURIComponent(c.slice(0, i)); }catch{ return null; }
+  const u = all.find(x => x.user === name);
+  return u && same(c.slice(i + 1), await sign(u.user, u.pass)) ? u : null;
+}
 
 export default async function middleware(request){
   const url = new URL(request.url);
   if(PUBLIC.test(url.pathname)) return;
-  const user = process.env.PEDALA_USER || "admin", pass = process.env.PEDALA_PASSWORD, hr = croatian(request);
-  if(!pass) return text(hr ? "Prijava nije postavljena: na Vercelu dodaj PEDALA_PASSWORD i napravi Redeploy." : "Login is not set up: add PEDALA_PASSWORD on Vercel and redeploy.", 503);
-  const token = await sign(user, pass);
-
+  const all = users(), hr = croatian(request);
+  if(!all[0].pass) return text(hr ? "Prijava nije postavljena: na Vercelu dodaj PEDALA_PASSWORD i napravi Redeploy." : "Login is not set up: add PEDALA_PASSWORD on Vercel and redeploy.", 503);
   if(url.pathname === "/__login" && request.method === "POST"){
     let f; try{ f = await request.formData(); }catch{ f = new FormData(); }
-    const next = safePath(f.get("next")), okUser = same(String(f.get("user") || "").trim(), user), okPass = same(String(f.get("password") || ""), pass);
-    if(okUser && okPass) return redirect(next, `${COOKIE}=${token}; Path=/; Max-Age=${YEAR}; HttpOnly; Secure; SameSite=Lax`);
+    const next = safePath(f.get("next")), name = String(f.get("user") || "").trim(), password = String(f.get("password") || "");
+    let ok = null; for(const u of all) if(same(name, u.user) & same(password, u.pass)) ok = u;   // check every profile, so timing says nothing
+    if(ok) return redirect(next, sessionCookies(ok, await sign(ok.user, ok.pass)));
     return redirect(`/__login?e=1&next=${encodeURIComponent(next)}`);
   }
-  if(url.pathname === "/__logout") return redirect("/", `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
+  if(url.pathname === "/__logout") return redirect("/", [`${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`, `${NS}=; Path=/; Max-Age=0; Secure; SameSite=Lax`]);
 
-  if(same(cookie(request, COOKIE), token)) return url.pathname === "/__login" ? redirect("/") : undefined;   // undefined: carry on to the site
+  if(await sessionUser(request, all)) return url.pathname === "/__login" ? redirect("/") : undefined;   // undefined: carry on to the site
 
   if(request.method === "GET" && (request.headers.get("accept") || "").includes("text/html")){
     const login = url.pathname === "/__login";
@@ -46,7 +65,11 @@ function cookie(request, name){
 }
 const croatian = request => /^(hr|bs|sr|sh)\b/i.test(request.headers.get("accept-language") || "");
 const safePath = p => typeof p === "string" && p.startsWith("/") && !p.startsWith("//") && !p.startsWith("/__") ? p : "/";
-const redirect = (location, setCookie) => new Response(null, { status: 303, headers: { location, "cache-control": "no-store", ...(setCookie ? { "set-cookie": setCookie } : {}) } });
+function redirect(location, setCookies){
+  const h = new Headers({ location, "cache-control": "no-store" });
+  for(const c of [].concat(setCookies || [])) h.append("set-cookie", c);
+  return new Response(null, { status: 303, headers: h });
+}
 const text = (body, status) => new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 

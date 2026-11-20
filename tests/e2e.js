@@ -14,8 +14,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
   const srv = await start(), B = srv.url, browser = await chromium.launch(), pageErrors = [];
   /* a fresh browser profile; fake YouTube player that answers volume questions and records commands */
-  async function open({ viewport = { width: 1280, height: 860 }, speed = 100, voices = [], settings, mobile = false, locale = "hr-HR" } = {}){
+  async function open({ viewport = { width: 1280, height: 860 }, speed = 100, voices = [], settings, mobile = false, locale = "hr-HR", cookies = [] } = {}){
     const ctx = await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile, acceptDownloads: true, locale });
+    if(cookies.length) await ctx.addCookies(cookies.map(([name, value]) => ({ name, value, url: B })));
     const p = await ctx.newPage(); p.on("pageerror", e => pageErrors.push(e.message)); p.on("dialog", d => d.accept());
     await p.route("https://www.youtube.com/embed/**", r => r.fulfill({ contentType: "text/html", body: `<body><script>
       let vol = 70; addEventListener("message", e => { const d = JSON.parse(e.data);
@@ -260,6 +261,42 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.ok(sent, "the weekly review prompt was used"); assert.match(sent.messages[0].content, /Plan: proteklih 7 dana/); assert.match(sent.messages[0].content, /Vožnje u Pedali proteklih 7 dana/);
     assert.equal(await p.evaluate(() => coachWeek()), null, "only once a week");
     srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
+  });
+
+  await test("strength at home: a 12-week plan of three circuits, a guided session ticks itself off", async () => {
+    const p = await open({ speed: 200, voices: [["Google hrvatski", "hr-HR"]] });
+    await p.evaluate(() => { settings.voice = true; const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+      store.set("plan", { id: STRENGTH.id, start: ymd(d), done: {}, skipped: {} }); });
+    const ss = await p.evaluate(() => planSessions().map(x => x.day + ":" + x.w.strength));
+    assert.equal(ss.length, 36); assert.deepEqual(ss.slice(0, 3), ["mon:A", "wed:B", "fri:C"]);
+    const [w1, w9, w12] = await p.evaluate(() => [0, 8, 11].map(i => { const w = strengthWorkout("A", i); return [w.min, w.steps.filter(s => s.kind === "work").length]; }));
+    assert.deepEqual([w1[1], w9[1], w12[1]], [18, 24, 18], "3 rounds, then 4, then an easier last week");
+    assert.ok(w1[0] >= 20 && w9[0] <= 45, "20 to 45 minutes");
+    await p.click('[data-view="plan"]'); await p.waitForTimeout(300);
+    assert.match(await p.textContent("#plan-body"), /Snaga kod kuće/);
+    // run Monday's session in the player (200x faster): it announces the exercises and ticks Monday off
+    await p.evaluate(() => { const x = planSessions()[0]; startStrength(x.w, x.id); });
+    assert.equal(await p.evaluate(() => $("#dlg-strength").open), true);
+    await p.waitForFunction(() => !$("#dlg-strength").open, null, { timeout: 30000 });
+    assert.match(await p.evaluate(() => plan().done["w1-mon"]), /^app:/);
+    const spoken = await p.evaluate(() => __spoken.join(" | "));
+    assert.match(spoken, /Čučanj, 30 sekundi/); assert.match(spoken, /Odmor\. Sljedeće: Iskorak unazad/); assert.match(spoken, /Trening je gotov/);
+    assert.ok(await p.evaluate(() => findWorkout("s-B-5")?.name.startsWith("Snaga B")), "the coach can swap a session for another circuit");
+    await p.context().close();
+  });
+
+  await test("profiles: a second person has her own data on her own phone", async () => {
+    srv.setEnv({ PEDALA_USER2: "ana", PEDALA_PASSWORD2: "x" });
+    const p = await open({ cookies: [["pedala_ns", "ana"], ["pedala_session", "ana.test"]] });
+    await p.evaluate(() => syncNow()); await p.waitForTimeout(800);
+    assert.equal(await p.evaluate(() => LS), "pedala.ana.");
+    assert.equal(await p.evaluate(async () => (await dbAll()).length), 0, "none of the main user's rides");
+    assert.equal(await p.evaluate(() => plan()), null, "and not his plan");
+    await p.evaluate(() => { store.set("plan", { id: STRENGTH.id, start: "2031-01-06", done: {}, skipped: {} }); return syncNow(); }); await p.waitForTimeout(500);
+    assert.ok([...srv.blobs.keys()].some(k => k === "u/ana/state.json"), "her data is stored under her name");
+    const main = await open(); await main.evaluate(() => syncNow()); await main.waitForTimeout(800);
+    assert.notEqual(await main.evaluate(() => plan()?.start), "2031-01-06", "the main user does not get her plan");
+    srv.setEnv({ PEDALA_USER2: null, PEDALA_PASSWORD2: null }); await p.context().close(); await main.context().close();
   });
 
   await test("feed: favourite channel videos and own playlist", async () => {
