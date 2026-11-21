@@ -36,6 +36,8 @@
   - praćenje napretka i kalendar (`.ics`) s podsjetnicima.
 - **Slanje na intervals.icu** nakon svake vožnje i izvoz u `.FIT`.
 - **Virtualni trener:** subotom tjedni pregled, ili po izboru kratak komentar nakon svakog treninga, na vožnje iz Pedale i na sve ostalo što stigne na intervals.icu, npr. trčanje i plivanje sa sata. Možeš ga i pitati ili zatražiti promjenu plana („prehlađen sam, što s ovim tjednom?“); predložene promjene primjenjuju se kad ih potvrdiš. Treba `ANTHROPIC_API_KEY`; oko 6 centi po komentaru ili odgovoru.
+- **Snaga kod kuće:** plan od 12 tjedana s vlastitom težinom (tri kružna treninga tjedno) i vođenim treningom: odbrojavanje, glasovne najave, sljedeća vježba.
+- **Profili:** više osoba na istoj adresi, svaka sa svojim podacima.
 - **Sinkronizacija mobitela i tableta** preko Vercel Blob spremišta, uz sigurnosnu kopiju u `.json`.
 
 ## Što treba
@@ -51,6 +53,8 @@ Web Bluetooth radi u **Chromeu ili Edgeu na Androidu, Windowsima, macOS-u, Linux
 |---|---|
 | `PEDALA_PASSWORD` | Lozinka za prijavu (obavezno: bez nje nitko ne ulazi). Neka bude duga, jer je zadano ime javno. |
 | `PEDALA_USER` | Korisničko ime (zadano `admin`) |
+| `PEDALA_USER2`, `PEDALA_PASSWORD2` … do 5 | Još osoba, svaka sa svojim vožnjama, planom, trenerom i sinkronizacijom (nije obavezno) |
+| `INTERVALS_API_KEY2` … | intervals.icu ključ druge osobe … (nije obavezno; može ga upisati i u Postavkama) |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 ključ za pretragu videa, kanala i playlista. U Google Cloudu postavi *Application restrictions: None* i *API restrictions: YouTube Data API v3*, jer ključ koristi server, a ne preglednik. |
 | `INTERVALS_API_KEY` | intervals.icu API ključ (na intervals.icu: *Settings → Developer Settings*) |
 | `ANTHROPIC_API_KEY` | Claude API ključ s console.anthropic.com za virtualnog trenera (nije obavezno). U Consoleu postavi mjesečni limit potrošnje. |

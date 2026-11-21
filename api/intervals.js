@@ -1,14 +1,16 @@
 // Vercel serverless function that forwards requests to intervals.icu, so the app does not
 // depend on intervals.icu allowing cross-origin calls from the browser.
-// The API key is INTERVALS_API_KEY on Vercel when set, otherwise the one the app sends from Settings.
+// The API key is the profile's key on Vercel when set (INTERVALS_API_KEY, INTERVALS_API_KEY2… see lib/session.js),
+// otherwise the one the app sends from Settings.
 //   GET  /api/intervals                              -> { serverKey: true | false }
 //   POST /api/intervals { action: "athlete", key }  -> { id, name }
 //   POST /api/intervals { action: "upload", key, fit (base64), name, description, external_id }  -> { id, created }
+const { profile } = require("../lib/session.js");
 const ICU = "https://intervals.icu/api/v1/athlete/0";   // 0 = the athlete who owns the key
 
 module.exports = async (req, res) => {
   res.setHeader("cache-control", "no-store");
-  const serverKey = process.env.INTERVALS_API_KEY;
+  const serverKey = profile(req).icuKey;
   if(req.method === "GET") return res.status(200).json({ serverKey: !!serverKey });
   if(req.method !== "POST") return res.status(405).json({ error: "Dozvoljeni su samo GET i POST" });
   let b = req.body || {};

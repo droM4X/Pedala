@@ -8,20 +8,23 @@
 //   GET  /api/sync?ride=<id>                           -> ride JSON
 //   GET  /api/sync                                     -> { ok: true } when storage is set up, 501 when not
 //
+// Each profile (lib/session.js) has its own: the main user at the top, others under u/<name>/.
 // Blobs: state.json, rides/<id>.json. They are private when the store allows it, otherwise public with an
 // unguessable name; their URLs never leave this function.
 const blob = require("@vercel/blob");
+const { profile } = require("../lib/session.js");
 
 let access = process.env.PEDALA_BLOB_ACCESS || "private";
 
 module.exports = async (req, res) => {
   res.setHeader("cache-control", "no-store");
   if(!process.env.BLOB_READ_WRITE_TOKEN) return res.status(501).json({ error: "noBlob" });
+  const P = profile(req).prefix;
   try{
     if(req.method === "GET"){
       const id = new URL(req.url, "http://x").searchParams.get("ride");
       if(!id) return res.status(200).json({ ok: true });
-      const ride = await readJson(`rides/${safeId(id)}.json`);
+      const ride = await readJson(`${P}rides/${safeId(id)}.json`);
       return ride ? res.status(200).json(ride) : res.status(404).json({ error: "Nema te vožnje" });
     }
     if(req.method !== "POST") return res.status(405).json({ error: "Dozvoljeni su samo GET i POST" });
@@ -31,17 +34,17 @@ module.exports = async (req, res) => {
     if(b.action === "ride"){
       const r = b.ride;
       if(!r?.id || !r.m || !Array.isArray(r.samples)) return res.status(400).json({ error: "Neispravna vožnja" });
-      await writeJson(`rides/${safeId(r.id)}.json`, r);
+      await writeJson(`${P}rides/${safeId(r.id)}.json`, r);
       return res.status(200).json({ ok: true });
     }
 
     if(b.action === "state"){
-      const cur = (await readJson("state.json")) || { sections: {}, deleted: [] };
+      const cur = (await readJson(`${P}state.json`)) || { sections: {}, deleted: [] };
       const merged = mergeState(cur, { sections: b.sections || {}, deleted: b.deleted || [] });
-      if(JSON.stringify(merged) !== JSON.stringify(cur)) await writeJson("state.json", merged);
-      const ids = await rideIds();
+      if(JSON.stringify(merged) !== JSON.stringify(cur)) await writeJson(`${P}state.json`, merged);
+      const ids = await rideIds(P);
       const gone = ids.filter(id => merged.deleted.includes(id));
-      if(gone.length){ const urls = (await Promise.all(gone.map(id => urlsOf(`rides/${id}.json`)))).flat(); if(urls.length) await blob.del(urls); }
+      if(gone.length){ const urls = (await Promise.all(gone.map(id => urlsOf(`${P}rides/${id}.json`)))).flat(); if(urls.length) await blob.del(urls); }
       return res.status(200).json({ ...merged, rides: ids.filter(id => !merged.deleted.includes(id)) });
     }
     return res.status(400).json({ error: "Nepoznata akcija" });
@@ -103,7 +106,7 @@ async function listAll(prefix){
   do{ const r = await blob.list({ prefix, cursor, limit: 1000 }); all.push(...r.blobs); cursor = r.hasMore ? r.cursor : null; }while(cursor);
   return all;
 }
-async function rideIds(){
-  const ids = (await listAll("rides/")).map(x => x.pathname.slice(6).replace(/\.json$/, "").replace(/-[A-Za-z0-9]{20,}$/, ""));
+async function rideIds(P = ""){
+  const dir = P + "rides/", ids = (await listAll(dir)).filter(x => !x.pathname.slice(dir.length).includes("/")).map(x => x.pathname.slice(dir.length).replace(/\.json$/, "").replace(/-[A-Za-z0-9]{20,}$/, ""));
   return [...new Set(ids)];
 }
