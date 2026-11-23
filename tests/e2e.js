@@ -102,6 +102,19 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.match((await none.evaluate(() => __spoken))[0], /^In 10 seconds/);
     await none.context().close();
   });
+  await test("voice: the Settings offer Hungarian, name it, and notice when the device has no Hungarian voice", async () => {
+    const ok = await open({ voices: [["Google magyar", "hu-HU"], ["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
+    await ok.click('[data-view="settings"]'); await ok.waitForTimeout(200);
+    assert.equal(await ok.evaluate(() => __pedala.S && document.querySelector('[name="voiceLang"] option[value="hu"]')?.textContent.trim()), "Magyar");
+    assert.match(await ok.textContent("#voice-note"), /Hungarian/, "the note names the language in use");
+    await ok.context().close();
+
+    const none = await open({ voices: [["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
+    await none.click('[data-view="settings"]'); await none.waitForTimeout(200);
+    assert.match(await none.textContent("#voice-note"), /Hungarian/, "the note says the Hungarian voice is missing");
+    assert.match(await none.textContent("#voice-note"), /English/, "and what it falls back to");
+    await none.context().close();
+  });
   await test("voice: auto never picks Hungarian, even in a Hungarian browser", async () => {
     const p = await open({ locale: "hu-HU", voices: [["Google magyar", "hu-HU"], ["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "auto" } });
     await p.click('[data-view="settings"]'); await p.click("#btn-voice-test"); await p.waitForTimeout(300);

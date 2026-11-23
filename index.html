@@ -586,7 +586,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
         <p class="full note" style="margin:-4px 0 4px">Besplatan je: na console.cloud.google.com napravi projekt, uključi <b>YouTube Data API v3</b> i pod Credentials stvori API key. Dnevna kvota je dovoljna za oko 100 pretraga. Bez ključa i dalje možeš zalijepiti link.</p>
         <label class="full check"><input name="beep" type="checkbox"> Zvučni signal na promjeni intervala</label>
         <label class="full check"><input name="voice" type="checkbox"> Glasovne najave (sljedeći interval, rezultat intervala i dionice)</label>
-        <label>Jezik najava<select name="voiceLang"><option value="auto">Automatski</option><option value="hr">Hrvatski</option><option value="en">English</option></select></label>
+        <label>Jezik najava<select name="voiceLang"><option value="auto">Automatski</option><option value="hr">Hrvatski</option><option value="en">English</option><option value="hu">Magyar</option></select></label>
         <label>Glas za najave<select name="voiceName" data-notr><option value="">Automatski</option></select></label>
         <div class="full dlg-acts" style="justify-content:flex-start;margin-top:-4px"><button class="btn small" type="button" id="btn-voice-test">Isprobaj glas</button></div>
         <p class="full note" id="voice-note" hidden></p>
@@ -897,6 +897,7 @@ const EN = new Map(Object.entries({
   "Pauziraj video kad pauziram trening": "Pause the video when I pause the workout", "Automatska pauza kad prestanem pedalirati": "Pause automatically when I stop pedalling",
   "Na ovom uređaju nema glasa za najave.": "There is no voice for announcements on this device.",
   "Nema hrvatskog glasa na uređaju, pa su najave na engleskom. Upute su u Postavkama.": "There is no Croatian voice on this device, so announcements are in English.",
+  "Nema mađarskog glasa na uređaju, pa su najave na engleskom. Upute su u Postavkama.": "There is no Hungarian voice on this device, so announcements are in English.",
   "Besplatan servis za analizu treninga. Na intervals.icu otvori": "A free training analysis service. On intervals.icu open", ", stvori": ", create an", "i zalijepi ga ovdje.": "and paste it here.",
   "API ključ": "API key", "intervals.icu API ključ": "intervals.icu API key", "Spremi i provjeri": "Save and check", "Provjeravam…": "Checking…",
   "Automatski pošalji svaku spremljenu vožnju na intervals.icu": "Send every saved ride to intervals.icu automatically",
@@ -1475,7 +1476,7 @@ function lapResult(lap){
    Announcements are spoken entirely in one language. Croatian needs a Croatian voice on the device; without one
    (or when English is picked in Settings) every sentence and number is English, so voices never mix languages. */
 const plural = (n, one, few, many) => { n = Math.abs(Math.round(n)); const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; };
-const isHr = v => /^hr([-_]|$)/i.test(v?.lang || ""), isEn = v => /^en([-_]|$)/i.test(v?.lang || "");
+const isHr = v => /^hr([-_]|$)/i.test(v?.lang || ""), isEn = v => /^en([-_]|$)/i.test(v?.lang || ""), isHu = v => /^hu([-_]|$)/i.test(v?.lang || "");
 const voices = () => window.speechSynthesis?.getVoices() || [];
 let hrVoice = null;   // the voice in use (name kept from when it could only be Croatian)
 /* voice and language: a voice picked by hand wins; otherwise Croatian if asked for (or "auto" with a Croatian interface) and available, else English */
@@ -1483,11 +1484,12 @@ function pickVoice(){
   const vs = voices(), byName = vs.find(v => v.voiceURI === settings.voiceName);
   if(byName) return byName;
   const want = settings.voiceLang || "auto", hr = vs.find(isHr);
+  if(want === "hu") return vs.find(isHu) || vs.find(isEn) || null;
   if((want === "hr" || want === "auto" && UI === "hr") && hr) return hr;
   return vs.find(v => isEn(v) && /GB|US/i.test(v.lang) && v.localService) || vs.find(isEn) || null;
 }
-const spLang = () => isHr(hrVoice || pickVoice()) ? "hr" : "en";
-const L = (hr, en) => spLang() === "hr" ? hr : en;
+const spLang = () => isHu(hrVoice || pickVoice()) ? "hu" : isHr(hrVoice || pickVoice()) ? "hr" : "en";
+const L = (hr, en, hu) => spLang() === "hr" ? hr : spLang() === "hu" ? (hu ?? en) : en;
 const watts = n => L(`${n} ${plural(n, "vat", "vata", "vata")}`, `${n} ${n === 1 ? "watt" : "watts"}`);
 const NOTE_EN = { "Visoka kadenca, mirno sjedi": "High cadence, stay seated", "Visoka kadenca": "High cadence", "Niska kadenca": "Low cadence",
   "Niska kadenca, teški gaz": "Low cadence, big gear", "Samo lijeva noga": "Left leg only", "Samo desna noga": "Right leg only", "Obje noge": "Both legs" };
@@ -1515,20 +1517,22 @@ function say(text, force = false){
     hrVoice ||= pickVoice();
     if(!hrVoice) return;
     if(settings.voiceLang === "hr" && !isHr(hrVoice) && !say.warned){ say.warned = true; notify("Nema hrvatskog glasa na uređaju, pa su najave na engleskom. Upute su u Postavkama."); }
+    if(settings.voiceLang === "hu" && !isHu(hrVoice) && !say.warned){ say.warned = true; notify("Nema mađarskog glasa na uređaju, pa su najave na engleskom. Upute su u Postavkama."); }
     const u = new SpeechSynthesisUtterance(typeof text === "function" ? text() : text); u.voice = hrVoice; u.lang = hrVoice.lang; u.rate = 1.05;
     duckStart(u); speechSynthesis.speak(u);
   }catch{}
 }
 function fillVoices(){
-  const f = $("#settings-form"), sel = f.voiceName, vs = voices(), hr = vs.filter(isHr), en = vs.filter(v => isEn(v) && !hr.includes(v));
-  sel.innerHTML = `<option value="">${tr("Automatski")}</option>` + [...hr, ...en, ...vs.filter(v => !hr.includes(v) && !en.includes(v))]
+  const f = $("#settings-form"), sel = f.voiceName, vs = voices(), hr = vs.filter(isHr), hu = vs.filter(isHu), en = vs.filter(v => isEn(v) && !hr.includes(v));
+  sel.innerHTML = `<option value="">${tr("Automatski")}</option>` + [...hr, ...hu, ...en, ...vs.filter(v => !hr.includes(v) && !hu.includes(v) && !en.includes(v))]
     .map(v => `<option value="${v.voiceURI.replace(/"/g, "&quot;")}">${v.name.replace(/</g, "")} · ${v.lang}</option>`).join("");
   sel.value = vs.some(v => v.voiceURI === settings.voiceName) ? settings.voiceName : "";
   f.voiceLang.value = settings.voiceLang || "auto";
   const note = $("#voice-note"), using = pickVoice();
   note.hidden = !vs.length;
   note.innerHTML = !using ? "Na ovom uređaju nema glasa za najave."
-    : ui(`Najave su na jeziku: <b>${isHr(using) ? "hrvatski" : "engleski"}</b>`, `Announcements are in <b>${isHr(using) ? "Croatian" : "English"}</b>`) + ` (${using.name.replace(/</g, "")}).`
+    : !hu.length && settings.voiceLang === "hu" ? ui("Nema mađarskog glasa; najave su na engleskom. Instaliraj: Postavke → Opće upravljanje → Jezik → Pretvaranje teksta u govor → Speech Services by Google → Instaliraj glasovne podatke → Mađarski.", "Hungarian voice missing; announcements fall back to English. Android: Text-to-speech → Speech Services by Google → Install voice data → Hungarian.")
+    : ui(`Najave su na jeziku: <b>${isHr(using) ? "hrvatski" : isHu(using) ? "mađarski" : "engleski"}</b>`, `Announcements are in <b>${isHr(using) ? "Croatian" : isHu(using) ? "Hungarian" : "English"}</b>`) + ` (${using.name.replace(/</g, "")}).`
       + (hr.length || UI !== "hr" ? "" : " Za hrvatske najave instaliraj hrvatski glas: <b>Postavke → Opće upravljanje → Jezik → Pretvaranje teksta u govor → Google → Instaliraj glasovne podatke → Hrvatski</b> (na Samsung tabletu: potraži <b>Tekst u govor</b>), pa ponovno otvori Pedalu.");
 }
 window.speechSynthesis?.addEventListener?.("voiceschanged", () => { hrVoice = null; say.warned = false; if($("#view-settings").classList.contains("active")) fillVoices(); });
