@@ -260,6 +260,7 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
     const m = QR.encode("http://192.168.0.20:8765/gear.html");
     assert.ok(m.version >= 1 && m.version <= 6, `version ${m.version}`);
     assert.equal(m.size, 17 + 4 * m.version);
+    assert.equal(m.modules[m.size - 8][8], true, "the dark module must be dark");
     assert.equal(m.modules.length, m.size); assert.ok(m.modules.every(r => r.length === m.size));
     const svg = QR.svg(m);
     assert.match(svg, /^<svg /); assert.match(svg, /viewBox="0 0 \d+ \d+"/);
@@ -271,6 +272,8 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
   });
   await test("qr: a payload too long for version 6 is refused, not truncated", () => {
     assert.throws(() => QR.encode("http://192.168.0.20:8765/gear.html?" + "a".repeat(120)), /too long/i);
+    assert.throws(() => QR.encode(123), /expects a string/);
+    assert.throws(() => QR.encode("hello", { ecc: "L" }), /ECC level M/);
   });
 
   for(const [s, n, e] of results) console.log(`${s === "ok" ? "✓" : "✗"} ${n}${e ? "\n    " + e.message : ""}`);

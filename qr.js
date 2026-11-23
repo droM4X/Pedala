@@ -130,7 +130,6 @@
         }
       }
     }
-    set(8, size - 8, true);
     for (let i = 0; i < 9; i++) {
       if (i !== 6) {
         set(8, i, false);
@@ -139,8 +138,9 @@
     }
     for (let i = 0; i < 8; i++) {
       set(size - 1 - i, 8, false);
-      set(8, size - 1 - i, false);
+      if (i < 7) set(8, size - 1 - i, false);
     }
+    set(8, size - 8, true);
     return { modules, functions };
   }
 
@@ -242,8 +242,10 @@
   }
 
   // Assemble the lowest-penalty masked QR matrix.
-  function encode(text) {
-    const bytes = Array.from(new TextEncoder().encode(String(text)));
+  function encode(text, { ecc = "M" } = {}) {
+    if (typeof text !== "string") throw new TypeError("QR.encode expects a string");
+    if (ecc !== "M") throw new Error("only ECC level M is supported");
+    const bytes = Array.from(new TextEncoder().encode(text));
     const version = chooseVersion(bytes.length);
     const base = drawFunctionPatterns(version);
     const stream = interleave(buildBits(bytes, version), version);
