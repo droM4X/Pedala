@@ -205,6 +205,7 @@ A `tests/e2e.js`-ben a `phone layout` teszt **elé**:
 ```js
   await test("remote: the ride page listens, and a shift from outside moves the gear", async () => {
     const p = await open();
+    await p.waitForFunction(() => __pedala.remote?.es?.readyState === 1);   // the SSE must be open before a shift is sent, or it is lost
     await p.waitForFunction(() => __pedala.S.gear === 10);
     await fetch(B + "/__remote/shift", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ d: 1 }) });
     await p.waitForFunction(() => __pedala.S.gear === 11, null, { timeout: 3000 });
@@ -225,8 +226,13 @@ Expected: FAIL — a váltás nem érkezik meg (timeout), mert nincs relay a sze
     const p = await browser.newContext().then(c => c.newPage());
     let hits = 0;
     await p.route("**/__remote/**", r => { hits++; r.fulfill({ status: 404, body: "no" }); });
-    await p.goto(`${B}/?simspeed=100`); await p.waitForTimeout(2500);
-    assert.equal(hits, 3, "three attempts, then it stops");
+    await p.goto(`${B}/?simspeed=100`);
+    // a failed EventSource is retried on Chrome's own schedule, so three attempts take ~6 s
+    const deadline = Date.now() + 15000;
+    while(hits < 3 && Date.now() < deadline) await p.waitForTimeout(200);
+    assert.equal(hits, 3, "three attempts");
+    await p.waitForTimeout(2000);
+    assert.equal(hits, 3, "then it stops by itself");
     assert.equal(await p.evaluate(() => document.querySelector("#chip-remote").classList.contains("on")), false);
     await p.context().close();
   });
@@ -281,6 +287,7 @@ $("#chip-remote").onclick = () => {
 
 - A `bump`-ban a `applyControl(); render();` után: `remoteSend();` — így minden helyi váltás (gomb, Click, kurzor) azonnal kimegy a telefonra.
 - Az init IIFE-ben, az `autoConnect()` **elé**: `remoteChip(); remoteConnect(); setInterval(() => { if(remote.phones) remoteSend(); }, 2000);`
+- A fájl végén a debug-exportba (`window.__pedala = { S, … }`) vedd fel a `remote`-ot is: a tesztek ezen keresztül várják meg, hogy az SSE nyitva legyen.
 
 - [ ] **Step 6: Futtasd a teszteket**
 
