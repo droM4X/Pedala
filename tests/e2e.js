@@ -397,6 +397,26 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.context().close();
   });
 
+  await test("ride stats: no heart-rate cell without a strap, and the cadence fills its place", async () => {
+    const p = await open();
+    const m = () => p.evaluate(() => {
+      const st = document.querySelector(".stats"), cad = st.querySelector(".stat.cad"), hr = st.querySelector(".stat.hr");
+      const other = st.querySelector(".stat:not(.cad):not(.hr)");
+      const w = el => Math.round(el.getBoundingClientRect().width);
+      return { cad: w(cad), other: w(other), h: Math.round(st.getBoundingClientRect().height), hrShown: hr.getClientRects().length > 0 };
+    });
+    let a = await m();
+    assert.equal(a.hrShown, false, "no strap: no heart-rate cell");
+    assert.ok(a.cad > a.other * 1.5, `the cadence takes the freed cell (${a.cad} vs ${a.other})`);
+    const h = a.h;
+    await p.evaluate(() => { __pedala.S.hrm = {}; render(); });
+    a = await m();
+    assert.equal(a.hrShown, true, "a strap brings the heart-rate cell back");
+    assert.ok(Math.abs(a.cad - a.other) <= 2, `the cadence shares the row again (${a.cad} vs ${a.other})`);
+    assert.ok(a.h <= h, `and the panel is no taller without a strap (${a.h} vs ${h})`);
+    await p.context().close();
+  });
+
   await test("phone layout: nothing wider than the screen, the ride view does not scroll", async () => {
     for(const viewport of [{ width: 360, height: 640 }, { width: 384, height: 832 }, { width: 832, height: 384 }]){
       const p = await open({ viewport, mobile: true });

@@ -72,6 +72,8 @@ button{cursor:pointer}
 .delta{font:600 18px/1 var(--num);color:var(--muted)}
 
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stats.no-hr .stat.hr{display:none}
+.stats.no-hr .stat.cad{grid-column:span 2}
 .stat{background:var(--panel);border-radius:12px;padding:6px 12px}
 .stat small{display:block;color:var(--muted);font-size:13px;font-weight:500}
 .stat strong{font:600 29px/1.05 var(--num);font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -412,8 +414,8 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
         <div class="next" id="iv-next"></div>
       </div>
       <div class="stats">
-        <div class="stat"><small id="cad-lbl">Kadenca</small><strong id="cad">–<i>rpm</i></strong></div>
-        <div class="stat"><small id="hr-lbl">Puls</small><strong id="hr">–<i>bpm</i></strong></div>
+        <div class="stat cad"><small id="cad-lbl">Kadenca</small><strong id="cad">–<i>rpm</i></strong></div>
+        <div class="stat hr"><small id="hr-lbl">Puls</small><strong id="hr">–<i>bpm</i></strong></div>
         <div class="stat"><small>Vrijeme</small><strong id="elapsed">0:00</strong></div>
         <div class="stat opt"><small>Udaljenost</small><strong id="dist">0.0<i>km</i></strong></div>
         <div class="stat opt"><small>Brzina</small><strong id="spd">0.0<i>km/h</i></strong></div>
@@ -1953,6 +1955,7 @@ function render(){
   $("#hr").innerHTML = (S.live.hr ? S.live.hr : "–") + "<i>bpm</i>";
   $("#hr-lbl").textContent = hz >= 0 ? `Puls · ${HR_ZONES[hz][2]}` : "Puls";
   $("#hr").style.color = hz >= 0 ? cssVar(HR_ZONES[hz][1]) : "";
+  $(".stats").classList.toggle("no-hr", !S.hrm);   // no strap: no pulse cell, the cadence takes its row
   $("#elapsed").textContent = fmtTime(S.t);
   $("#dist").innerHTML = (S.dist / 1000).toFixed(1) + "<i>km</i>";
   $("#spd").innerHTML = (S.live.speed || 0).toFixed(1) + "<i>km/h</i>";
