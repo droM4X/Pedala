@@ -318,6 +318,23 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.equal(await p.evaluate(() => document.querySelector("#chip-remote").classList.contains("on")), false, "no phone yet");
     await p.context().close();
   });
+
+  await test("remote: the phone shifts the running ride, and the chip follows it", async () => {
+    const p = await open();
+    await p.waitForFunction(() => __pedala.S.gear === 10);
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true, locale: "en-US" });
+    const ph = await ctx.newPage(); ph.on("pageerror", e => pageErrors.push(e.message));
+    await ph.goto(B + "/gear.html");
+    await ph.waitForFunction(() => document.querySelector("#dot").classList.contains("on"), null, { timeout: 5000 });
+    assert.equal(await ph.textContent("#value"), "10", "the phone shows the gear the ride reports");
+    await ph.click("#up");
+    await p.waitForFunction(() => __pedala.S.gear === 11, null, { timeout: 3000 });
+    await ph.waitForFunction(() => document.querySelector("#value").textContent === "11", null, { timeout: 3000 });
+    assert.equal(await p.evaluate(() => document.querySelector("#chip-remote").classList.contains("on")), true);
+    await ctx.close();
+    await p.waitForFunction(() => !document.querySelector("#chip-remote").classList.contains("on"), null, { timeout: 5000 });
+    await p.context().close();
+  });
   await test("remote: a deployed instance (no /__remote) costs one request and stops", async () => {
     const p = await browser.newContext().then(c => c.newPage());
     let hits = 0;
