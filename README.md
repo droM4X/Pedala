@@ -89,8 +89,7 @@ Without a trainer use **Connect trainer → Simulator**; `?simspeed=20` runs the
 Tests (Node 20+):
 
 ```bash
-npm i --no-save jsqr          # the QR round-trip test decodes what qr.js encodes
-npm i --no-save playwright && npx playwright install chromium
+npm i --no-save jsqr playwright && npx playwright install chromium  # jsqr decodes what qr.js encodes; Playwright runs end-to-end tests
 npm test               # unit tests (login, sync) and end-to-end tests in Chromium
 ```
 

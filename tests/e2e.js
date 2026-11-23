@@ -397,7 +397,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const p = await open({ locale: "en-US" });
     await p.evaluate(() => __pedala.openRemote());
     assert.equal((await p.textContent("#remote-copy")).trim(), "Copy");
-    assert.ok((await p.textContent("#remote-none")).startsWith("No network address"));
+    assert.ok((await p.textContent("#remote-none")).startsWith("The remote only works while Pedala runs"));
     await p.context().close();
   });
   await test("remote modal: without a LAN address it explains instead of drawing a QR", async () => {
