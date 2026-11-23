@@ -37,8 +37,7 @@ HR/EN — csak a **bemondások** kapjanak magyar változatot.
   1. a `L(horvát, angol)` párok a bemondásokban (19 hely),
   2. a számláló segédfüggvények (`watts`, `sayDur`, `cadSay`, `segSpeechPower`),
   3. a megjegyzés-térkép (`NOTE_EN`) és az erősítés-játék `spoken()` függvénye.
-- A beállítás (`settings.voiceLang`) már szinkronizálódik eszközök között; a `hu` érték ezt
-  nem törheti.
+- A bemondások nyelve (a kiválasztott hanggal és a felület nyelvével együtt) szándékosan eszközönkénti beállítás, mert az elérhető hangok eszközönként eltérnek.
 
 ## Megközelítések
 
