@@ -1455,7 +1455,7 @@ function lapResult(lap){
     // drills: report the cadence of the drill parts, stay quiet on recoveries
     if(lap.cadTgt[0] >= 100 || lap.cadTgt[1] <= 70){
       notify(`${lap.name}: ${lap.avgCad} rpm (cilj ${cadTxt(lap.cadTgt)})`);
-      say(() => L(`Prosječna kadenca ${lap.avgCad}.`, `Average cadence ${lap.avgCad}.`));
+      say(() => L(`Prosječna kadenca ${lap.avgCad}.`, `Average cadence ${lap.avgCad}.`, `Átlagos kadencia ${lap.avgCad}.`));
     }
     return;
   }
@@ -1463,12 +1463,13 @@ function lapResult(lap){
     notify(`${lap.name}: ${fmtTime(lap.dur)} · ${lap.avgP} W${lap.avgHr ? " · " + lap.avgHr + " bpm" : ""}`);
     const km = Math.round(S.dist / 1000);
     say(() => L(`${km} ${plural(km, "kilometar", "kilometra", "kilometara")}. Zadnjih ${LAP_KM} za ${sayDur(lap.dur)}, prosjek ${watts(lap.avgP)}.`,
-      `${km} kilometers. Last ${LAP_KM} in ${sayDur(lap.dur)}, average ${watts(lap.avgP)}.`));
+      `${km} kilometers. Last ${LAP_KM} in ${sayDur(lap.dur)}, average ${watts(lap.avgP)}.`,
+      `${km} kilométer. Az utolsó ${LAP_KM} kilométer ${sayDur(lap.dur)} alatt, átlag ${watts(lap.avgP)}.`));
   } else if(lap.score != null && lap.dur >= 30 && !S.workout?.test){
     const what = lap.kind === "hr" ? `${lap.avgHr} bpm od ${lap.tgt}` : `${lap.avgP} W od ${lap.tgt}`;
     notify(`${lap.name}: ${what} (${lap.score}%)`);
-    say(() => lap.kind === "hr" ? L(`Interval gotov. Prosječni puls ${lap.avgHr}.`, `Interval done. Average heart rate ${lap.avgHr}.`)
-      : L(`Interval gotov. Prosjek ${watts(lap.avgP)}, ${lap.score} posto.`, `Interval done. Average ${watts(lap.avgP)}, ${lap.score} percent.`));
+say(() => lap.kind === "hr" ? L(`Interval gotov. Prosječni puls ${lap.avgHr}.`, `Interval done. Average heart rate ${lap.avgHr}.`, `Intervallum kész. Átlagpulzus ${lap.avgHr}.`)
+      : L(`Interval gotov. Prosjek ${watts(lap.avgP)}, ${lap.score} posto.`, `Interval done. Average ${watts(lap.avgP)}, ${lap.score} percent.`, `Intervallum kész. Átlag ${watts(lap.avgP)}, ${lap.score} százalék.`));
   }
 }
 
@@ -1643,7 +1644,7 @@ function start(){
 }
 function pause(auto){ S.running = false; S.autoPaused = !!auto; S.soft = null; applyControl(); if(settings.pauseVideo) yt("pauseVideo"); if(auto) notify("Pauza: nastavi pedalirati za nastavak"); render(); }
 function resume(){ S.running = true; S.autoPaused = false; S.idle = 0; softStart(); S.hrHold = 60; applyControl(); yt("playVideo"); toast("Nastavljam"); }
-function finishWorkout(){ S.running = false; S.soft = null; applyControl(); if(settings.beep) beep(660, .4); say(() => S.route ? L("Stigao si na cilj.", "You made it to the finish.") : L("Trening je gotov. Bravo.", "Workout complete. Well done.")); openSummary(); }
+function finishWorkout(){ S.running = false; S.soft = null; applyControl(); if(settings.beep) beep(660, .4); say(() => S.route ? L("Stigao si na cilj.", "You made it to the finish.", "Célba értél.") : L("Trening je gotov. Bravo.", "Workout complete. Well done.", "Vége az edzésnek. Szép munka.")); openSummary(); }
 
 /* ============ metrics ============ */
 function metrics(samples, ftp){
@@ -2898,8 +2899,8 @@ function wkNext(){
   $("#wk-cue").textContent = st.c ? ui(...st.c) : "";
   $("#wk-next").textContent = nx ? `${tr("Sljedeće")}: ${name(nx)}` : tr("Zadnja vježba");
   $("#dlg-strength").dataset.kind = st.kind;
-  if(st.kind === "rest") say(() => L(`Odmor. Sljedeće: ${spoken(nx)}.`, `Rest. Next: ${spoken(nx)}.`));
-  else say(() => st.kind === "work" ? L(`${spoken(st)}, ${st.s} sekundi.`, `${spoken(st)}, ${st.s} seconds.`) : spoken(st));
+if(st.kind === "rest") say(() => L(`Odmor. Sljedeće: ${spoken(nx)}.`, `Rest. Next: ${spoken(nx)}.`, `Pihenő. Következik: ${spoken(nx)}.`));
+  else say(() => st.kind === "work" ? L(`${spoken(st)}, ${st.s} sekundi.`, `${spoken(st)}, ${st.s} seconds.`, `${spoken(st)}, ${st.s} másodperc.`) : spoken(st));
   wkRender();
 }
 function wkTick(){
@@ -2919,7 +2920,7 @@ function wkFinish(complete){
   const share = (WK.done + (WK.steps[WK.i] ? WK.steps[WK.i].s - WK.left : 0)) / WK.total;
   if($("#dlg-strength").open) $("#dlg-strength").close();
   if(complete || share >= .5){
-    if(complete) say(() => L("Trening je gotov. Bravo.", "Workout complete. Well done."));
+    if(complete) say(() => L("Trening je gotov. Bravo.", "Workout complete. Well done.", "Vége az edzésnek. Szép munka."));
     if(WK.sess && plan()) planUpdate(p => { p.done = { ...p.done, [WK.sess]: "app:" + Date.now() }; if(p.skipped) delete p.skipped[WK.sess]; });
     toast(tr("Trening snage je odrađen"));
   }

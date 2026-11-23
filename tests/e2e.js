@@ -107,6 +107,10 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.match(hrSentence, /145-ös pulzuson/, hrSentence);
     await hu.evaluate(() => say(() => segSpeechPower({ d: 180, hr: 150 / settings.maxHr }), true)); await hu.waitForTimeout(300);
     assert.match((await hu.evaluate(() => __spoken)).at(-1), /150-es pulzuson/);
+    await hu.evaluate(() => { S.workout = null; S.dist = 12000; lapResult({ kind: "dist", dur: 200, avgP: 250 }); }); await hu.waitForTimeout(300);
+    const lapSentence = (await hu.evaluate(() => __spoken)).at(-1);
+    assert.match(lapSentence, /12 kilométer/, lapSentence);
+
     await hu.context().close();
     const none = await open({ voices: [["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
     await none.click('[data-view="settings"]'); await none.waitForTimeout(200);
