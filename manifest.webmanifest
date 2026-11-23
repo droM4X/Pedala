@@ -1,8 +1,8 @@
 {
   "name": "Pedala",
   "short_name": "Pedala",
-  "description": "Trenažer, treninzi i video u pregledniku",
-  "lang": "hr",
+  "description": "Bike trainer",
+  "lang": "en",
   "id": "/",
   "start_url": "/",
   "scope": "/",
