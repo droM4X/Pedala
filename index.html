@@ -221,6 +221,9 @@ dialog p{color:var(--muted);margin:0 0 14px}
 .sum small{display:block;color:var(--muted);font-size:12px}
 .sum b{font:700 26px/1.05 var(--num)}
 dialog.wide{max-width:min(980px,96vw)}
+dialog#dlg-remote{position:relative;text-align:center}
+#qr-box svg{display:block;width:min(260px,60vw);height:auto;margin:0 auto 14px;background:#fff;border-radius:10px;padding:8px}
+#dlg-remote .x{position:absolute;top:10px;right:10px;border:0;background:transparent;color:var(--text);font-size:22px;cursor:pointer}
 dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
 .rep h3{font:600 20px/1.1 var(--num);margin:18px 0 8px}
 .rep canvas{display:block;width:100%;height:200px;background:var(--panel2);border-radius:12px}
@@ -680,8 +683,18 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
   <div class="dlg-acts"><button class="btn" data-close>Odustani</button></div>
 </dialog>
 
+<dialog id="dlg-remote">
+  <button class="x" id="remote-x" type="button" data-close aria-label="Zatvori">✕</button>
+  <h2>Remote</h2>
+  <div id="qr-box"></div>
+  <p id="remote-none" hidden>Nema mrežne adrese: otvori Pedalu na računalu u istoj mreži, ili upiši adresu u telefon ručno.</p>
+  <p class="remote-link"><b id="remote-link"></b></p>
+  <div class="dlg-acts"><button class="btn" id="remote-copy" type="button">Kopiraj</button><button class="btn" data-close>Zatvori</button></div>
+</dialog>
+
 <div class="toast" id="toast" role="status"></div>
 
+<script src="/qr.js"></script>
 <script>
 "use strict";
 /* ============ utilities ============ */
@@ -3446,11 +3459,17 @@ function remoteConnect(){
   es.addEventListener("phones", e => remoteSetPhones(JSON.parse(e.data).n));
   es.addEventListener("shift", e => { const m = JSON.parse(e.data); if(m.d === 1 || m.d === -1) bump(m.d); });
 }
-$("#chip-remote").onclick = () => {
-  if(!remote.es){ remoteConnect(); return; }
-  const l = remote.links[0];
-  toast(l ? ui("Távirányító a telefonon: " + l, "On the phone, open " + l) : ui("Távirányító: nincs hálózati cím", "Remote: no network address"));
-};
+function openRemote(){
+  const link = remote.links[0] || "";
+  $("#remote-link").textContent = link;
+  $("#remote-none").hidden = !!link;
+  try{ $("#qr-box").innerHTML = link ? QR.svg(QR.encode(link), { margin: 4 }) : ""; }
+  catch(e){ $("#qr-box").innerHTML = ""; }
+  if(!$("#dlg-remote").open) $("#dlg-remote").showModal();
+}
+$("#chip-remote").onclick = () => { if(!remote.es) remoteConnect(); openRemote(); };
+$("#remote-copy").onclick = () => { const t = remote.links[0]; if(!t) return;
+  navigator.clipboard?.writeText(t).then(() => toast(ui("Kopirano", "Copied")), () => toast(t)); };
 const bump = d => { const c = currentSeg(); if(!S.workout || c?.s.free){ S.gear = clamp(S.gear + d, 1, GEARS.length); }
   else if(c?.s.hr){ S.hrOff = clamp(S.hrOff + d * 2, -20, 20); }
   else { S.bias = clamp(Math.round((S.bias + d * .05) * 100) / 100, .5, 1.5); } applyControl(); render(); remoteSend(); };
@@ -3511,7 +3530,7 @@ window.addEventListener("beforeunload", e => { if(S.started){ e.preventDefault()
   fetch("/api/intervals").then(r => r.ok ? r.json() : {}).then(j => { icuServer = !!j.serverKey; }).catch(() => {})
     .finally(() => { syncIcu(); renderHistoryIfOpen(); if($("#view-settings").classList.contains("active")) renderIcu(); planIcuTick(); });
 })();
-window.__pedala = { S, parseZwo, parseGpx, setRoute, routes, gradeAt, trainerGrade, clickKeys, onClickPress, encodeFit, metrics, allWorkouts, setWorkout, GEARS, remote };
+window.__pedala = { S, parseZwo, parseGpx, setRoute, routes, gradeAt, trainerGrade, clickKeys, onClickPress, encodeFit, metrics, allWorkouts, setWorkout, GEARS, remote, openRemote };
 </script>
 </body>
 </html>
