@@ -1494,8 +1494,8 @@ const L = (hr, en, hu) => spLang() === "hr" ? hr : spLang() === "hu" ? (hu ?? en
 const watts = n => L(`${n} ${plural(n, "vat", "vata", "vata")}`, `${n} ${n === 1 ? "watt" : "watts"}`, `${n} watt`);
 const NOTE_EN = { "Visoka kadenca, mirno sjedi": "High cadence, stay seated", "Visoka kadenca": "High cadence", "Niska kadenca": "Low cadence",
   "Niska kadenca, teški gaz": "Low cadence, big gear", "Samo lijeva noga": "Left leg only", "Samo desna noga": "Right leg only", "Obje noge": "Both legs" };
-const NOTE_HU = { "Visoka kadenca, mirno sjedi": "Magas pedálfordulat, maradj ülve", "Visoka kadenca": "Magas pedálfordulat", "Niska kadenca": "Alacsony pedálfordulat",
-  "Niska kadenca, teški gaz": "Alacsony pedálfordulat, nehéz fokozat", "Samo lijeva noga": "Csak a bal láb", "Samo desna noga": "Csak a jobb láb", "Obje noge": "Mindkét láb" };
+const NOTE_HU = { "Visoka kadenca, mirno sjedi": "Magas kadencia, maradj ülve", "Visoka kadenca": "Magas kadencia", "Niska kadenca": "Alacsony kadencia",
+  "Niska kadenca, teški gaz": "Alacsony kadencia, nehéz fokozat", "Samo lijeva noga": "Csak a bal láb", "Samo desna noga": "Csak a jobb láb", "Obje noge": "Mindkét láb" };
 function sayDur(sec){
   sec = Math.round(sec); const m = Math.floor(sec / 60), x = sec % 60, hr = spLang() === "hr", hu = spLang() === "hu";
   const mm = m ? (hr ? `${m} ${plural(m, "minuta", "minute", "minuta")}` : hu ? `${m} perc` : `${m} ${m === 1 ? "minute" : "minutes"}`) : "";
@@ -1507,12 +1507,18 @@ function segSpeech(sg){
   const note = sg.note ? L(sg.note, NOTE_EN[sg.note] || sg.note, NOTE_HU[sg.note] || sg.note) + ". " : "", cad = sg.cad ? ", " + cadSay(sg.cad) : "";
   return note + segSpeechPower(sg) + cad;
 }
+// Hungarian suffix harmony follows the final spoken word of the number.
+function huSuffix(n){
+  const units = ["as", "es", "es", "as", "es", "ös", "os", "es", "as", "es"];
+  const tens = { 1: "es", 2: "as", 3: "as", 4: "es", 5: "es", 6: "as", 7: "es", 8: "as", 9: "es", 10: "as" };
+  return n % 10 ? units[n % 10] : tens[n === 100 ? 10 : n % 100 / 10] || "as";
+}
 function segSpeechPower(sg){
   const w = S.workout, d = sayDur(sg.d);
   if(sg.free) return L(`${d} slobodno`, `${d} free riding`, `${d} szabadon`);
-  if(sg.hr) return L(`${d} na pulsu ${hrTarget(sg)}`, `${d} at heart rate ${hrTarget(sg)}`, `${d} ${hrTarget(sg)}-es pulzuson`);
+  if(sg.hr) return L(`${d} na pulsu ${hrTarget(sg)}`, `${d} at heart rate ${hrTarget(sg)}`, `${d} ${hrTarget(sg)}-${huSuffix(hrTarget(sg))} pulzuson`);
   const a = Math.round(toWatts(w, sg.lo) * S.bias), b = Math.round(toWatts(w, sg.hi) * S.bias);
-  return Math.abs(a - b) < 5 ? L(`${d} na ${watts(a)}`, `${d} at ${watts(a)}`, `${d} ${watts(a)}-on`) : L(`${d}, od ${a} do ${watts(b)}`, `${d}, from ${a} to ${watts(b)}`, `${d}, ${a}-tól ${watts(b)}-on`);
+  return Math.abs(a - b) < 5 ? L(`${d} na ${watts(a)}`, `${d} at ${watts(a)}`, `${d} ${watts(a)}on`) : L(`${d}, od ${a} do ${watts(b)}`, `${d}, from ${a} to ${watts(b)}`, `${d}, ${a}-tól ${watts(b)}on`);
 }
 function say(text, force = false){
   if(!(settings.voice || force) || !("speechSynthesis" in window)) return;
