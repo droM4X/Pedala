@@ -69,7 +69,7 @@ Chrome only remembers Bluetooth devices with `chrome://flags/#enable-web-bluetoo
 
 The two pods are two separate devices. Connect the harder-gear pod with **Click +** and the easier-gear pod with **Click −** (wake only that pod before connecting). Every button on the + pod shifts up, every button on the − pod shifts down. If they end up swapped, use *Settings → Zwift Click → Set the + and − pod*. The left Click v2 pod often sends no presses unless it was recently unlocked in Zwift; then put both directions on the right pod: in *Set the + and − pod* press a button for +, then another button on the same pod for −.
 
-Use the phone remote when the Zwift Click pods go to sleep during a ride. Open `http://<the computer's LAN address>:8765/gear.html` on your phone; the Remote chip in Pedala's header shows the address. The + and − buttons do the same as the Click. The green dot means the phone is connected. The phone remote does not work when Pedala is deployed to Vercel.
+Use the phone remote when the Zwift Click pods go to sleep during a ride. Open `http://<the computer's LAN address>:8765/gear.html` on your phone; the Remote chip in Pedala's header shows the address. The + and − buttons do the same as the Click. The green dot means the phone is connected to an active ride. The phone remote does not work when Pedala is deployed to Vercel.
 
 ### Voice
 

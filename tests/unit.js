@@ -216,6 +216,8 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
       assert.equal((await post(s.base, "/__remote/shift", { d: 5 })).status, 400);
       assert.equal((await post(s.base, "/__remote/shift", {})).status, 400);
       assert.equal((await post(s.base, "/__remote/state", { gear: 99 })).status, 400);
+      assert.equal((await post(s.base, "/__remote/state", { gear: 7, mode: "gear", bias: "bad", hrOff: 0 })).status, 400);
+      assert.equal((await post(s.base, "/__remote/state", { gear: 7, mode: "gear", bias: 1, hrOff: 21 })).status, 400);
       assert.equal((await fetch(s.base + "/__remote/shift")).status, 405);
       const opt = await fetch(s.base + "/__remote/shift", { method: "OPTIONS" });
       assert.equal(opt.status, 204); assert.equal(opt.headers.get("access-control-allow-origin"), "*");
