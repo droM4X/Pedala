@@ -340,6 +340,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.ok(await p.evaluate(() => findWorkout("s-B-5")?.name.startsWith("Snaga B")), "the coach can swap a session for another circuit");
     await p.context().close();
     const hu = await open({ voices: [["Google magyar", "hu-HU"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
+    const missing = await hu.evaluate(() => {
+      const names = [...Object.values(EX).map(x => x[0]), ...WARMUP.map(w => w[0]), ...COOLDOWN.map(c => c[0])];
+      return names.filter(n => !n[2]).map(n => n[0]);
+    });
+    assert.deepEqual(missing, [], "every spoken movement name has a Hungarian form");
     await hu.evaluate(() => startStrength({ name: "test", steps: [{ kind: "rest", s: 30 }, { kind: "work", n: EX.squat[0], s: 30 }], min: 1 }));
     await hu.waitForTimeout(300);
     const huStrength = (await hu.evaluate(() => __spoken))[0];
