@@ -380,6 +380,23 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.context().close();
   });
 
+  await test("overlay: no heart-rate box without a strap, and the gear box takes its place", async () => {
+    const p = await open();
+    await p.click("#btn-dash"); await p.evaluate(() => render()); await p.waitForTimeout(200);
+    const shown = s => p.evaluate(q => { const el = document.querySelector(q); return !!el && el.getClientRects().length > 0; }, s);
+    assert.equal(await shown("#o-hr-box"), false, "no strap: no heart-rate box");
+    assert.equal(await shown("#o-gear-box"), true, "the gear box is there instead");
+    assert.equal(await p.textContent("#o-gear"), "10");
+    assert.equal(await p.textContent("#o-gear-lbl"), "Brzina · omjer 2.04");
+    await p.keyboard.press("ArrowUp"); await p.waitForTimeout(150);
+    assert.equal(await p.textContent("#o-gear"), "11", "the gear box follows the shift");
+    assert.equal(await p.textContent("#o-gear-lbl"), "Brzina · omjer 2.22");
+    await p.evaluate(() => { __pedala.S.hrm = {}; render(); });   // a strap appears
+    assert.equal(await shown("#o-hr-box"), true, "a strap brings the heart-rate box back");
+    assert.equal(await shown("#o-gear-box"), true, "and the gear box stays, beside it");
+    await p.context().close();
+  });
+
   await test("phone layout: nothing wider than the screen, the ride view does not scroll", async () => {
     for(const viewport of [{ width: 360, height: 640 }, { width: 384, height: 832 }, { width: 832, height: 384 }]){
       const p = await open({ viewport, mobile: true });

@@ -168,6 +168,7 @@ a.btn{display:inline-block;color:inherit;text-decoration:none}
   .ovl>div{padding:4px 10px 6px} .ovl small{font-size:12px} .ovl i{font-size:14px}
   .ovl b{font-size:28px} .ovl .o-pw b{font-size:52px} .ovl .o-pw i{font-size:20px} .ovl .o-tgt{font-size:18px}
   .ovl #o-iv-next{display:none}
+  .ovl #o-gear-box small{display:none}
 }
 
 /* lists */
@@ -441,6 +442,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
         <div class="o-iv" id="o-iv-box"><small id="o-iv-lbl"></small><b id="o-iv">0:00</b><small id="o-iv-next"></small></div>
         <div class="o-hrb" id="o-cad-box"><small id="o-cad-lbl">Kadenca</small><b id="o-cad">–</b><i>rpm</i></div>
         <div class="o-hrb" id="o-hr-box"><small id="o-hr-lbl">Puls</small><b id="o-hr">–</b><i>bpm</i></div>
+        <div class="o-hrb" id="o-gear-box"><small id="o-gear-lbl">Brzina</small><b id="o-gear">10</b><i id="o-gear-unit"></i></div>
         <div><small>Vrijeme</small><b id="o-time">0:00</b></div>
         <div><small id="o-x-lbl">Brzina</small><b id="o-x">0.0</b><i id="o-x-unit">km/h</i></div>
       </div>
@@ -2003,9 +2005,15 @@ function renderOverlay(p, tgt, rg){
   o("#o-cad", S.live.cadence ? Math.round(S.live.cadence) : "–");
   const ct = S.workout && cs?.s.cad; o("#o-cad-lbl", ct ? `Kadenca · ${cadTxt(ct)}` : "Kadenca");
   $("#o-cad-box").style.borderLeftColor = ct && S.live.cadence ? cssVar(cadIn(S.live.cadence, ct) ? "--z3" : "--z5") : "transparent";
+  /* the gear box sits right after the heart-rate one: it takes its place when no strap is connected */
+  const hrOn = !!S.hrm;
   o("#o-hr", S.live.hr || "–");
   const hz = hrZone(S.live.hr); o("#o-hr-lbl", hz >= 0 ? `Puls · ${HR_ZONES[hz][2]}` : "Puls");
-  $("#o-hr-box").style.borderLeftColor = hz >= 0 ? cssVar(HR_ZONES[hz][1]) : "transparent";
+  $("#o-hr-box").hidden = !hrOn;
+  $("#o-hr-box").style.borderLeftColor = hrOn && hz >= 0 ? cssVar(HR_ZONES[hz][1]) : "transparent";
+  if(!S.workout || cs?.s.free){ o("#o-gear", S.gear); o("#o-gear-lbl", `Brzina · omjer ${GEARS[S.gear - 1].toFixed(2)}`); o("#o-gear-unit", "/" + GEARS.length); }
+  else if(cs?.s.hr){ o("#o-gear", hrTarget(cs.s)); o("#o-gear-lbl", "Ciljani puls"); o("#o-gear-unit", "bpm"); }
+  else { o("#o-gear", Math.round(S.bias * 100)); o("#o-gear-lbl", "Intenzitet"); o("#o-gear-unit", "%"); }
   o("#o-time", fmtTime(S.t));
   o("#o-x-lbl", S.route ? "Udaljenost" : "Brzina");
   o("#o-x", S.route ? (S.dist / 1000).toFixed(1) : (S.live.speed || 0).toFixed(1)); o("#o-x-unit", S.route ? "km" : "km/h");
