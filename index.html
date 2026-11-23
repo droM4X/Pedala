@@ -1468,7 +1468,7 @@ function lapResult(lap){
   } else if(lap.score != null && lap.dur >= 30 && !S.workout?.test){
     const what = lap.kind === "hr" ? `${lap.avgHr} bpm od ${lap.tgt}` : `${lap.avgP} W od ${lap.tgt}`;
     notify(`${lap.name}: ${what} (${lap.score}%)`);
-say(() => lap.kind === "hr" ? L(`Interval gotov. Prosječni puls ${lap.avgHr}.`, `Interval done. Average heart rate ${lap.avgHr}.`, `Intervallum kész. Átlagpulzus ${lap.avgHr}.`)
+    say(() => lap.kind === "hr" ? L(`Interval gotov. Prosječni puls ${lap.avgHr}.`, `Interval done. Average heart rate ${lap.avgHr}.`, `Intervallum kész. Átlagpulzus ${lap.avgHr}.`)
       : L(`Interval gotov. Prosjek ${watts(lap.avgP)}, ${lap.score} posto.`, `Interval done. Average ${watts(lap.avgP)}, ${lap.score} percent.`, `Intervallum kész. Átlag ${watts(lap.avgP)}, ${lap.score} százalék.`));
   }
 }
@@ -2835,25 +2835,25 @@ $("#dlg-sess").addEventListener("click", e => { if(e.target === $("#dlg-sess")) 
    weeks 4, 8 and 12 have a round less. Sessions run in a guided player with a countdown and voice cues, and a
    strength session recorded on a watch ticks off by itself once it reaches intervals.icu. */
 const EX = {
-  squat:     [["Čučanj", "Squat"], ["Stopala u širini ramena, kukovi unatrag kao da sjedaš, koljena prate prste, leđa ravna.", "Feet shoulder-width, hips back as if sitting down, knees over toes, back straight."]],
-  lunge:     [["Iskorak unazad, naizmjenično", "Reverse lunge, alternating"], ["Korak unatrag i spusti stražnje koljeno prema podu; prednje koljeno iznad stopala.", "Step back and lower the back knee towards the floor; front knee above the foot."]],
-  bridge:    [["Most za stražnjicu", "Glute bridge"], ["Na leđima, stopala na podu: podigni kukove i stisni stražnjicu, pa se polako spusti.", "On your back, feet on the floor: lift your hips and squeeze your glutes, then lower slowly."]],
-  sideLunge: [["Iskorak u stranu, naizmjenično", "Side lunge, alternating"], ["Široki korak u stranu, sjedni na tu nogu, druga ostaje ispružena.", "Wide step to the side, sit into that leg, the other stays straight."]],
-  wallSit:   [["Sjedenje uz zid", "Wall sit"], ["Leđa uz zid, koljena pod pravim kutom (ili više ako je preteško).", "Back against the wall, knees at a right angle (or higher if that is too hard)."]],
-  calf:      [["Podizanje na prste", "Calf raise"], ["Polako gore na prste i polako dolje; drži se za stolicu.", "Slowly up onto your toes and slowly down; hold a chair."]],
-  pushup:    [["Sklek", "Push-up"], ["Na koljenima ili uz rub stola ako je teško; tijelo ravno, prsa prema podu.", "On your knees or against a table edge if it is hard; body straight, chest towards the floor."]],
-  dips:      [["Propadanje na stolici", "Chair dips"], ["Dlanovi na rub stolice iza sebe, savij laktove unatrag i podigni se.", "Hands on the chair edge behind you, bend your elbows back and push up."]],
-  superman:  [["Superman", "Superman"], ["Na trbuhu: podigni ruke i noge malo od poda, pogled prema podu.", "On your front: lift arms and legs slightly off the floor, look at the floor."]],
-  plank:     [["Plank na podlakticama", "Forearm plank"], ["Laktovi ispod ramena, tijelo ravno od glave do peta; može i na koljenima.", "Elbows under shoulders, body straight from head to heels; on your knees is fine."]],
-  sidePlank: [["Bočni plank, pola vremena svaka strana", "Side plank, half the time each side"], ["Na podlaktici i boku stopala (ili koljena), kukovi gore.", "On your forearm and the side of your foot (or knee), hips up."]],
-  deadBug:   [["Mrtva buba", "Dead bug"], ["Na leđima, ruke i koljena gore: polako ispruži suprotnu ruku i nogu, donji dio leđa ostaje na podu.", "On your back, arms and knees up: slowly stretch out the opposite arm and leg, lower back stays on the floor."]],
-  climber:   [["Penjač", "Mountain climber"], ["U položaju skleka naizmjence privlači koljena prsima; brzina po osjećaju.", "In a push-up position, bring your knees to your chest in turn; pace by feel."]],
-  tap:       [["Plank s dodirom ramena", "Plank shoulder taps"], ["U položaju skleka naizmjence dodirni suprotno rame; kukovi mirni.", "In a push-up position, touch the opposite shoulder in turn; hips still."]],
+  squat:     [["Čučanj", "Squat", "Guggolás"], ["Stopala u širini ramena, kukovi unatrag kao da sjedaš, koljena prate prste, leđa ravna.", "Feet shoulder-width, hips back as if sitting down, knees over toes, back straight."]],
+  lunge:     [["Iskorak unazad, naizmjenično", "Reverse lunge, alternating", "Hátralépés, váltakozva"], ["Korak unatrag i spusti stražnje koljeno prema podu; prednje koljeno iznad stopala.", "Step back and lower the back knee towards the floor; front knee above the foot."]],
+  bridge:    [["Most za stražnjicu", "Glute bridge", "Farizomhíd"], ["Na leđima, stopala na podu: podigni kukove i stisni stražnjicu, pa se polako spusti.", "On your back, feet on the floor: lift your hips and squeeze your glutes, then lower slowly."]],
+  sideLunge: [["Iskorak u stranu, naizmjenično", "Side lunge, alternating", "Oldalra lépés, váltakozva"], ["Široki korak u stranu, sjedni na tu nogu, druga ostaje ispružena.", "Wide step to the side, sit into that leg, the other stays straight."]],
+  wallSit:   [["Sjedenje uz zid", "Wall sit", "Falnál ülés"], ["Leđa uz zid, koljena pod pravim kutom (ili više ako je preteško).", "Back against the wall, knees at a right angle (or higher if that is too hard)."]],
+  calf:      [["Podizanje na prste", "Calf raise", "Lábujjhegyre emelkedés"], ["Polako gore na prste i polako dolje; drži se za stolicu.", "Slowly up onto your toes and slowly down; hold a chair."]],
+  pushup:    [["Sklek", "Push-up", "Fekvőtámasz"], ["Na koljenima ili uz rub stola ako je teško; tijelo ravno, prsa prema podu.", "On your knees or against a table edge if it is hard; body straight, chest towards the floor."]],
+  dips:      [["Propadanje na stolici", "Chair dips", "Támasz a széken"], ["Dlanovi na rub stolice iza sebe, savij laktove unatrag i podigni se.", "Hands on the chair edge behind you, bend your elbows back and push up."]],
+  superman:  [["Superman", "Superman", "Superman"], ["Na trbuhu: podigni ruke i noge malo od poda, pogled prema podu.", "On your front: lift arms and legs slightly off the floor, look at the floor."]],
+  plank:     [["Plank na podlakticama", "Forearm plank", "Plank alkaron"], ["Laktovi ispod ramena, tijelo ravno od glave do peta; može i na koljenima.", "Elbows under shoulders, body straight from head to heels; on your knees is fine."]],
+  sidePlank: [["Bočni plank, pola vremena svaka strana", "Side plank, half the time each side", "Oldalsó plank, fél idő mindkét oldal"], ["Na podlaktici i boku stopala (ili koljena), kukovi gore.", "On your forearm and the side of your foot (or knee), hips up."]],
+  deadBug:   [["Mrtva buba", "Dead bug", "Holtbogár"], ["Na leđima, ruke i koljena gore: polako ispruži suprotnu ruku i nogu, donji dio leđa ostaje na podu.", "On your back, arms and knees up: slowly stretch out the opposite arm and leg, lower back stays on the floor."]],
+  climber:   [["Penjač", "Mountain climber", "Hegymászó"], ["U položaju skleka naizmjence privlači koljena prsima; brzina po osjećaju.", "In a push-up position, bring your knees to your chest in turn; pace by feel."]],
+  tap:       [["Plank s dodirom ramena", "Plank shoulder taps", "Plank vállérintéssel"], ["U položaju skleka naizmjence dodirni suprotno rame; kukovi mirni.", "In a push-up position, touch the opposite shoulder in turn; hips still."]],
 };
-const WARMUP = [[["Hodanje u mjestu, koljena gore", "Marching on the spot, knees up"], 60], [["Krugovi rukama naprijed i natrag", "Arm circles forwards and back"], 30],
-  [["Krugovi kukovima", "Hip circles"], 30], [["Čučanj do pola, polako", "Half squat, slowly"], 30], [["Iskorak unazad, lagano", "Easy reverse lunge"], 30], [["Zamasi nogama uz zid", "Leg swings at a wall"], 30]];
-const COOLDOWN = [[["Istezanje prednje lože, lijeva noga", "Quad stretch, left leg"], 30], [["Istezanje prednje lože, desna noga", "Quad stretch, right leg"], 30],
-  [["Istezanje stražnje lože, sjedeći", "Hamstring stretch, seated"], 40], [["Istezanje prsa uz okvir vrata", "Chest stretch in a doorway"], 30], [["Istezanje leđa: sjedni na pete, ruke naprijed", "Back stretch: sit on your heels, arms forward"], 40]];
+const WARMUP = [[["Hodanje u mjestu, koljena gore", "Marching on the spot, knees up", "Helyben menetelés, térd fel"], 60], [["Krugovi rukama naprijed i natrag", "Arm circles forwards and back", "Karkörzés előre-hátra"], 30],
+  [["Krugovi kukovima", "Hip circles", "Csípőkörzés"], 30], [["Čučanj do pola, polako", "Half squat, slowly", "Félguggolás, lassan"], 30], [["Iskorak unazad, lagano", "Easy reverse lunge", "Könnyű hátralépés"], 30], [["Zamasi nogama uz zid", "Leg swings at a wall", "Láb lendítése a falnál"], 30]];
+const COOLDOWN = [[["Istezanje prednje lože, lijeva noga", "Quad stretch, left leg", "Comb elülső izmának nyújtása, bal láb"], 30], [["Istezanje prednje lože, desna noga", "Quad stretch, right leg", "Comb elülső izmának nyújtása, jobb láb"], 30],
+  [["Istezanje stražnje lože, sjedeći", "Hamstring stretch, seated", "Comb hátsó izmának nyújtása, ülve"], 40], [["Istezanje prsa uz okvir vrata", "Chest stretch in a doorway", "Mellkasnyújtás ajtófélfánál"], 30], [["Istezanje leđa: sjedni na pete, ruke naprijed", "Back stretch: sit on your heels, arms forward", "Hátnyújtás: ülj a sarkadra, karok előre"], 40]];
 const CIRCUITS = { A: ["squat", "lunge", "bridge", "sideLunge", "wallSit", "calf"], B: ["pushup", "dips", "superman", "plank", "sidePlank", "deadBug"], C: ["squat", "pushup", "lunge", "climber", "tap", "bridge"] };
 const CIRCUIT_NAME = { A: ["noge i stražnjica", "legs and glutes"], B: ["gornji dio i trup", "upper body and core"], C: ["cijelo tijelo", "full body"] };
 const STRENGTH = { id: "snaga12", weeks: 12, deload: [4, 8, 12], days: [["mon", 0, "Pon", "A"], ["wed", 2, "Sri", "B"], ["fri", 4, "Pet", "C"]] };
@@ -2899,7 +2899,7 @@ function wkNext(){
   $("#wk-cue").textContent = st.c ? ui(...st.c) : "";
   $("#wk-next").textContent = nx ? `${tr("Sljedeće")}: ${name(nx)}` : tr("Zadnja vježba");
   $("#dlg-strength").dataset.kind = st.kind;
-if(st.kind === "rest") say(() => L(`Odmor. Sljedeće: ${spoken(nx)}.`, `Rest. Next: ${spoken(nx)}.`, `Pihenő. Következik: ${spoken(nx)}.`));
+  if(st.kind === "rest") say(() => L(`Odmor. Sljedeće: ${spoken(nx)}.`, `Rest. Next: ${spoken(nx)}.`, `Pihenő. Következik: ${spoken(nx)}.`));
   else say(() => st.kind === "work" ? L(`${spoken(st)}, ${st.s} sekundi.`, `${spoken(st)}, ${st.s} seconds.`, `${spoken(st)}, ${st.s} másodperc.`) : spoken(st));
   wkRender();
 }

@@ -339,6 +339,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.match(spoken, /Čučanj, 30 sekundi/); assert.match(spoken, /Odmor\. Sljedeće: Iskorak unazad/); assert.match(spoken, /Trening je gotov/);
     assert.ok(await p.evaluate(() => findWorkout("s-B-5")?.name.startsWith("Snaga B")), "the coach can swap a session for another circuit");
     await p.context().close();
+    const hu = await open({ voices: [["Google magyar", "hu-HU"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
+    await hu.evaluate(() => startStrength({ name: "test", steps: [{ kind: "rest", s: 30 }, { kind: "work", n: EX.squat[0], s: 30 }], min: 1 }));
+    await hu.waitForTimeout(300);
+    const huStrength = (await hu.evaluate(() => __spoken))[0];
+    assert.match(huStrength, /Guggolás/, huStrength);
+    assert.doesNotMatch(huStrength, /Squat|Push-up|Reverse lunge/, huStrength);
+    await hu.evaluate(() => { clearInterval(WK.timer); WK.timer = null; }); await hu.context().close();
   });
 
   await test("profiles: a second person has her own data on her own phone", async () => {
