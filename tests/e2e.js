@@ -378,12 +378,26 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const svg = p.locator("#qr-box svg");
     assert.equal(await svg.count(), 1, "the QR is drawn");
     const box = await svg.boundingBox();
+    const firstPath = await svg.locator("path").getAttribute("d");
+    await p.evaluate(() => { __pedala.remote.links = ["http://192.168.7.7:8765/gear.html"]; __pedala.openRemote(); });
+    assert.notEqual(await svg.locator("path").getAttribute("d"), firstPath, "the QR changes with the current link");
+    assert.equal((await p.textContent("#remote-link")).trim(), "http://192.168.7.7:8765/gear.html");
+    await p.evaluate(() => { __pedala.remote.links = []; __pedala.openRemote(); });
+    assert.equal(await svg.count(), 0, "a missing address clears the QR");
+    assert.equal(await p.locator("#remote-none").isVisible(), true);
     assert.ok(box.width > 100 && box.height > 100, `the QR has a size (${box.width}x${box.height})`);
     const centered = await dlg.evaluate(d => { const r = d.getBoundingClientRect();
       return Math.abs((r.left + r.right) / 2 - innerWidth / 2) < 40 && Math.abs((r.top + r.bottom) / 2 - innerHeight / 2) < 40; });
     assert.equal(centered, true, "the modal is centered");
     await p.click("#dlg-remote [data-close]");
     assert.equal(await dlg.evaluate(d => d.open), false, "the X closes it");
+    await p.context().close();
+  });
+  await test("remote modal: English labels are translated", async () => {
+    const p = await open({ locale: "en-US" });
+    await p.evaluate(() => __pedala.openRemote());
+    assert.equal((await p.textContent("#remote-copy")).trim(), "Copy");
+    assert.ok((await p.textContent("#remote-none")).startsWith("No network address"));
     await p.context().close();
   });
   await test("remote modal: without a LAN address it explains instead of drawing a QR", async () => {
