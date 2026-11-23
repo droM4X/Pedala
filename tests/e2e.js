@@ -327,6 +327,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await ph.goto(B + "/gear.html");
     await ph.waitForFunction(() => document.querySelector("#dot").classList.contains("on"), null, { timeout: 5000 });
     assert.equal(await ph.textContent("#value"), "10", "the phone shows the gear the ride reports");
+    assert.equal(await ph.textContent("#title"), "Pedala remote", "the connected title is restored");
     await ph.click("#up");
     await p.waitForFunction(() => __pedala.S.gear === 11, null, { timeout: 3000 });
     await ph.waitForFunction(() => document.querySelector("#value").textContent === "11", null, { timeout: 3000 });
