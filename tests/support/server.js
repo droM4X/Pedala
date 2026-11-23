@@ -2,6 +2,7 @@
 // with intervals.icu, the YouTube Data API, the Anthropic API and Vercel Blob replaced by small in-memory fakes.
 const http = require("http"), fs = require("fs"), path = require("path");
 const ROOT = path.join(__dirname, "..", "..");
+const { createRemote } = require("../../lib/remote.js");
 
 const log = [];
 let uploads = 0; const seenFit = new Map();
@@ -88,6 +89,7 @@ const api = { intervals: require("../../api/intervals.js"), youtube: require("..
 const TYPES = { ".png": "image/png", ".js": "text/javascript", ".webmanifest": "application/manifest+json", ".html": "text/html; charset=utf-8" };
 
 function start(port = 0){
+  const remote = createRemote();
   const server = http.createServer(async (req, res) => {
     res.status = c => { res.statusCode = c; return res; };
     res.json = o => { res.setHeader("content-type", "application/json"); res.end(JSON.stringify(o)); return res; };
@@ -98,6 +100,7 @@ function start(port = 0){
       return api[name](req, res);
     }
     if(req.url.startsWith("/api/")){ res.statusCode = 404; return res.end("not found"); }
+    if(remote.route(req, res)) return;
     const file = path.join(ROOT, decodeURIComponent(req.url.split("?")[0]));
     if(req.url !== "/" && file.startsWith(ROOT + path.sep) && !file.includes("node_modules") && fs.existsSync(file) && fs.statSync(file).isFile()){
       res.setHeader("content-type", TYPES[path.extname(file)] || "application/octet-stream"); return res.end(fs.readFileSync(file));
@@ -107,7 +110,7 @@ function start(port = 0){
   return new Promise(resolve => server.listen(port, () => resolve({
     url: `http://localhost:${server.address().port}`, log, blobs, claude,
     setEnv(vars){ for(const [k, v] of Object.entries(vars)) v == null ? delete process.env[k] : process.env[k] = v; },
-    close: () => new Promise(r => server.close(r)),
+    close: () => new Promise(r => { remote.close(); server.close(r); }),
   })));
 }
 module.exports = { start };

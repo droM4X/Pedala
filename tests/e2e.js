@@ -309,6 +309,27 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     srv.setEnv({ YOUTUBE_API_KEY: null }); await p.context().close();
   });
 
+  await test("remote: the ride page listens, and a shift from outside moves the gear", async () => {
+    const p = await open();
+    await p.waitForFunction(() => __pedala.remote?.es?.readyState === 1);
+    await p.waitForFunction(() => __pedala.S.gear === 10);
+    await fetch(B + "/__remote/shift", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ d: 1 }) });
+    await p.waitForFunction(() => __pedala.S.gear === 11, null, { timeout: 3000 });
+    assert.equal(await p.evaluate(() => document.querySelector("#chip-remote").classList.contains("on")), false, "no phone yet");
+    await p.context().close();
+  });
+  await test("remote: a deployed instance (no /__remote) costs one request and stops", async () => {
+    const p = await browser.newContext().then(c => c.newPage());
+    let hits = 0;
+    await p.route("**/__remote/**", r => { hits++; r.fulfill({ status: 404, body: "no" }); });
+    await p.goto(`${B}/?simspeed=100`); await p.waitForTimeout(2000);
+    assert.equal(hits, 1, "a failed EventSource is not retried: one request, then it stops");
+    await p.waitForTimeout(2000);
+    assert.equal(hits, 1, "and it stays stopped");
+    assert.equal(await p.evaluate(() => document.querySelector("#chip-remote").classList.contains("on")), false);
+    await p.context().close();
+  });
+
   await test("phone layout: nothing wider than the screen, the ride view does not scroll", async () => {
     for(const viewport of [{ width: 360, height: 640 }, { width: 384, height: 832 }, { width: 832, height: 384 }]){
       const p = await open({ viewport, mobile: true });

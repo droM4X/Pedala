@@ -366,6 +366,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
   .tabs .tl{display:none} .tabs .ti{display:inline}
   .brand{font-size:19px}
   .chip{padding:4px 9px;font-size:13px}
+  #chip-remote{display:none}
   .form{grid-template-columns:1fr}
   .form .full{grid-column:1}
 }
@@ -394,6 +395,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
     <button class="chip" id="chip-hr"><span class="dot"></span><span>Puls</span></button>
     <button class="chip" id="chip-click-p"><span class="dot"></span><span>Click +</span></button>
     <button class="chip" id="chip-click-m"><span class="dot"></span><span>Click −</span></button>
+    <button class="chip" id="chip-remote"><span class="dot"></span><span>Remote</span></button>
   </header>
 
   <!-- RIDE -->
@@ -3416,9 +3418,31 @@ $("#btn-click-yb").onclick = () => {
 
 $("#btn-start").onclick = () => { if(!S.started || !S.running) { S.started && S.autoPaused ? resume() : start(); } else pause(false); render(); };
 $("#btn-end").onclick = () => { pause(false); openSummary(); };
+/* phone remote: the phone (gear.html) shifts through the local server; the relay is /__remote/* */
+const remote = { es: null, phones: 0, links: [] };
+function remoteState(){ const c = currentSeg(); const mode = !S.workout || c?.s.free ? "gear" : c?.s.hr ? "hr" : "bias";
+  return { gear: S.gear, mode, bias: S.bias, hrOff: S.hrOff }; }
+function remoteSend(){ if(remote.es?.readyState !== 1) return;
+  fetch("/__remote/state", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(remoteState()) }).catch(() => {}); }
+function remoteChip(){ setChip("#chip-remote", remote.phones ? "on" : "", "Remote"); }
+function remoteSetPhones(n){ const had = remote.phones; remote.phones = n || 0; remoteChip(); if(!had && remote.phones) remoteSend(); }
+function remoteConnect(){
+  remote.es?.close();
+  const es = remote.es = new EventSource("/__remote/events?role=ride");
+  es.onopen = () => remoteSend();
+  es.onerror = () => { if(es.readyState === 2){ remote.es = null; remote.phones = 0; remoteChip(); } };   // a non-200 fails permanently (deployed instance): stop, a chip click retries; network errors keep EventSource's own retry loop
+  es.addEventListener("hello", e => { const m = JSON.parse(e.data); remote.links = m.links || []; remoteSetPhones(m.phones); });
+  es.addEventListener("phones", e => remoteSetPhones(JSON.parse(e.data).n));
+  es.addEventListener("shift", e => { const m = JSON.parse(e.data); if(m.d === 1 || m.d === -1) bump(m.d); });
+}
+$("#chip-remote").onclick = () => {
+  if(!remote.es){ remoteConnect(); return; }
+  const l = remote.links[0];
+  toast(l ? ui("Távirányító a telefonon: " + l, "On the phone, open " + l) : ui("Távirányító: nincs hálózati cím", "Remote: no network address"));
+};
 const bump = d => { const c = currentSeg(); if(!S.workout || c?.s.free){ S.gear = clamp(S.gear + d, 1, GEARS.length); }
   else if(c?.s.hr){ S.hrOff = clamp(S.hrOff + d * 2, -20, 20); }
-  else { S.bias = clamp(Math.round((S.bias + d * .05) * 100) / 100, .5, 1.5); } applyControl(); render(); };
+  else { S.bias = clamp(Math.round((S.bias + d * .05) * 100) / 100, .5, 1.5); } applyControl(); render(); remoteSend(); };
 $("#bias-dn").onclick = () => bump(-1); $("#bias-up").onclick = () => bump(1);
 $("#gear-dn").onclick = () => bump(-1); $("#gear-up").onclick = () => bump(1);
 document.addEventListener("keydown", e => {
@@ -3467,6 +3491,7 @@ window.addEventListener("beforeunload", e => { if(S.started){ e.preventDefault()
   const v = store.get("video", null); v ? setVideo(v) : store.get("stageMode", null) === "dash" ? setDash() : showPicker();
   const mu = store.get("music", null); if(mu) setMusic(mu, false);
   fillSettings(); render();
+  remoteChip(); remoteConnect(); setInterval(() => { if(remote.phones) remoteSend(); }, 2000);
   autoConnect();
   if("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.register("/sw.js").catch(e => console.warn("sw", e));
   syncNow().finally(() => setTimeout(planToday, 1500));
@@ -3475,7 +3500,7 @@ window.addEventListener("beforeunload", e => { if(S.started){ e.preventDefault()
   fetch("/api/intervals").then(r => r.ok ? r.json() : {}).then(j => { icuServer = !!j.serverKey; }).catch(() => {})
     .finally(() => { syncIcu(); renderHistoryIfOpen(); if($("#view-settings").classList.contains("active")) renderIcu(); planIcuTick(); });
 })();
-window.__pedala = { S, parseZwo, parseGpx, setRoute, routes, gradeAt, trainerGrade, clickKeys, onClickPress, encodeFit, metrics, allWorkouts, setWorkout, GEARS };
+window.__pedala = { S, parseZwo, parseGpx, setRoute, routes, gradeAt, trainerGrade, clickKeys, onClickPress, encodeFit, metrics, allWorkouts, setWorkout, GEARS, remote };
 </script>
 </body>
 </html>
