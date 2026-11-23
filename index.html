@@ -686,6 +686,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
 <dialog id="dlg-remote">
   <button class="x" id="remote-x" type="button" data-close aria-label="Zatvori">✕</button>
   <h2>Remote</h2>
+  <p id="remote-scan" hidden>Očitaj kôd telefonom ili tabletom</p>
   <div id="qr-box"></div>
   <p id="remote-none" hidden>Remote radi samo kad Pedala vrti na računalu u istoj mreži: na Vercelu ga nema, a ovdje nema mrežne adrese.</p>
   <p class="remote-link"><b id="remote-link"></b></p>
@@ -734,6 +735,7 @@ const ui = (hr, en) => UI === "hr" ? hr : en;
 document.documentElement.lang = UI;
 const EN = new Map(Object.entries({
   "Kopiraj": "Copy",
+  "Očitaj kôd telefonom ili tabletom": "Scan the code with your phone or tablet",
   "Remote radi samo kad Pedala vrti na računalu u istoj mreži: na Vercelu ga nema, a ovdje nema mrežne adrese.": "The remote only works while Pedala runs on a computer in the same network: a Vercel deployment has no relay, and there is no network address here.",
   // header and ride screen
   "Vožnja": "Ride", "Treninzi": "Workouts", "Povijest": "History", "Napredak": "Progress", "Postavke": "Settings",
@@ -3465,6 +3467,7 @@ function openRemote(){
   const link = remote.links[0] || "";
   $("#remote-link").textContent = link;
   $("#remote-none").hidden = !!link;
+  $("#remote-scan").hidden = !link;   // the hint is only there when there is a code to scan
   try{ $("#qr-box").innerHTML = link ? QR.svg(QR.encode(link), { margin: 4 }) : ""; }
   catch(e){ $("#qr-box").innerHTML = ""; }
   if(!$("#dlg-remote").open) $("#dlg-remote").showModal();

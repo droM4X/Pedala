@@ -395,8 +395,12 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   });
   await test("remote modal: English labels are translated", async () => {
     const p = await open({ locale: "en-US" });
-    await p.evaluate(() => __pedala.openRemote());
+    await p.evaluate(() => { __pedala.remote.links = ["http://192.168.0.20:8765/gear.html"]; __pedala.openRemote(); });
     assert.equal((await p.textContent("#remote-copy")).trim(), "Copy");
+    assert.equal((await p.textContent("#remote-scan")).trim(), "Scan the code with your phone or tablet");
+    assert.equal(await p.locator("#remote-scan").isVisible(), true, "the hint shows above the code");
+    await p.evaluate(() => { __pedala.remote.links = []; __pedala.openRemote(); });
+    assert.equal(await p.locator("#remote-scan").isVisible(), false, "and it goes away with the code");
     assert.ok((await p.textContent("#remote-none")).startsWith("The remote only works while Pedala runs"));
     await p.context().close();
   });
