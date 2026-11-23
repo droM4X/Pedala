@@ -129,6 +129,107 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
     }finally{ global.fetch = realFetch; delete process.env.ANTHROPIC_API_KEY; }
   });
 
+  /* ---------- lib/remote.js ---------- */
+  const http = require("node:http"), { createRemote, lanLinks } = require("../lib/remote.js");
+
+  async function relay(heartbeatMs){                      // a relay egy csupasz szerveren, hogy a szerver-bekötést ne ez tesztelje
+    const r = createRemote({ heartbeatMs });
+    const srv = http.createServer((req, res) => { if(!r.route(req, res)){ res.statusCode = 404; res.end("no"); } });
+    await new Promise(ok => srv.listen(0, ok));
+    const base = `http://127.0.0.1:${srv.address().port}`;
+    return { base, r, close: () => new Promise(ok => { r.close(); srv.close(ok); }) };
+  }
+  const sse = base => new Promise((ok, bad) => {              // egy nyitott SSE csatorna, a beérkező eseményekkel
+    const box = { events: [] }, req = http.get(base, res => {
+      res.setEncoding("utf8"); let buf = "";
+      res.on("data", c => { buf += c; let i; while((i = buf.indexOf("\n\n")) >= 0){ box.events.push(parseSse(buf.slice(0, i))); buf = buf.slice(i + 2); } ok({ box, end: () => req.destroy() }); });
+    });
+    req.on("error", bad);
+  });
+  const parseSse = block => { const e = {}; for(const line of block.split("\n")){
+    if(line.startsWith("event:")) e.event = line.slice(6).trim();
+    else if(line.startsWith("data:")) e.data = JSON.parse(line.slice(5).trim()); } return e; };
+  const waitFor = async (f, ms = 2000) => { const t0 = Date.now();
+    while(Date.now() - t0 < ms){ if(f()) return; await new Promise(r => setTimeout(r, 20)); } throw new Error("timeout"); };
+  const post = (base, path, body) => fetch(base + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  await test("remote: a shift from the phone reaches the ride page", async () => {
+    const s = await relay();
+    try{
+      const ride = await sse(s.base + "/__remote/events?role=ride");
+      assert.equal((await post(s.base, "/__remote/shift", { d: 1 })).status, 204);
+      await waitFor(() => ride.box.events.some(e => e.event === "shift"));
+      assert.deepEqual(ride.box.events.find(e => e.event === "shift").data, { d: 1 });
+      // two quick taps: both arrive, in order, nothing is merged away
+      await Promise.all([post(s.base, "/__remote/shift", { d: -1 }), post(s.base, "/__remote/shift", { d: 1 })]);
+      await waitFor(() => ride.box.events.filter(e => e.event === "shift").length === 3);
+      assert.deepEqual(ride.box.events.filter(e => e.event === "shift").map(e => e.data.d), [1, -1, 1]);
+      ride.end();
+    }finally{ await s.close(); }
+  });
+  await test("remote: the phone gets the gear the ride reports, also if it joins later", async () => {
+    const s = await relay();
+    try{
+      assert.equal((await post(s.base, "/__remote/state", { gear: 7, mode: "gear", bias: 1, hrOff: 0 })).status, 204);
+      const phone = await sse(s.base + "/__remote/events?role=phone");
+      await waitFor(() => phone.box.events.some(e => e.event === "hello"));
+      assert.deepEqual(phone.box.events.find(e => e.event === "hello").data, { gear: 7, mode: "gear", bias: 1, hrOff: 0, ride: false });
+      phone.end();
+    }finally{ await s.close(); }
+  });
+  await test("remote: the phone learns when a ride joins and when it leaves", async () => {
+    const s = await relay();
+    try{
+      const phone = await sse(s.base + "/__remote/events?role=phone");
+      await waitFor(() => phone.box.events.some(e => e.event === "hello"));
+      const ride = await sse(s.base + "/__remote/events?role=ride");
+      await waitFor(() => phone.box.events.some(e => e.event === "state" && e.data.ride === true));
+      ride.end();
+      await waitFor(() => phone.box.events.some(e => e.event === "state" && e.data.ride === false));
+      phone.end();
+    }finally{ await s.close(); }
+  });
+  await test("remote: the ride page hears the number of connected phones", async () => {
+    const s = await relay();
+    try{
+      const ride = await sse(s.base + "/__remote/events?role=ride");
+      await waitFor(() => ride.box.events.some(e => e.event === "hello"));
+      assert.equal(ride.box.events.find(e => e.event === "hello").data.phones, 0);
+      const phone = await sse(s.base + "/__remote/events?role=phone");
+      await waitFor(() => ride.box.events.some(e => e.event === "phones" && e.data.n === 1));
+      phone.end();
+      await waitFor(() => ride.box.events.some(e => e.event === "phones" && e.data.n === 0));
+      ride.end();
+    }finally{ await s.close(); }
+  });
+  await test("remote: a heartbeat arrives even when nothing happens", async () => {
+    const s = await relay(60);
+    try{
+      const phone = await sse(s.base + "/__remote/events?role=phone");
+      await waitFor(() => phone.box.events.filter(e => e.event === "ping").length >= 2);
+      phone.end();
+    }finally{ await s.close(); }
+  });
+  await test("remote: a bad shift is refused, CORS is open for the phone page", async () => {
+    const s = await relay();
+    try{
+      assert.equal((await post(s.base, "/__remote/shift", { d: 5 })).status, 400);
+      assert.equal((await post(s.base, "/__remote/shift", {})).status, 400);
+      assert.equal((await post(s.base, "/__remote/state", { gear: 99 })).status, 400);
+      assert.equal((await fetch(s.base + "/__remote/shift")).status, 405);
+      const opt = await fetch(s.base + "/__remote/shift", { method: "OPTIONS" });
+      assert.equal(opt.status, 204); assert.equal(opt.headers.get("access-control-allow-origin"), "*");
+      assert.match(opt.headers.get("access-control-allow-headers"), /content-type/);
+    }finally{ await s.close(); }
+  });
+  await test("remote: http links for the phone, using the LAN address instead of localhost", () => {
+    const ifs = { en0: [{ family: "IPv4", address: "192.168.0.20", internal: false }],
+                  lo0: [{ family: "IPv4", address: "127.0.0.1", internal: true }] };
+    assert.deepEqual(lanLinks("localhost:8765", ifs), ["http://192.168.0.20:8765/gear.html"]);
+    assert.deepEqual(lanLinks("127.0.0.1:8765", ifs), ["http://192.168.0.20:8765/gear.html"]);
+    assert.deepEqual(lanLinks("192.168.0.20:8765", ifs), ["http://192.168.0.20:8765/gear.html"]);
+  });
+
   for(const [s, n, e] of results) console.log(`${s === "ok" ? "✓" : "✗"} ${n}${e ? "\n    " + e.message : ""}`);
   const failed = results.filter(r => r[0] !== "ok").length;
   console.log(`\n${results.length - failed} passed, ${failed} failed`);
