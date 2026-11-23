@@ -336,6 +336,38 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.waitForFunction(() => !document.querySelector("#chip-remote").classList.contains("on"), null, { timeout: 5000 });
     await p.context().close();
   });
+  await test("remote: reconnect escalation preserves address and manual retry connects", async () => {
+    const p = await open();
+    await p.waitForFunction(() => __pedala.S.gear === 10);
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true, locale: "en-US" });
+    const ph = await ctx.newPage(); ph.on("pageerror", e => pageErrors.push(e.message));
+    await ph.addInitScript(() => {
+      const Real = window.EventSource;
+      let fakes = 1;
+      window.EventSource = function(url){
+        if(fakes-- > 0 && String(url).includes("__remote")){
+          const self = this, ls = {};
+          self.readyState = 0;
+          self.addEventListener = (t, f) => { (ls[t] = ls[t] || []).push(f); };
+          self.close = () => { self.readyState = 2; clearInterval(self.timer); };
+          const fire = t => { self["on" + t]?.({}); (ls[t] || []).forEach(f => f({})); };
+          let n = 0;
+          self.timer = setInterval(() => { if(++n > 5) return clearInterval(self.timer); fire("error"); }, 25);
+          return;
+        }
+        return new Real(url);
+      };
+    });
+    await ph.goto(B + "/gear.html");
+    await ph.waitForFunction(() => !document.querySelector("#conn").hidden && /Cannot reach/.test(document.querySelector("#title").textContent), null, { timeout: 5000 });
+    assert.equal(await ph.inputValue("#addr"), B, "the reconnect form is prefilled with the server URL");
+    await ph.click('#conn button[type="submit"]');
+    await ph.waitForFunction(() => document.querySelector("#dot").classList.contains("on"), null, { timeout: 5000 });
+    assert.equal(await ph.textContent("#value"), "10", "manual retry receives the ride gear");
+    await ctx.close();
+    await p.context().close();
+  });
+
   await test("remote: a deployed instance (no /__remote) costs one request and stops", async () => {
     const p = await browser.newContext().then(c => c.newPage());
     let hits = 0;
