@@ -1481,10 +1481,11 @@ const voices = () => window.speechSynthesis?.getVoices() || [];
 let hrVoice = null;   // the voice in use (name kept from when it could only be Croatian)
 /* voice and language: a voice picked by hand wins; otherwise Croatian if asked for (or "auto" with a Croatian interface) and available, else English */
 function pickVoice(){
-  const vs = voices(), byName = vs.find(v => v.voiceURI === settings.voiceName);
-  if(byName) return byName;
-  const want = settings.voiceLang || "auto", hr = vs.find(isHr);
+  const vs = voices(), want = settings.voiceLang || "auto", byName = vs.find(v => v.voiceURI === settings.voiceName);
+  if(byName && (want !== "hu" || isHu(byName))) return byName;
   if(want === "hu") return vs.find(isHu) || vs.find(isEn) || null;
+  if(byName) return byName;
+  const hr = vs.find(isHr);
   if((want === "hr" || want === "auto" && UI === "hr") && hr) return hr;
   return vs.find(v => isEn(v) && /GB|US/i.test(v.lang) && v.localService) || vs.find(isEn) || null;
 }

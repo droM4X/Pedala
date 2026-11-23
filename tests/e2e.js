@@ -106,14 +106,18 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const ok = await open({ voices: [["Google magyar", "hu-HU"], ["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
     await ok.click('[data-view="settings"]'); await ok.waitForTimeout(200);
     assert.equal(await ok.evaluate(() => __pedala.S && document.querySelector('[name="voiceLang"] option[value="hu"]')?.textContent.trim()), "Magyar");
-    assert.match(await ok.textContent("#voice-note"), /Hungarian/, "the note names the language in use");
+    assert.match(await ok.textContent("#voice-note"), /Announcements are in Hungarian/, "the note says announcements are in Hungarian");
     await ok.context().close();
 
     const none = await open({ voices: [["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
     await none.click('[data-view="settings"]'); await none.waitForTimeout(200);
-    assert.match(await none.textContent("#voice-note"), /Hungarian/, "the note says the Hungarian voice is missing");
-    assert.match(await none.textContent("#voice-note"), /English/, "and what it falls back to");
+    assert.match(await none.textContent("#voice-note"), /Hungarian voice missing; announcements fall back to English/, "the note names Hungarian as missing and English as the fallback");
     await none.context().close();
+
+    const croatian = await open({ voices: [["Google hrvatski", "hr-HR"], ["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", voiceName: "Google hrvatski", uiLang: "en" } });
+    await croatian.click('[data-view="settings"]'); await croatian.click("#btn-voice-test"); await croatian.waitForTimeout(300);
+    assert.match((await croatian.evaluate(() => __spoken))[0], /^In 10 seconds/, "a saved Croatian voice cannot override Hungarian mode's English fallback");
+    await croatian.context().close();
   });
   await test("voice: auto never picks Hungarian, even in a Hungarian browser", async () => {
     const p = await open({ locale: "hu-HU", voices: [["Google magyar", "hu-HU"], ["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "auto" } });
