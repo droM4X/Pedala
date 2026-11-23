@@ -1435,11 +1435,11 @@ function lapTick(c, tgt){
     if(!S.lap || S.lap.seg !== c.i){
       const done = lapClose(); if(done) lapResult(done);
       lapOpen({ seg: c.i, name: `Interval ${c.i + 1}`, kind: c.s.free ? "free" : c.s.hr ? "hr" : "power", cadTgt: c.s.cad, note: c.s.note });
-      if(c.i === 0 && S.t <= 1) say(() => `${L("Kreće trening.", "Workout starting.")} ${segSpeech(c.s)}.`);
+      if(c.i === 0 && S.t <= 1) say(() => `${L("Kreće trening.", "Workout starting.", "Kezdődik az edzés.")} ${segSpeech(c.s)}.`);
     }
     // next segment in 10 seconds
     const nx = S.workout.segs[c.i + 1];
-    if(nx && Math.round(c.left) === 10 && c.s.d >= 20) say(() => `${L("Za 10 sekundi:", "In 10 seconds:")} ${segSpeech(nx)}.`);
+    if(nx && Math.round(c.left) === 10 && c.s.d >= 20) say(() => `${L("Za 10 sekundi:", "In 10 seconds:", "10 másodperc múlva:")} ${segSpeech(nx)}.`);
   } else if(!S.workout){
     if(!S.lap) lapOpen({ name: `Dionica ${S.laps.length + 1}`, kind: "dist" });
     else if(S.dist - S.lap.d0 >= LAP_KM * 1000){ lapResult(lapClose()); lapOpen({ name: `Dionica ${S.laps.length + 1}`, kind: "dist" }); }
@@ -1491,26 +1491,28 @@ function pickVoice(){
 }
 const spLang = () => isHu(hrVoice || pickVoice()) ? "hu" : isHr(hrVoice || pickVoice()) ? "hr" : "en";
 const L = (hr, en, hu) => spLang() === "hr" ? hr : spLang() === "hu" ? (hu ?? en) : en;
-const watts = n => L(`${n} ${plural(n, "vat", "vata", "vata")}`, `${n} ${n === 1 ? "watt" : "watts"}`);
+const watts = n => L(`${n} ${plural(n, "vat", "vata", "vata")}`, `${n} ${n === 1 ? "watt" : "watts"}`, `${n} watt`);
 const NOTE_EN = { "Visoka kadenca, mirno sjedi": "High cadence, stay seated", "Visoka kadenca": "High cadence", "Niska kadenca": "Low cadence",
   "Niska kadenca, teški gaz": "Low cadence, big gear", "Samo lijeva noga": "Left leg only", "Samo desna noga": "Right leg only", "Obje noge": "Both legs" };
+const NOTE_HU = { "Visoka kadenca, mirno sjedi": "Magas pedálfordulat, maradj ülve", "Visoka kadenca": "Magas pedálfordulat", "Niska kadenca": "Alacsony pedálfordulat",
+  "Niska kadenca, teški gaz": "Alacsony pedálfordulat, nehéz fokozat", "Samo lijeva noga": "Csak a bal láb", "Samo desna noga": "Csak a jobb láb", "Obje noge": "Mindkét láb" };
 function sayDur(sec){
-  sec = Math.round(sec); const m = Math.floor(sec / 60), x = sec % 60, hr = spLang() === "hr";
-  const mm = m ? (hr ? `${m} ${plural(m, "minuta", "minute", "minuta")}` : `${m} ${m === 1 ? "minute" : "minutes"}`) : "";
-  const ss = x ? (hr ? `${x} ${plural(x, "sekunda", "sekunde", "sekundi")}` : `${x} ${x === 1 ? "second" : "seconds"}`) : "";
-  return [mm, ss].filter(Boolean).join(hr ? " i " : " and ");
+  sec = Math.round(sec); const m = Math.floor(sec / 60), x = sec % 60, hr = spLang() === "hr", hu = spLang() === "hu";
+  const mm = m ? (hr ? `${m} ${plural(m, "minuta", "minute", "minuta")}` : hu ? `${m} perc` : `${m} ${m === 1 ? "minute" : "minutes"}`) : "";
+  const ss = x ? (hr ? `${x} ${plural(x, "sekunda", "sekunde", "sekundi")}` : hu ? `${x} másodperc` : `${x} ${x === 1 ? "second" : "seconds"}`) : "";
+  return [mm, ss].filter(Boolean).join(hr ? " i " : hu ? " " : " and ");
 }
-const cadSay = ([lo, hi]) => hi >= CAD_ANY ? L(`kadenca ${lo} i više`, `cadence ${lo} or more`) : L(`kadenca ${lo} do ${hi}`, `cadence ${lo} to ${hi}`);
+const cadSay = ([lo, hi]) => hi >= CAD_ANY ? L(`kadenca ${lo} i više`, `cadence ${lo} or more`, `kadencia ${lo} vagy több`) : L(`kadenca ${lo} do ${hi}`, `cadence ${lo} to ${hi}`, `kadencia ${lo} és ${hi} között`);
 function segSpeech(sg){
-  const note = sg.note ? L(sg.note, NOTE_EN[sg.note] || sg.note) + ". " : "", cad = sg.cad ? ", " + cadSay(sg.cad) : "";
+  const note = sg.note ? L(sg.note, NOTE_EN[sg.note] || sg.note, NOTE_HU[sg.note] || sg.note) + ". " : "", cad = sg.cad ? ", " + cadSay(sg.cad) : "";
   return note + segSpeechPower(sg) + cad;
 }
 function segSpeechPower(sg){
   const w = S.workout, d = sayDur(sg.d);
-  if(sg.free) return L(`${d} slobodno`, `${d} free riding`);
-  if(sg.hr) return L(`${d} na pulsu ${hrTarget(sg)}`, `${d} at heart rate ${hrTarget(sg)}`);
+  if(sg.free) return L(`${d} slobodno`, `${d} free riding`, `${d} szabadon`);
+  if(sg.hr) return L(`${d} na pulsu ${hrTarget(sg)}`, `${d} at heart rate ${hrTarget(sg)}`, `${d} ${hrTarget(sg)}-es pulzuson`);
   const a = Math.round(toWatts(w, sg.lo) * S.bias), b = Math.round(toWatts(w, sg.hi) * S.bias);
-  return Math.abs(a - b) < 5 ? L(`${d} na ${watts(a)}`, `${d} at ${watts(a)}`) : L(`${d}, od ${a} do ${watts(b)}`, `${d}, from ${a} to ${watts(b)}`);
+  return Math.abs(a - b) < 5 ? L(`${d} na ${watts(a)}`, `${d} at ${watts(a)}`, `${d} ${watts(a)}-on`) : L(`${d}, od ${a} do ${watts(b)}`, `${d}, from ${a} to ${watts(b)}`, `${d}, ${a}-tól ${watts(b)}-on`);
 }
 function say(text, force = false){
   if(!(settings.voice || force) || !("speechSynthesis" in window)) return;
@@ -1934,7 +1936,7 @@ $("#mus-play").onclick = () => { musicOn = !musicOn; musicCmd(musicOn ? "playVid
 $("#mus-min").onclick = () => { const m = $("#music"); m.classList.toggle("min"); $("#mus-min").textContent = m.classList.contains("min") ? "+" : "–"; };
 $("#btn-dash").onclick = () => setDash();
 $("#vid-long").addEventListener("change", () => renderFeed());
-$("#btn-voice-test").onclick = () => { hrVoice = null; fillVoices(); say(() => L("Za 10 sekundi: 3 minute na 265 vata, kadenca 90 do 100.", "In 10 seconds: 3 minutes at 265 watts, cadence 90 to 100."), true); };
+$("#btn-voice-test").onclick = () => { hrVoice = null; fillVoices(); say(() => L("Za 10 sekundi: 3 minute na 265 vata, kadenca 90 do 100.", "In 10 seconds: 3 minutes at 265 watts, cadence 90 to 100.", "10 másodperc múlva: 3 perc 265 watton, kadencia 90 és 100 között"), true); };
 
 /* ============ sound + wake lock ============ */
 let actx;
