@@ -232,6 +232,50 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
     assert.deepEqual(lanLinks("192.168.0.20:8765", ifs), ["http://192.168.0.20:8765/gear.html"]);
   });
 
+  /* ---------- qr.js ---------- */
+  const QR = require("../qr.js");
+  let jsQR;
+  try{ jsQR = require("jsqr").default || require("jsqr"); }
+  catch{ throw new Error("the QR round-trip test needs the decoder: npm i --no-save jsqr"); }
+
+  /* the matrix as an RGBA buffer the decoder can read: 4 px per module, plus the quiet zone */
+  function qrPixels({ size, modules }, margin = 4, scale = 4){
+    const px = (size + margin * 2) * scale, data = new Uint8ClampedArray(px * px * 4).fill(255);
+    for(let y = 0; y < size; y++) for(let x = 0; x < size; x++) if(modules[y][x])
+      for(let dy = 0; dy < scale; dy++) for(let dx = 0; dx < scale; dx++){
+        const i = (((y + margin) * scale + dy) * px + ((x + margin) * scale + dx)) * 4;
+        data[i] = data[i + 1] = data[i + 2] = 0;
+      }
+    return { data, width: px, height: px };
+  }
+  const decodeQr = text => { const m = QR.encode(text), { data, width, height } = qrPixels(m); const r = jsQR(data, width, height); return r && r.data; };
+
+  await test("qr: a URL survives the round trip through a real decoder", () => {
+    for(const text of ["http://192.168.0.20:8765/gear.html",
+                       "http://my-very-long-laptop-hostname.local:8765/gear.html",
+                       "x"])
+      assert.equal(decodeQr(text), text, text);
+  });
+  await test("qr: the shortest version that fits, with a real quiet zone and a square matrix", () => {
+    const m = QR.encode("http://192.168.0.20:8765/gear.html");
+    assert.ok(m.version >= 1 && m.version <= 6, `version ${m.version}`);
+    assert.equal(m.size, 17 + 4 * m.version);
+    assert.equal(m.modules[m.size - 8][8], true, "the dark module must be dark");
+    assert.equal(m.modules.length, m.size); assert.ok(m.modules.every(r => r.length === m.size));
+    const svg = QR.svg(m);
+    assert.match(svg, /^<svg /); assert.match(svg, /viewBox="0 0 \d+ \d+"/);
+  });
+  await test("qr: a longer payload gets a bigger version, not a truncated one", () => {
+    const short = QR.encode("http://a.b/c"), long = QR.encode("http://192.168.100.200:8765/gear.html?x=" + "y".repeat(60));
+    assert.ok(long.version > short.version, `${short.version} -> ${long.version}`);
+    assert.equal(decodeQr("http://192.168.100.200:8765/gear.html?x=" + "y".repeat(60)), "http://192.168.100.200:8765/gear.html?x=" + "y".repeat(60));
+  });
+  await test("qr: a payload too long for version 6 is refused, not truncated", () => {
+    assert.throws(() => QR.encode("http://192.168.0.20:8765/gear.html?" + "a".repeat(120)), /too long/i);
+    assert.throws(() => QR.encode(123), /expects a string/);
+    assert.throws(() => QR.encode("hello", { ecc: "L" }), /ECC level M/);
+  });
+
   for(const [s, n, e] of results) console.log(`${s === "ok" ? "✓" : "✗"} ${n}${e ? "\n    " + e.message : ""}`);
   const failed = results.filter(r => r[0] !== "ok").length;
   console.log(`\n${results.length - failed} passed, ${failed} failed`);
