@@ -258,7 +258,7 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
   });
   await test("qr: the shortest version that fits, with a real quiet zone and a square matrix", () => {
     const m = QR.encode("http://192.168.0.20:8765/gear.html");
-    assert.ok(m.version >= 1 && m.version <= 10, `version ${m.version}`);
+    assert.ok(m.version >= 1 && m.version <= 6, `version ${m.version}`);
     assert.equal(m.size, 17 + 4 * m.version);
     assert.equal(m.modules.length, m.size); assert.ok(m.modules.every(r => r.length === m.size));
     const svg = QR.svg(m);
@@ -268,6 +268,9 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
     const short = QR.encode("http://a.b/c"), long = QR.encode("http://192.168.100.200:8765/gear.html?x=" + "y".repeat(60));
     assert.ok(long.version > short.version, `${short.version} -> ${long.version}`);
     assert.equal(decodeQr("http://192.168.100.200:8765/gear.html?x=" + "y".repeat(60)), "http://192.168.100.200:8765/gear.html?x=" + "y".repeat(60));
+  });
+  await test("qr: a payload too long for version 6 is refused, not truncated", () => {
+    assert.throws(() => QR.encode("http://192.168.0.20:8765/gear.html?" + "a".repeat(120)), /too long/i);
   });
 
   for(const [s, n, e] of results) console.log(`${s === "ok" ? "✓" : "✗"} ${n}${e ? "\n    " + e.message : ""}`);
