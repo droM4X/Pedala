@@ -73,7 +73,7 @@ Use the phone remote when the Zwift Click pods go to sleep during a ride. Open `
 
 ### Voice
 
-Croatian announcements need a Croatian text-to-speech voice (Android: *Text-to-speech → Speech Services by Google → Install voice data → Croatian*). Without one, everything is spoken in English, or pick a language under *Settings → Announcement language*. With the app in English, announcements are in English.
+Croatian announcements need a Croatian text-to-speech voice (Android: *Text-to-speech → Speech Services by Google → Install voice data → Croatian*). In `auto`, announcements follow the interface language and fall back to English without a Croatian voice; manually choosing an announcement language overrides this. Hungarian announcements need a Hungarian text-to-speech voice; choose the language under *Settings → Announcement language*, as `auto` never picks Hungarian.
 
 ## Development
 

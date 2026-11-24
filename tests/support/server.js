@@ -50,7 +50,7 @@ async function fakeIntervals(u, opt){
     const id = "i" + (900 + ++uploads); seenFit.set(h, id); return J([{ icu_athlete_id: "i12345", id }], 201);
   }
   // reading for the coach: a run from a watch, a ride uploaded by Pedala, wellness
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString("sv-SE");   // local YYYY-MM-DD, the same day the app's ymd() computes (UTC would differ just after midnight)
   if(u.pathname === "/api/v1/athlete/0/activities") return J([
     { id: "i777", type: "Run", name: "Jutarnje trčanje", start_date_local: today + "T07:00:00", moving_time: 1800, distance: 5000, average_heartrate: 148, icu_training_load: 38 },
     { id: "i555", type: "VirtualRide", name: "Pedala", external_id: "r-1", start_date_local: today + "T06:00:00", moving_time: 1620, icu_training_load: 38 }]);
@@ -62,7 +62,7 @@ async function fakeIntervals(u, opt){
 
 /* Anthropic Messages API: answers every request with a short comment and remembers what it was sent */
 const claude = [];
-async function fakeClaude(url, opt){
+async function fakeClaude(_url, opt){
   const body = JSON.parse(opt.body); claude.push(body);
   log.push(`claude ${body.model} ${body.messages[0].content.length} chars`);
   if(body.output_config?.format){   // a question: propose swapping the first listed session for active recovery, plus one invalid change
@@ -109,7 +109,7 @@ function start(port = 0){
   });
   return new Promise(resolve => server.listen(port, () => resolve({
     url: `http://localhost:${server.address().port}`, log, blobs, claude,
-    setEnv(vars){ for(const [k, v] of Object.entries(vars)) v == null ? delete process.env[k] : process.env[k] = v; },
+    setEnv(vars){ for(const [k, v] of Object.entries(vars)){ if(v == null) delete process.env[k]; else process.env[k] = v; } },
     close: () => new Promise(r => { remote.close(); server.close(r); }),
   })));
 }

@@ -586,7 +586,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
         <p class="full note" style="margin:-4px 0 4px">Besplatan je: na console.cloud.google.com napravi projekt, uključi <b>YouTube Data API v3</b> i pod Credentials stvori API key. Dnevna kvota je dovoljna za oko 100 pretraga. Bez ključa i dalje možeš zalijepiti link.</p>
         <label class="full check"><input name="beep" type="checkbox"> Zvučni signal na promjeni intervala</label>
         <label class="full check"><input name="voice" type="checkbox"> Glasovne najave (sljedeći interval, rezultat intervala i dionice)</label>
-        <label>Jezik najava<select name="voiceLang"><option value="auto">Automatski</option><option value="hr">Hrvatski</option><option value="en">English</option></select></label>
+        <label>Jezik najava<select name="voiceLang"><option value="auto">Automatski</option><option value="hr">Hrvatski</option><option value="en">English</option><option value="hu">Magyar</option></select></label>
         <label>Glas za najave<select name="voiceName" data-notr><option value="">Automatski</option></select></label>
         <div class="full dlg-acts" style="justify-content:flex-start;margin-top:-4px"><button class="btn small" type="button" id="btn-voice-test">Isprobaj glas</button></div>
         <p class="full note" id="voice-note" hidden></p>
@@ -897,6 +897,7 @@ const EN = new Map(Object.entries({
   "Pauziraj video kad pauziram trening": "Pause the video when I pause the workout", "Automatska pauza kad prestanem pedalirati": "Pause automatically when I stop pedalling",
   "Na ovom uređaju nema glasa za najave.": "There is no voice for announcements on this device.",
   "Nema hrvatskog glasa na uređaju, pa su najave na engleskom. Upute su u Postavkama.": "There is no Croatian voice on this device, so announcements are in English.",
+  "Nema mađarskog glasa na uređaju, pa su najave na engleskom. Upute su u Postavkama.": "There is no Hungarian voice on this device, so announcements are in English.",
   "Besplatan servis za analizu treninga. Na intervals.icu otvori": "A free training analysis service. On intervals.icu open", ", stvori": ", create an", "i zalijepi ga ovdje.": "and paste it here.",
   "API ključ": "API key", "intervals.icu API ključ": "intervals.icu API key", "Spremi i provjeri": "Save and check", "Provjeravam…": "Checking…",
   "Automatski pošalji svaku spremljenu vožnju na intervals.icu": "Send every saved ride to intervals.icu automatically",
@@ -1434,11 +1435,11 @@ function lapTick(c, tgt){
     if(!S.lap || S.lap.seg !== c.i){
       const done = lapClose(); if(done) lapResult(done);
       lapOpen({ seg: c.i, name: `Interval ${c.i + 1}`, kind: c.s.free ? "free" : c.s.hr ? "hr" : "power", cadTgt: c.s.cad, note: c.s.note });
-      if(c.i === 0 && S.t <= 1) say(() => `${L("Kreće trening.", "Workout starting.")} ${segSpeech(c.s)}.`);
+      if(c.i === 0 && S.t <= 1) say(() => `${L("Kreće trening.", "Workout starting.", "Kezdődik az edzés.")} ${segSpeech(c.s)}.`);
     }
     // next segment in 10 seconds
     const nx = S.workout.segs[c.i + 1];
-    if(nx && Math.round(c.left) === 10 && c.s.d >= 20) say(() => `${L("Za 10 sekundi:", "In 10 seconds:")} ${segSpeech(nx)}.`);
+    if(nx && Math.round(c.left) === 10 && c.s.d >= 20) say(() => `${L("Za 10 sekundi:", "In 10 seconds:", "10 másodperc múlva:")} ${segSpeech(nx)}.`);
   } else if(!S.workout){
     if(!S.lap) lapOpen({ name: `Dionica ${S.laps.length + 1}`, kind: "dist" });
     else if(S.dist - S.lap.d0 >= LAP_KM * 1000){ lapResult(lapClose()); lapOpen({ name: `Dionica ${S.laps.length + 1}`, kind: "dist" }); }
@@ -1454,7 +1455,7 @@ function lapResult(lap){
     // drills: report the cadence of the drill parts, stay quiet on recoveries
     if(lap.cadTgt[0] >= 100 || lap.cadTgt[1] <= 70){
       notify(`${lap.name}: ${lap.avgCad} rpm (cilj ${cadTxt(lap.cadTgt)})`);
-      say(() => L(`Prosječna kadenca ${lap.avgCad}.`, `Average cadence ${lap.avgCad}.`));
+      say(() => L(`Prosječna kadenca ${lap.avgCad}.`, `Average cadence ${lap.avgCad}.`, `Átlagos kadencia ${lap.avgCad}.`));
     }
     return;
   }
@@ -1462,12 +1463,13 @@ function lapResult(lap){
     notify(`${lap.name}: ${fmtTime(lap.dur)} · ${lap.avgP} W${lap.avgHr ? " · " + lap.avgHr + " bpm" : ""}`);
     const km = Math.round(S.dist / 1000);
     say(() => L(`${km} ${plural(km, "kilometar", "kilometra", "kilometara")}. Zadnjih ${LAP_KM} za ${sayDur(lap.dur)}, prosjek ${watts(lap.avgP)}.`,
-      `${km} kilometers. Last ${LAP_KM} in ${sayDur(lap.dur)}, average ${watts(lap.avgP)}.`));
+      `${km} kilometers. Last ${LAP_KM} in ${sayDur(lap.dur)}, average ${watts(lap.avgP)}.`,
+      `${km} kilométer. Az utolsó ${LAP_KM} kilométer ${sayDur(lap.dur)} alatt, átlag ${watts(lap.avgP)}.`));
   } else if(lap.score != null && lap.dur >= 30 && !S.workout?.test){
     const what = lap.kind === "hr" ? `${lap.avgHr} bpm od ${lap.tgt}` : `${lap.avgP} W od ${lap.tgt}`;
     notify(`${lap.name}: ${what} (${lap.score}%)`);
-    say(() => lap.kind === "hr" ? L(`Interval gotov. Prosječni puls ${lap.avgHr}.`, `Interval done. Average heart rate ${lap.avgHr}.`)
-      : L(`Interval gotov. Prosjek ${watts(lap.avgP)}, ${lap.score} posto.`, `Interval done. Average ${watts(lap.avgP)}, ${lap.score} percent.`));
+    say(() => lap.kind === "hr" ? L(`Interval gotov. Prosječni puls ${lap.avgHr}.`, `Interval done. Average heart rate ${lap.avgHr}.`, `Intervallum kész. Átlagpulzus ${lap.avgHr}.`)
+      : L(`Interval gotov. Prosjek ${watts(lap.avgP)}, ${lap.score} posto.`, `Interval done. Average ${watts(lap.avgP)}, ${lap.score} percent.`, `Intervallum kész. Átlag ${watts(lap.avgP)}, ${lap.score} százalék.`));
   }
 }
 
@@ -1475,39 +1477,49 @@ function lapResult(lap){
    Announcements are spoken entirely in one language. Croatian needs a Croatian voice on the device; without one
    (or when English is picked in Settings) every sentence and number is English, so voices never mix languages. */
 const plural = (n, one, few, many) => { n = Math.abs(Math.round(n)); const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; };
-const isHr = v => /^hr([-_]|$)/i.test(v?.lang || ""), isEn = v => /^en([-_]|$)/i.test(v?.lang || "");
+const isHr = v => /^hr([-_]|$)/i.test(v?.lang || ""), isEn = v => /^en([-_]|$)/i.test(v?.lang || ""), isHu = v => /^hu([-_]|$)/i.test(v?.lang || "");
 const voices = () => window.speechSynthesis?.getVoices() || [];
 let hrVoice = null;   // the voice in use (name kept from when it could only be Croatian)
 /* voice and language: a voice picked by hand wins; otherwise Croatian if asked for (or "auto" with a Croatian interface) and available, else English */
 function pickVoice(){
-  const vs = voices(), byName = vs.find(v => v.voiceURI === settings.voiceName);
+  const vs = voices(), want = settings.voiceLang || "auto", byName = vs.find(v => v.voiceURI === settings.voiceName);
+  if(byName && (want !== "hu" || isHu(byName))) return byName;
+  if(want === "hu") return vs.find(isHu) || vs.find(isEn) || null;
   if(byName) return byName;
-  const want = settings.voiceLang || "auto", hr = vs.find(isHr);
+  const hr = vs.find(isHr);
   if((want === "hr" || want === "auto" && UI === "hr") && hr) return hr;
   return vs.find(v => isEn(v) && /GB|US/i.test(v.lang) && v.localService) || vs.find(isEn) || null;
 }
-const spLang = () => isHr(hrVoice || pickVoice()) ? "hr" : "en";
-const L = (hr, en) => spLang() === "hr" ? hr : en;
-const watts = n => L(`${n} ${plural(n, "vat", "vata", "vata")}`, `${n} ${n === 1 ? "watt" : "watts"}`);
+const spLang = () => isHu(hrVoice || pickVoice()) ? "hu" : isHr(hrVoice || pickVoice()) ? "hr" : "en";
+const L = (hr, en, hu) => spLang() === "hr" ? hr : spLang() === "hu" ? (hu ?? en) : en;
+const watts = n => L(`${n} ${plural(n, "vat", "vata", "vata")}`, `${n} ${n === 1 ? "watt" : "watts"}`, `${n} watt`);
 const NOTE_EN = { "Visoka kadenca, mirno sjedi": "High cadence, stay seated", "Visoka kadenca": "High cadence", "Niska kadenca": "Low cadence",
   "Niska kadenca, teški gaz": "Low cadence, big gear", "Samo lijeva noga": "Left leg only", "Samo desna noga": "Right leg only", "Obje noge": "Both legs" };
+const NOTE_HU = { "Visoka kadenca, mirno sjedi": "Magas kadencia, maradj ülve", "Visoka kadenca": "Magas kadencia", "Niska kadenca": "Alacsony kadencia",
+  "Niska kadenca, teški gaz": "Alacsony kadencia, nehéz fokozat", "Samo lijeva noga": "Csak a bal láb", "Samo desna noga": "Csak a jobb láb", "Obje noge": "Mindkét láb" };
 function sayDur(sec){
-  sec = Math.round(sec); const m = Math.floor(sec / 60), x = sec % 60, hr = spLang() === "hr";
-  const mm = m ? (hr ? `${m} ${plural(m, "minuta", "minute", "minuta")}` : `${m} ${m === 1 ? "minute" : "minutes"}`) : "";
-  const ss = x ? (hr ? `${x} ${plural(x, "sekunda", "sekunde", "sekundi")}` : `${x} ${x === 1 ? "second" : "seconds"}`) : "";
-  return [mm, ss].filter(Boolean).join(hr ? " i " : " and ");
+  sec = Math.round(sec); const m = Math.floor(sec / 60), x = sec % 60, hr = spLang() === "hr", hu = spLang() === "hu";
+  const mm = m ? (hr ? `${m} ${plural(m, "minuta", "minute", "minuta")}` : hu ? `${m} perc` : `${m} ${m === 1 ? "minute" : "minutes"}`) : "";
+  const ss = x ? (hr ? `${x} ${plural(x, "sekunda", "sekunde", "sekundi")}` : hu ? `${x} másodperc` : `${x} ${x === 1 ? "second" : "seconds"}`) : "";
+  return [mm, ss].filter(Boolean).join(hr ? " i " : hu ? " " : " and ");
 }
-const cadSay = ([lo, hi]) => hi >= CAD_ANY ? L(`kadenca ${lo} i više`, `cadence ${lo} or more`) : L(`kadenca ${lo} do ${hi}`, `cadence ${lo} to ${hi}`);
+const cadSay = ([lo, hi]) => hi >= CAD_ANY ? L(`kadenca ${lo} i više`, `cadence ${lo} or more`, `kadencia ${lo} vagy több`) : L(`kadenca ${lo} do ${hi}`, `cadence ${lo} to ${hi}`, `kadencia ${lo} és ${hi} között`);
 function segSpeech(sg){
-  const note = sg.note ? L(sg.note, NOTE_EN[sg.note] || sg.note) + ". " : "", cad = sg.cad ? ", " + cadSay(sg.cad) : "";
+  const note = sg.note ? L(sg.note, NOTE_EN[sg.note] || sg.note, NOTE_HU[sg.note] || sg.note) + ". " : "", cad = sg.cad ? ", " + cadSay(sg.cad) : "";
   return note + segSpeechPower(sg) + cad;
+}
+// Hungarian suffix harmony follows the final spoken word of the number.
+function huSuffix(n){
+  const units = ["as", "es", "es", "as", "es", "ös", "os", "es", "as", "es"];
+  const tens = { 1: "es", 2: "as", 3: "as", 4: "es", 5: "es", 6: "as", 7: "es", 8: "as", 9: "es", 10: "as" };
+  return n % 10 ? units[n % 10] : tens[n === 100 ? 10 : n % 100 / 10] || "as";
 }
 function segSpeechPower(sg){
   const w = S.workout, d = sayDur(sg.d);
-  if(sg.free) return L(`${d} slobodno`, `${d} free riding`);
-  if(sg.hr) return L(`${d} na pulsu ${hrTarget(sg)}`, `${d} at heart rate ${hrTarget(sg)}`);
+  if(sg.free) return L(`${d} slobodno`, `${d} free riding`, `${d} szabadon`);
+  if(sg.hr) return L(`${d} na pulsu ${hrTarget(sg)}`, `${d} at heart rate ${hrTarget(sg)}`, `${d} ${hrTarget(sg)}-${huSuffix(hrTarget(sg))} pulzuson`);
   const a = Math.round(toWatts(w, sg.lo) * S.bias), b = Math.round(toWatts(w, sg.hi) * S.bias);
-  return Math.abs(a - b) < 5 ? L(`${d} na ${watts(a)}`, `${d} at ${watts(a)}`) : L(`${d}, od ${a} do ${watts(b)}`, `${d}, from ${a} to ${watts(b)}`);
+  return Math.abs(a - b) < 5 ? L(`${d} na ${watts(a)}`, `${d} at ${watts(a)}`, `${d} ${watts(a)}on`) : L(`${d}, od ${a} do ${watts(b)}`, `${d}, from ${a} to ${watts(b)}`, `${d}, ${a}-tól ${watts(b)}on`);
 }
 function say(text, force = false){
   if(!(settings.voice || force) || !("speechSynthesis" in window)) return;
@@ -1515,20 +1527,22 @@ function say(text, force = false){
     hrVoice ||= pickVoice();
     if(!hrVoice) return;
     if(settings.voiceLang === "hr" && !isHr(hrVoice) && !say.warned){ say.warned = true; notify("Nema hrvatskog glasa na uređaju, pa su najave na engleskom. Upute su u Postavkama."); }
+    if(settings.voiceLang === "hu" && !isHu(hrVoice) && !say.warned){ say.warned = true; notify("Nema mađarskog glasa na uređaju, pa su najave na engleskom. Upute su u Postavkama."); }
     const u = new SpeechSynthesisUtterance(typeof text === "function" ? text() : text); u.voice = hrVoice; u.lang = hrVoice.lang; u.rate = 1.05;
     duckStart(u); speechSynthesis.speak(u);
   }catch{}
 }
 function fillVoices(){
-  const f = $("#settings-form"), sel = f.voiceName, vs = voices(), hr = vs.filter(isHr), en = vs.filter(v => isEn(v) && !hr.includes(v));
-  sel.innerHTML = `<option value="">${tr("Automatski")}</option>` + [...hr, ...en, ...vs.filter(v => !hr.includes(v) && !en.includes(v))]
+  const f = $("#settings-form"), sel = f.voiceName, vs = voices(), hr = vs.filter(isHr), hu = vs.filter(isHu), en = vs.filter(v => isEn(v) && !hr.includes(v));
+  sel.innerHTML = `<option value="">${tr("Automatski")}</option>` + [...hr, ...hu, ...en, ...vs.filter(v => !hr.includes(v) && !hu.includes(v) && !en.includes(v))]
     .map(v => `<option value="${v.voiceURI.replace(/"/g, "&quot;")}">${v.name.replace(/</g, "")} · ${v.lang}</option>`).join("");
   sel.value = vs.some(v => v.voiceURI === settings.voiceName) ? settings.voiceName : "";
   f.voiceLang.value = settings.voiceLang || "auto";
   const note = $("#voice-note"), using = pickVoice();
   note.hidden = !vs.length;
   note.innerHTML = !using ? "Na ovom uređaju nema glasa za najave."
-    : ui(`Najave su na jeziku: <b>${isHr(using) ? "hrvatski" : "engleski"}</b>`, `Announcements are in <b>${isHr(using) ? "Croatian" : "English"}</b>`) + ` (${using.name.replace(/</g, "")}).`
+    : !hu.length && settings.voiceLang === "hu" ? ui("Nema mađarskog glasa; najave su na engleskom. Instaliraj: Postavke → Opće upravljanje → Jezik → Pretvaranje teksta u govor → Speech Services by Google → Instaliraj glasovne podatke → Mađarski.", "Hungarian voice missing; announcements fall back to English. Android: Text-to-speech → Speech Services by Google → Install voice data → Hungarian.")
+    : ui(`Najave su na jeziku: <b>${isHr(using) ? "hrvatski" : isHu(using) ? "mađarski" : "engleski"}</b>`, `Announcements are in <b>${isHr(using) ? "Croatian" : isHu(using) ? "Hungarian" : "English"}</b>`) + ` (${using.name.replace(/</g, "")}).`
       + (hr.length || UI !== "hr" ? "" : " Za hrvatske najave instaliraj hrvatski glas: <b>Postavke → Opće upravljanje → Jezik → Pretvaranje teksta u govor → Google → Instaliraj glasovne podatke → Hrvatski</b> (na Samsung tabletu: potraži <b>Tekst u govor</b>), pa ponovno otvori Pedalu.");
 }
 window.speechSynthesis?.addEventListener?.("voiceschanged", () => { hrVoice = null; say.warned = false; if($("#view-settings").classList.contains("active")) fillVoices(); });
@@ -1630,7 +1644,7 @@ function start(){
 }
 function pause(auto){ S.running = false; S.autoPaused = !!auto; S.soft = null; applyControl(); if(settings.pauseVideo) yt("pauseVideo"); if(auto) notify("Pauza: nastavi pedalirati za nastavak"); render(); }
 function resume(){ S.running = true; S.autoPaused = false; S.idle = 0; softStart(); S.hrHold = 60; applyControl(); yt("playVideo"); toast("Nastavljam"); }
-function finishWorkout(){ S.running = false; S.soft = null; applyControl(); if(settings.beep) beep(660, .4); say(() => S.route ? L("Stigao si na cilj.", "You made it to the finish.") : L("Trening je gotov. Bravo.", "Workout complete. Well done.")); openSummary(); }
+function finishWorkout(){ S.running = false; S.soft = null; applyControl(); if(settings.beep) beep(660, .4); say(() => S.route ? L("Stigao si na cilj.", "You made it to the finish.", "Célba értél.") : L("Trening je gotov. Bravo.", "Workout complete. Well done.", "Vége az edzésnek. Szép munka.")); openSummary(); }
 
 /* ============ metrics ============ */
 function metrics(samples, ftp){
@@ -1929,7 +1943,7 @@ $("#mus-play").onclick = () => { musicOn = !musicOn; musicCmd(musicOn ? "playVid
 $("#mus-min").onclick = () => { const m = $("#music"); m.classList.toggle("min"); $("#mus-min").textContent = m.classList.contains("min") ? "+" : "–"; };
 $("#btn-dash").onclick = () => setDash();
 $("#vid-long").addEventListener("change", () => renderFeed());
-$("#btn-voice-test").onclick = () => { hrVoice = null; fillVoices(); say(() => L("Za 10 sekundi: 3 minute na 265 vata, kadenca 90 do 100.", "In 10 seconds: 3 minutes at 265 watts, cadence 90 to 100."), true); };
+$("#btn-voice-test").onclick = () => { hrVoice = null; fillVoices(); say(() => L("Za 10 sekundi: 3 minute na 265 vata, kadenca 90 do 100.", "In 10 seconds: 3 minutes at 265 watts, cadence 90 to 100.", "10 másodperc múlva: 3 perc 265 watton, kadencia 90 és 100 között"), true); };
 
 /* ============ sound + wake lock ============ */
 let actx;
@@ -2821,25 +2835,25 @@ $("#dlg-sess").addEventListener("click", e => { if(e.target === $("#dlg-sess")) 
    weeks 4, 8 and 12 have a round less. Sessions run in a guided player with a countdown and voice cues, and a
    strength session recorded on a watch ticks off by itself once it reaches intervals.icu. */
 const EX = {
-  squat:     [["Čučanj", "Squat"], ["Stopala u širini ramena, kukovi unatrag kao da sjedaš, koljena prate prste, leđa ravna.", "Feet shoulder-width, hips back as if sitting down, knees over toes, back straight."]],
-  lunge:     [["Iskorak unazad, naizmjenično", "Reverse lunge, alternating"], ["Korak unatrag i spusti stražnje koljeno prema podu; prednje koljeno iznad stopala.", "Step back and lower the back knee towards the floor; front knee above the foot."]],
-  bridge:    [["Most za stražnjicu", "Glute bridge"], ["Na leđima, stopala na podu: podigni kukove i stisni stražnjicu, pa se polako spusti.", "On your back, feet on the floor: lift your hips and squeeze your glutes, then lower slowly."]],
-  sideLunge: [["Iskorak u stranu, naizmjenično", "Side lunge, alternating"], ["Široki korak u stranu, sjedni na tu nogu, druga ostaje ispružena.", "Wide step to the side, sit into that leg, the other stays straight."]],
-  wallSit:   [["Sjedenje uz zid", "Wall sit"], ["Leđa uz zid, koljena pod pravim kutom (ili više ako je preteško).", "Back against the wall, knees at a right angle (or higher if that is too hard)."]],
-  calf:      [["Podizanje na prste", "Calf raise"], ["Polako gore na prste i polako dolje; drži se za stolicu.", "Slowly up onto your toes and slowly down; hold a chair."]],
-  pushup:    [["Sklek", "Push-up"], ["Na koljenima ili uz rub stola ako je teško; tijelo ravno, prsa prema podu.", "On your knees or against a table edge if it is hard; body straight, chest towards the floor."]],
-  dips:      [["Propadanje na stolici", "Chair dips"], ["Dlanovi na rub stolice iza sebe, savij laktove unatrag i podigni se.", "Hands on the chair edge behind you, bend your elbows back and push up."]],
-  superman:  [["Superman", "Superman"], ["Na trbuhu: podigni ruke i noge malo od poda, pogled prema podu.", "On your front: lift arms and legs slightly off the floor, look at the floor."]],
-  plank:     [["Plank na podlakticama", "Forearm plank"], ["Laktovi ispod ramena, tijelo ravno od glave do peta; može i na koljenima.", "Elbows under shoulders, body straight from head to heels; on your knees is fine."]],
-  sidePlank: [["Bočni plank, pola vremena svaka strana", "Side plank, half the time each side"], ["Na podlaktici i boku stopala (ili koljena), kukovi gore.", "On your forearm and the side of your foot (or knee), hips up."]],
-  deadBug:   [["Mrtva buba", "Dead bug"], ["Na leđima, ruke i koljena gore: polako ispruži suprotnu ruku i nogu, donji dio leđa ostaje na podu.", "On your back, arms and knees up: slowly stretch out the opposite arm and leg, lower back stays on the floor."]],
-  climber:   [["Penjač", "Mountain climber"], ["U položaju skleka naizmjence privlači koljena prsima; brzina po osjećaju.", "In a push-up position, bring your knees to your chest in turn; pace by feel."]],
-  tap:       [["Plank s dodirom ramena", "Plank shoulder taps"], ["U položaju skleka naizmjence dodirni suprotno rame; kukovi mirni.", "In a push-up position, touch the opposite shoulder in turn; hips still."]],
+  squat:     [["Čučanj", "Squat", "Guggolás"], ["Stopala u širini ramena, kukovi unatrag kao da sjedaš, koljena prate prste, leđa ravna.", "Feet shoulder-width, hips back as if sitting down, knees over toes, back straight."]],
+  lunge:     [["Iskorak unazad, naizmjenično", "Reverse lunge, alternating", "Hátralépés, váltakozva"], ["Korak unatrag i spusti stražnje koljeno prema podu; prednje koljeno iznad stopala.", "Step back and lower the back knee towards the floor; front knee above the foot."]],
+  bridge:    [["Most za stražnjicu", "Glute bridge", "Farizomhíd"], ["Na leđima, stopala na podu: podigni kukove i stisni stražnjicu, pa se polako spusti.", "On your back, feet on the floor: lift your hips and squeeze your glutes, then lower slowly."]],
+  sideLunge: [["Iskorak u stranu, naizmjenično", "Side lunge, alternating", "Oldalra lépés, váltakozva"], ["Široki korak u stranu, sjedni na tu nogu, druga ostaje ispružena.", "Wide step to the side, sit into that leg, the other stays straight."]],
+  wallSit:   [["Sjedenje uz zid", "Wall sit", "Falnál ülés"], ["Leđa uz zid, koljena pod pravim kutom (ili više ako je preteško).", "Back against the wall, knees at a right angle (or higher if that is too hard)."]],
+  calf:      [["Podizanje na prste", "Calf raise", "Lábujjhegyre emelkedés"], ["Polako gore na prste i polako dolje; drži se za stolicu.", "Slowly up onto your toes and slowly down; hold a chair."]],
+  pushup:    [["Sklek", "Push-up", "Fekvőtámasz"], ["Na koljenima ili uz rub stola ako je teško; tijelo ravno, prsa prema podu.", "On your knees or against a table edge if it is hard; body straight, chest towards the floor."]],
+  dips:      [["Propadanje na stolici", "Chair dips", "Támasz a széken"], ["Dlanovi na rub stolice iza sebe, savij laktove unatrag i podigni se.", "Hands on the chair edge behind you, bend your elbows back and push up."]],
+  superman:  [["Superman", "Superman", "Superman"], ["Na trbuhu: podigni ruke i noge malo od poda, pogled prema podu.", "On your front: lift arms and legs slightly off the floor, look at the floor."]],
+  plank:     [["Plank na podlakticama", "Forearm plank", "Plank alkaron"], ["Laktovi ispod ramena, tijelo ravno od glave do peta; može i na koljenima.", "Elbows under shoulders, body straight from head to heels; on your knees is fine."]],
+  sidePlank: [["Bočni plank, pola vremena svaka strana", "Side plank, half the time each side", "Oldalsó plank, fél idő mindkét oldal"], ["Na podlaktici i boku stopala (ili koljena), kukovi gore.", "On your forearm and the side of your foot (or knee), hips up."]],
+  deadBug:   [["Mrtva buba", "Dead bug", "Holtbogár"], ["Na leđima, ruke i koljena gore: polako ispruži suprotnu ruku i nogu, donji dio leđa ostaje na podu.", "On your back, arms and knees up: slowly stretch out the opposite arm and leg, lower back stays on the floor."]],
+  climber:   [["Penjač", "Mountain climber", "Hegymászó"], ["U položaju skleka naizmjence privlači koljena prsima; brzina po osjećaju.", "In a push-up position, bring your knees to your chest in turn; pace by feel."]],
+  tap:       [["Plank s dodirom ramena", "Plank shoulder taps", "Plank vállérintéssel"], ["U položaju skleka naizmjence dodirni suprotno rame; kukovi mirni.", "In a push-up position, touch the opposite shoulder in turn; hips still."]],
 };
-const WARMUP = [[["Hodanje u mjestu, koljena gore", "Marching on the spot, knees up"], 60], [["Krugovi rukama naprijed i natrag", "Arm circles forwards and back"], 30],
-  [["Krugovi kukovima", "Hip circles"], 30], [["Čučanj do pola, polako", "Half squat, slowly"], 30], [["Iskorak unazad, lagano", "Easy reverse lunge"], 30], [["Zamasi nogama uz zid", "Leg swings at a wall"], 30]];
-const COOLDOWN = [[["Istezanje prednje lože, lijeva noga", "Quad stretch, left leg"], 30], [["Istezanje prednje lože, desna noga", "Quad stretch, right leg"], 30],
-  [["Istezanje stražnje lože, sjedeći", "Hamstring stretch, seated"], 40], [["Istezanje prsa uz okvir vrata", "Chest stretch in a doorway"], 30], [["Istezanje leđa: sjedni na pete, ruke naprijed", "Back stretch: sit on your heels, arms forward"], 40]];
+const WARMUP = [[["Hodanje u mjestu, koljena gore", "Marching on the spot, knees up", "Helyben menetelés, térd fel"], 60], [["Krugovi rukama naprijed i natrag", "Arm circles forwards and back", "Karkörzés előre-hátra"], 30],
+  [["Krugovi kukovima", "Hip circles", "Csípőkörzés"], 30], [["Čučanj do pola, polako", "Half squat, slowly", "Félguggolás, lassan"], 30], [["Iskorak unazad, lagano", "Easy reverse lunge", "Könnyű hátralépés"], 30], [["Zamasi nogama uz zid", "Leg swings at a wall", "Láb lendítése a falnál"], 30]];
+const COOLDOWN = [[["Istezanje prednje lože, lijeva noga", "Quad stretch, left leg", "Comb elülső izmának nyújtása, bal láb"], 30], [["Istezanje prednje lože, desna noga", "Quad stretch, right leg", "Comb elülső izmának nyújtása, jobb láb"], 30],
+  [["Istezanje stražnje lože, sjedeći", "Hamstring stretch, seated", "Comb hátsó izmának nyújtása, ülve"], 40], [["Istezanje prsa uz okvir vrata", "Chest stretch in a doorway", "Mellkasnyújtás ajtófélfánál"], 30], [["Istezanje leđa: sjedni na pete, ruke naprijed", "Back stretch: sit on your heels, arms forward", "Hátnyújtás: ülj a sarkadra, karok előre"], 40]];
 const CIRCUITS = { A: ["squat", "lunge", "bridge", "sideLunge", "wallSit", "calf"], B: ["pushup", "dips", "superman", "plank", "sidePlank", "deadBug"], C: ["squat", "pushup", "lunge", "climber", "tap", "bridge"] };
 const CIRCUIT_NAME = { A: ["noge i stražnjica", "legs and glutes"], B: ["gornji dio i trup", "upper body and core"], C: ["cijelo tijelo", "full body"] };
 const STRENGTH = { id: "snaga12", weeks: 12, deload: [4, 8, 12], days: [["mon", 0, "Pon", "A"], ["wed", 2, "Sri", "B"], ["fri", 4, "Pet", "C"]] };
@@ -2885,8 +2899,8 @@ function wkNext(){
   $("#wk-cue").textContent = st.c ? ui(...st.c) : "";
   $("#wk-next").textContent = nx ? `${tr("Sljedeće")}: ${name(nx)}` : tr("Zadnja vježba");
   $("#dlg-strength").dataset.kind = st.kind;
-  if(st.kind === "rest") say(() => L(`Odmor. Sljedeće: ${spoken(nx)}.`, `Rest. Next: ${spoken(nx)}.`));
-  else say(() => st.kind === "work" ? L(`${spoken(st)}, ${st.s} sekundi.`, `${spoken(st)}, ${st.s} seconds.`) : spoken(st));
+  if(st.kind === "rest") say(() => L(`Odmor. Sljedeće: ${spoken(nx)}.`, `Rest. Next: ${spoken(nx)}.`, `Pihenő. Következik: ${spoken(nx)}.`));
+  else say(() => st.kind === "work" ? L(`${spoken(st)}, ${st.s} sekundi.`, `${spoken(st)}, ${st.s} seconds.`, `${spoken(st)}, ${st.s} másodperc.`) : spoken(st));
   wkRender();
 }
 function wkTick(){
@@ -2906,7 +2920,7 @@ function wkFinish(complete){
   const share = (WK.done + (WK.steps[WK.i] ? WK.steps[WK.i].s - WK.left : 0)) / WK.total;
   if($("#dlg-strength").open) $("#dlg-strength").close();
   if(complete || share >= .5){
-    if(complete) say(() => L("Trening je gotov. Bravo.", "Workout complete. Well done."));
+    if(complete) say(() => L("Trening je gotov. Bravo.", "Workout complete. Well done.", "Vége az edzésnek. Szép munka."));
     if(WK.sess && plan()) planUpdate(p => { p.done = { ...p.done, [WK.sess]: "app:" + Date.now() }; if(p.skipped) delete p.skipped[WK.sess]; });
     toast(tr("Trening snage je odrađen"));
   }

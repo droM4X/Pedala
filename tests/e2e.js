@@ -87,6 +87,67 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await a.context().close(); await b.context().close();
   });
 
+  await test("voice: Hungarian is spoken when picked by hand, and falls back with a notice without a Hungarian voice", async () => {
+    const hu = await open({ voices: [["Google magyar", "hu-HU"], ["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
+    await hu.click('[data-view="settings"]'); await hu.click("#btn-voice-test"); await hu.waitForTimeout(300);
+    const sentence = (await hu.evaluate(() => __spoken))[0];
+    assert.match(sentence, /10 másodperc/, sentence);
+    assert.match(sentence, /perc/, sentence);
+    assert.doesNotMatch(sentence, /sekundi|vata|kadenca|vat\\b/, "no Croatian words in a Hungarian sentence: " + sentence);
+    await hu.click('[data-view="ride"]');
+    await hu.evaluate(() => { S.workout = { ftp: 230 }; say(() => segSpeech({ d: 200, lo: 1, hi: 1, cad: [90, 100] }), true); }); await hu.waitForTimeout(300);
+    const workoutSentence = (await hu.evaluate(() => __spoken))[1];
+    assert.match(workoutSentence, /3 perc 20 másodperc/, workoutSentence);
+    assert.match(workoutSentence, /watton/, workoutSentence);
+    assert.match(workoutSentence, /kadencia 90 és 100 között/, workoutSentence);
+    assert.doesNotMatch(workoutSentence, /vat\\b|sekundi|kadenca/, workoutSentence);
+    await hu.evaluate(() => say(() => segSpeech({ d: 200, free: true, note: "Visoka kadenca, mirno sjedi", cad: [90, CAD_ANY] }), true)); await hu.waitForTimeout(300);
+    const cueSentence = (await hu.evaluate(() => __spoken)).at(-1);
+    assert.match(cueSentence, /Magas kadencia, maradj ülve/, cueSentence);
+    assert.match(cueSentence, /kadencia 90 vagy több/, cueSentence);
+    assert.doesNotMatch(cueSentence, /Visoka|kadenca|sekundi/, cueSentence);
+    await hu.evaluate(() => { hrVoice = pickVoice(); S.workout = { ftp: 200 }; S.hrOff = 0; say(() => segSpeechPower({ d: 180, hr: 145 / settings.maxHr }), true); });
+    await hu.waitForTimeout(300);
+    const hrSentence = (await hu.evaluate(() => __spoken)).at(-1);
+    assert.match(hrSentence, /145-ös pulzuson/, hrSentence);
+    await hu.evaluate(() => say(() => segSpeechPower({ d: 180, hr: 150 / settings.maxHr }), true)); await hu.waitForTimeout(300);
+    assert.match((await hu.evaluate(() => __spoken)).at(-1), /150-es pulzuson/);
+    await hu.evaluate(() => { S.workout = null; S.dist = 12000; lapResult({ kind: "dist", dur: 200, avgP: 250 }); }); await hu.waitForTimeout(300);
+    const lapSentence = (await hu.evaluate(() => __spoken)).at(-1);
+    assert.match(lapSentence, /12 kilométer/, lapSentence);
+
+    await hu.context().close();
+    const none = await open({ voices: [["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
+    await none.click('[data-view="settings"]'); await none.waitForTimeout(200);
+    assert.match(await none.textContent("#voice-note"), /Hungarian/);
+    await none.click("#btn-voice-test"); await none.waitForTimeout(300);
+    assert.match((await none.evaluate(() => __spoken))[0], /^In 10 seconds/);
+    await none.context().close();
+  });
+  await test("voice: the Settings offer Hungarian, name it, and notice when the device has no Hungarian voice", async () => {
+    const ok = await open({ voices: [["Google magyar", "hu-HU"], ["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
+    await ok.click('[data-view="settings"]'); await ok.waitForTimeout(200);
+    assert.equal(await ok.evaluate(() => __pedala.S && document.querySelector('[name="voiceLang"] option[value="hu"]')?.textContent.trim()), "Magyar");
+    assert.match(await ok.textContent("#voice-note"), /Announcements are in Hungarian/, "the note says announcements are in Hungarian");
+    await ok.context().close();
+
+    const none = await open({ voices: [["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
+    await none.click('[data-view="settings"]'); await none.waitForTimeout(200);
+    assert.match(await none.textContent("#voice-note"), /Hungarian voice missing; announcements fall back to English/, "the note names Hungarian as missing and English as the fallback");
+    await none.context().close();
+
+    const croatian = await open({ voices: [["Google hrvatski", "hr-HR"], ["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", voiceName: "Google hrvatski", uiLang: "en" } });
+    await croatian.click('[data-view="settings"]'); await croatian.click("#btn-voice-test"); await croatian.waitForTimeout(300);
+    assert.match((await croatian.evaluate(() => __spoken))[0], /^In 10 seconds/, "a saved Croatian voice cannot override Hungarian mode's English fallback");
+    await croatian.context().close();
+  });
+  await test("voice: auto never picks Hungarian, even in a Hungarian browser", async () => {
+    const p = await open({ locale: "hu-HU", voices: [["Google magyar", "hu-HU"], ["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "auto" } });
+    await p.click('[data-view="settings"]'); await p.click("#btn-voice-test"); await p.waitForTimeout(300);
+    assert.match((await p.evaluate(() => __spoken))[0], /^In 10 seconds/);
+    await p.context().close();
+  });
+
   await test("voice: everything English without a Croatian voice, Croatian with one; YouTube is turned down while speaking", async () => {
     const en = await open({ voices: [["Samsung English", "en-US"]] });
     await en.click('[data-view="settings"]'); await en.click("#btn-voice-test"); await en.waitForTimeout(300);
@@ -283,6 +344,19 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.match(spoken, /Čučanj, 30 sekundi/); assert.match(spoken, /Odmor\. Sljedeće: Iskorak unazad/); assert.match(spoken, /Trening je gotov/);
     assert.ok(await p.evaluate(() => findWorkout("s-B-5")?.name.startsWith("Snaga B")), "the coach can swap a session for another circuit");
     await p.context().close();
+    const hu = await open({ voices: [["Google magyar", "hu-HU"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
+    const missing = await hu.evaluate(() => {
+      const nameTriples = [...Object.values(EX).map(x => x[0]), ...WARMUP.map(w => w[0]), ...COOLDOWN.map(c => c[0])];
+      return { count: nameTriples.length, missing: nameTriples.filter(perLanguageNames => perLanguageNames[2] === undefined).map(perLanguageNames => perLanguageNames[0]) };
+    });
+    assert.equal(missing.count, 25, "fourteen exercises, six warm-up and five cool-down names");
+    assert.deepEqual(missing.missing, [], "every spoken movement name has a Hungarian form");
+    await hu.evaluate(() => startStrength({ name: "test", steps: [{ kind: "rest", s: 30 }, { kind: "work", n: EX.squat[0], s: 30 }], min: 1 }));
+    await hu.waitForTimeout(300);
+    const huStrength = (await hu.evaluate(() => __spoken))[0];
+    assert.match(huStrength, /Guggolás/, huStrength);
+    assert.doesNotMatch(huStrength, /Squat|Push-up|Reverse lunge/, huStrength);
+    await hu.evaluate(() => { clearInterval(WK.timer); WK.timer = null; }); await hu.context().close();
   });
 
   await test("profiles: a second person has her own data on her own phone", async () => {
@@ -321,16 +395,17 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
   await test("remote: the phone shifts the running ride, and the chip follows it", async () => {
     const p = await open();
-    await p.waitForFunction(() => __pedala.S.gear === 10);
+    await p.waitForFunction(() => Number.isFinite(__pedala.S.gear));
+    const g0 = await p.evaluate(() => __pedala.S.gear);
     const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true, locale: "en-US" });
     const ph = await ctx.newPage(); ph.on("pageerror", e => pageErrors.push(e.message));
     await ph.goto(B + "/gear.html");
     await ph.waitForFunction(() => document.querySelector("#dot").classList.contains("on"), null, { timeout: 5000 });
-    assert.equal(await ph.textContent("#value"), "10", "the phone shows the gear the ride reports");
+    await ph.waitForFunction(g => document.querySelector("#value").textContent === String(g), g0, { timeout: 5000 });
     assert.equal(await ph.textContent("#title"), "Pedala remote", "the connected title is restored");
     await ph.click("#up");
-    await p.waitForFunction(() => __pedala.S.gear === 11, null, { timeout: 3000 });
-    await ph.waitForFunction(() => document.querySelector("#value").textContent === "11", null, { timeout: 3000 });
+    await p.waitForFunction(g => __pedala.S.gear === g + 1, g0, { timeout: 3000 });
+    await ph.waitForFunction(g => document.querySelector("#value").textContent === String(g + 1), g0, { timeout: 3000 });
     assert.equal(await p.evaluate(() => document.querySelector("#chip-remote").classList.contains("on")), true);
     await ctx.close();
     await p.waitForFunction(() => !document.querySelector("#chip-remote").classList.contains("on"), null, { timeout: 5000 });
@@ -338,7 +413,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   });
   await test("remote: reconnect escalation preserves address and manual retry connects", async () => {
     const p = await open();
-    await p.waitForFunction(() => __pedala.S.gear === 10);
+    await p.waitForFunction(() => Number.isFinite(__pedala.S.gear));
+    const g0 = await p.evaluate(() => __pedala.S.gear);
     const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true, locale: "en-US" });
     const ph = await ctx.newPage(); ph.on("pageerror", e => pageErrors.push(e.message));
     await ph.addInitScript(() => {
@@ -363,7 +439,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.equal(await ph.inputValue("#addr"), B, "the reconnect form is prefilled with the server URL");
     await ph.click('#conn button[type="submit"]');
     await ph.waitForFunction(() => document.querySelector("#dot").classList.contains("on"), null, { timeout: 5000 });
-    assert.equal(await ph.textContent("#value"), "10", "manual retry receives the ride gear");
+    await ph.waitForFunction(g => document.querySelector("#value").textContent === String(g), g0, { timeout: 5000 });
     await ctx.close();
     await p.context().close();
   });
