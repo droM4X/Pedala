@@ -440,6 +440,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const ph = await ctx.newPage(); ph.on("pageerror", e => pageErrors.push(e.message));
     await ph.goto(B + "/gear.html");
     await ph.waitForFunction(() => document.querySelector("#dot").classList.contains("on"), null, { timeout: 5000 });
+    assert.equal(await ph.evaluate(() => document.querySelector("#fin").disabled), true, "connected, but the ride has not started: finish is disabled");
     await ph.click("#go");
     await p.waitForFunction(() => __pedala.S.running === true, null, { timeout: 3000 });
     await p.waitForTimeout(300);   // 30 simulated seconds: enough samples for a summary
@@ -548,8 +549,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   });
 
   await test("ovl: distance has its own box before cadence, speed is always shown", async () => {
-    const p = await open();
-    await p.click("#btn-dash"); await p.evaluate(() => render()); await p.waitForTimeout(200);
+  const p = await open();
+  await p.click("#btn-dash"); await p.evaluate(() => render()); await p.waitForTimeout(200);
+  assert.ok(await p.evaluate(() => document.querySelector("#o-hr-box").hidden), "default settings: no heart-rate box without the toggle");
     await p.waitForFunction(() => !document.querySelector("#ovl").hidden && document.querySelector("#ovl").offsetParent !== null);
     const order = await p.evaluate(() => [...document.querySelectorAll("#ovl > div")].map(d => d.id));
     assert.ok(order.indexOf("o-dist-box") >= 0 && order.indexOf("o-dist-box") < order.indexOf("o-cad-box"), "distance before cadence");
