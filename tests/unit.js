@@ -152,6 +152,8 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
   const waitFor = async (f, ms = 2000) => { const t0 = Date.now();
     while(Date.now() - t0 < ms){ if(f()) return; await new Promise(r => setTimeout(r, 20)); } throw new Error("timeout"); };
   const post = (base, path, body) => fetch(base + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const once = async (c, event) => { await waitFor(() => c.box.events.some(e => e.event === event)); return c.box.events.find(e => e.event === event).data; };
+  const pick = (o, keys) => Object.fromEntries(keys.map(k => [k, o[k]]));
 
   await test("remote: a shift from the phone reaches the ride page", async () => {
     const s = await relay();
@@ -222,6 +224,27 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
       const opt = await fetch(s.base + "/__remote/shift", { method: "OPTIONS" });
       assert.equal(opt.status, 204); assert.equal(opt.headers.get("access-control-allow-origin"), "*");
       assert.match(opt.headers.get("access-control-allow-headers"), /content-type/);
+    }finally{ await s.close(); }
+  });
+  await test("remote: control reaches the ride page, invalid actions are rejected", async () => {
+    const s = await relay();
+    try{
+      const ride = await sse(s.base + "/__remote/events?role=ride");
+      assert.equal((await post(s.base, "/__remote/control", { a: "finish" })).status, 204);
+      assert.equal((await post(s.base, "/__remote/control", { a: "stop" })).status, 400);
+      assert.equal((await post(s.base, "/__remote/control", {})).status, 400);
+      const m = await once(ride, "control"); assert.equal(m.a, "finish");
+      ride.end();
+    }finally{ await s.close(); }
+  });
+  await test("remote: state carries started/running, and stays valid without them", async () => {
+    const s = await relay();
+    try{
+      assert.equal((await post(s.base, "/__remote/state", { gear: 7, mode: "gear", bias: 1, hrOff: 0, started: true, running: false })).status, 204);
+      const phone = await sse(s.base + "/__remote/events?role=phone");
+      assert.deepEqual(pick(await once(phone, "hello"), ["started", "running"]), { started: true, running: false });
+      assert.equal((await post(s.base, "/__remote/state", { gear: 7, mode: "gear", bias: 1, hrOff: 0 })).status, 204, "old payload still valid");
+      phone.end();
     }finally{ await s.close(); }
   });
   await test("remote: http links for the phone, using the LAN address instead of localhost", () => {

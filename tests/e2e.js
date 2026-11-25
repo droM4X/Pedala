@@ -189,7 +189,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   });
 
   await test("Zwift Click v2: each pod is its own + or − device, or both directions on one pod", async () => {
-    const p = await open();
+    const p = await open({ settings: { clickOn: true } });
     await p.evaluate(() => {
       const mk = (id, role = null) => { const z = new ZwiftClick(role); z.device = { id, gatt: { connected: true } }; z.kind = "ride"; S.clicks.push(z); return z; };
       window.__r = mk("podRIGHT"); window.__l = mk("podLEFT1");
@@ -393,6 +393,27 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.context().close();
   });
 
+  await test("remote: control from outside starts, pauses and finishes the ride", async () => {
+    const p = await open({ speed: 100 });
+    await p.click("#chip-trainer"); await p.click("#c-sim");
+    await p.waitForFunction(() => __pedala.remote?.es?.readyState === 1);
+    assert.equal(await p.evaluate(() => __pedala.S.started), false, "fresh page: the ride has not started");
+    const post = a => fetch(B + "/__remote/control", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ a }) });
+    await post("start");
+    await p.waitForFunction(() => __pedala.S.running === true);
+    await p.waitForTimeout(300);   // 30 simulated seconds: enough samples for a summary
+    await post("start");
+    await p.waitForFunction(() => __pedala.S.running === false);
+    await post("finish");
+    await p.waitForFunction(() => document.querySelector("#dlg-summary").open);
+    await post("finish");
+    await new Promise(r => setTimeout(r, 300));
+    assert.ok(await p.evaluate(() => document.querySelector("#dlg-summary").open), "finish ignored under the summary");
+    await post("start");
+    await p.waitForFunction(() => !document.querySelector("#dlg-summary").open && __pedala.S.running === true);
+    await p.context().close();
+  });
+
   await test("remote: the phone shifts the running ride, and the chip follows it", async () => {
     const p = await open();
     await p.waitForFunction(() => Number.isFinite(__pedala.S.gear));
@@ -409,6 +430,31 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.equal(await p.evaluate(() => document.querySelector("#chip-remote").classList.contains("on")), true);
     await ctx.close();
     await p.waitForFunction(() => !document.querySelector("#chip-remote").classList.contains("on"), null, { timeout: 5000 });
+    await p.context().close();
+  });
+  await test("remote: the phone starts, pauses and finishes with a confirm dialog", async () => {
+    const p = await open({ speed: 100 });
+    await p.click("#chip-trainer"); await p.click("#c-sim");
+    await p.waitForFunction(() => __pedala.remote?.es?.readyState === 1);
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true, locale: "en-US" });
+    const ph = await ctx.newPage(); ph.on("pageerror", e => pageErrors.push(e.message));
+    await ph.goto(B + "/gear.html");
+    await ph.waitForFunction(() => document.querySelector("#dot").classList.contains("on"), null, { timeout: 5000 });
+    assert.equal(await ph.evaluate(() => document.querySelector("#fin").disabled), true, "connected, but the ride has not started: finish is disabled");
+    await ph.click("#go");
+    await p.waitForFunction(() => __pedala.S.running === true, null, { timeout: 3000 });
+    await p.waitForTimeout(300);   // 30 simulated seconds: enough samples for a summary
+    await ph.waitForFunction(() => document.querySelector("#go").textContent === "Pause", null, { timeout: 3000 });
+    await ph.click("#go");
+    await p.waitForFunction(() => __pedala.S.running === false, null, { timeout: 3000 });
+    await ph.waitForFunction(() => document.querySelector("#go").textContent === "Start", null, { timeout: 3000 });
+    await ph.click("#fin");
+    await ph.waitForFunction(() => document.querySelector("#confirm").open);
+    await ph.click("#fin-no");                            // cancel: the ride is not finished
+    assert.ok(await p.evaluate(() => !document.querySelector("#dlg-summary").open));
+    await ph.click("#fin"); await ph.click("#fin-yes");
+    await p.waitForFunction(() => document.querySelector("#dlg-summary").open, null, { timeout: 3000 });
+    await ctx.close();
     await p.context().close();
   });
   await test("remote: reconnect escalation preserves address and manual retry connects", async () => {
@@ -502,8 +548,25 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.context().close();
   });
 
+  await test("ovl: distance has its own box before cadence, speed is always shown", async () => {
+  const p = await open();
+  await p.click("#btn-dash"); await p.evaluate(() => render()); await p.waitForTimeout(200);
+  assert.ok(await p.evaluate(() => document.querySelector("#o-hr-box").hidden), "default settings: no heart-rate box without the toggle");
+    await p.waitForFunction(() => !document.querySelector("#ovl").hidden && document.querySelector("#ovl").offsetParent !== null);
+    const order = await p.evaluate(() => [...document.querySelectorAll("#ovl > div")].map(d => d.id));
+    assert.ok(order.indexOf("o-dist-box") >= 0 && order.indexOf("o-dist-box") < order.indexOf("o-cad-box"), "distance before cadence");
+    assert.equal(await p.textContent("#o-x-unit"), "km/h");
+    assert.ok(await p.evaluate(() => document.querySelector("#o-dist-box").hidden), "no route: distance hidden");
+    /* no ride is running, so the distance stays exactly where the test puts it */
+    await p.evaluate(() => { __pedala.S.route = { len: 50000, ele: new Array(5001).fill(0) }; __pedala.S.dist = 1234; render(); });
+    await p.waitForFunction(() => !document.querySelector("#o-dist-box").hidden, null, { timeout: 5000 });
+    assert.equal(await p.textContent("#o-dist"), "1.2");
+    assert.equal(await p.textContent("#o-x-unit"), "km/h", "speed still visible with a route");
+    await p.context().close();
+  });
+
   await test("overlay: no heart-rate box without a strap, and the gear box takes its place", async () => {
-    const p = await open();
+    const p = await open({ settings: { hrOn: true } });
     await p.click("#btn-dash"); await p.evaluate(() => render()); await p.waitForTimeout(200);
     const shown = s => p.evaluate(q => { const el = document.querySelector(q); return !!el && el.getClientRects().length > 0; }, s);
     assert.equal(await shown("#o-hr-box"), false, "no strap: no heart-rate box");
@@ -520,7 +583,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   });
 
   await test("ride stats: no heart-rate cell without a strap, and the cadence fills its place", async () => {
-    const p = await open();
+    const p = await open({ settings: { hrOn: true } });
     const m = () => p.evaluate(() => {
       const st = document.querySelector(".stats"), cad = st.querySelector(".stat.cad"), hr = st.querySelector(".stat.hr");
       const other = st.querySelector(".stat:not(.cad):not(.hr)");
@@ -549,6 +612,25 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
       assert.deepEqual(m, { wide: false, scroll: false, over: 0 }, `${viewport.width}x${viewport.height}`);
       await p.context().close();
     }
+  });
+
+  await test("settings: Click and HR toggles hide their UI", async () => {
+    const p = await open({ settings: { clickOn: false, hrOn: false } });
+    assert.ok(await p.evaluate(() => $("#chip-click-p").hidden && $("#chip-click-m").hidden));
+    assert.ok(await p.evaluate(() => $("#chip-hr").hidden));
+    assert.ok(await p.evaluate(() => $(".stat.hr").hidden));
+    assert.equal(await p.evaluate(() => document.querySelector(".stat.hr").getClientRects().length), 0, "the pulse cell is really not displayed");
+    assert.ok(await p.evaluate(() => $("#click-details").hidden), "the Click setup section is folded away");
+    await p.click('[data-view="workouts"]');
+    assert.ok(!(await p.textContent("#wo-list")).includes("Po pulsu"), "no heart-rate workouts without a strap");
+    await p.click('[data-view="settings"]');
+    assert.ok(await p.evaluate(() => $("#hr-on").checked === false && $("#click-on").checked === false), "both toggles start unticked");
+    await p.evaluate(() => document.querySelector("#hr-on").click());   // ticking takes effect at once
+    await p.evaluate(() => document.querySelector("#click-on").click());
+    assert.ok(!(await p.evaluate(() => $("#chip-hr").hidden)));
+    assert.ok(!(await p.evaluate(() => $("#chip-click-p").hidden)) && !(await p.evaluate(() => $("#chip-click-m").hidden)), "both Click chips are back");
+    assert.ok(!(await p.evaluate(() => $("#click-details").hidden)));
+    await p.context().close();
   });
 
   await browser.close(); await srv.close();

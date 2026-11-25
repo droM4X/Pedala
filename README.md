@@ -9,7 +9,7 @@
 ## Features
 
 **Riding**
-- **Bluetooth devices:** FTMS smart trainers (e.g. Elite Direto XR-T), heart rate straps and Zwift Click v1/v2. Devices you connected once reconnect by themselves as soon as they are switched on.
+- **Bluetooth devices:** FTMS smart trainers (e.g. Elite Direto XR-T), heart rate straps and Zwift Click v1/v2. Devices you connected once reconnect by themselves as soon as they are switched on. The strap and the Click are off until you tick *I use a heart rate strap* / *I use a Zwift Click* in Settings, which shows their buttons and lets them connect.
 - **ERG workouts:** built-in workouts (endurance, sweet spot, VO2max, threshold, ramp test) and `.zwo` import from Zwift, including cadence targets.
 - **Pedal drills** with cadence targets and cues: spin-ups, high/low cadence, low-cadence torque, cadence pyramid, single leg.
 - **Heart-rate workouts:** power is steered to keep your heart rate in Zone 2.
@@ -69,7 +69,7 @@ Chrome only remembers Bluetooth devices with `chrome://flags/#enable-web-bluetoo
 
 The two pods are two separate devices. Connect the harder-gear pod with **Click +** and the easier-gear pod with **Click −** (wake only that pod before connecting). Every button on the + pod shifts up, every button on the − pod shifts down. If they end up swapped, use *Settings → Zwift Click → Set the + and − pod*. The left Click v2 pod often sends no presses unless it was recently unlocked in Zwift; then put both directions on the right pod: in *Set the + and − pod* press a button for +, then another button on the same pod for −.
 
-Use the phone remote when the Zwift Click pods go to sleep during a ride. Open `http://<the computer's LAN address>:8765/gear.html` on your phone; the Remote chip in Pedala's header shows the address; click it to display a QR code your phone can scan to open `gear.html`. The + and − buttons do the same as the Click. The green dot means the phone is connected to an active ride. The phone remote does not work when Pedala is deployed to Vercel.
+Use the phone remote when the Zwift Click pods go to sleep during a ride. Open `http://<the computer's LAN address>:8765/gear.html` on your phone; the Remote chip in Pedala's header shows the address; click it to display a QR code your phone can scan to open `gear.html`. The + and − buttons do the same as the Click. The green dot means the phone is connected to an active ride. The Start and Finish buttons start, pause and end the ride; Finish asks for a confirmation first. The phone remote does not work when Pedala is deployed to Vercel.
 
 ### Voice
 
