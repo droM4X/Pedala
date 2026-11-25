@@ -189,7 +189,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   });
 
   await test("Zwift Click v2: each pod is its own + or − device, or both directions on one pod", async () => {
-    const p = await open();
+    const p = await open({ settings: { clickOn: true } });
     await p.evaluate(() => {
       const mk = (id, role = null) => { const z = new ZwiftClick(role); z.device = { id, gatt: { connected: true } }; z.kind = "ride"; S.clicks.push(z); return z; };
       window.__r = mk("podRIGHT"); window.__l = mk("podLEFT1");
@@ -564,7 +564,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   });
 
   await test("overlay: no heart-rate box without a strap, and the gear box takes its place", async () => {
-    const p = await open();
+    const p = await open({ settings: { hrOn: true } });
     await p.click("#btn-dash"); await p.evaluate(() => render()); await p.waitForTimeout(200);
     const shown = s => p.evaluate(q => { const el = document.querySelector(q); return !!el && el.getClientRects().length > 0; }, s);
     assert.equal(await shown("#o-hr-box"), false, "no strap: no heart-rate box");
@@ -581,7 +581,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   });
 
   await test("ride stats: no heart-rate cell without a strap, and the cadence fills its place", async () => {
-    const p = await open();
+    const p = await open({ settings: { hrOn: true } });
     const m = () => p.evaluate(() => {
       const st = document.querySelector(".stats"), cad = st.querySelector(".stat.cad"), hr = st.querySelector(".stat.hr");
       const other = st.querySelector(".stat:not(.cad):not(.hr)");
@@ -610,6 +610,25 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
       assert.deepEqual(m, { wide: false, scroll: false, over: 0 }, `${viewport.width}x${viewport.height}`);
       await p.context().close();
     }
+  });
+
+  await test("settings: Click and HR toggles hide their UI", async () => {
+    const p = await open({ settings: { clickOn: false, hrOn: false } });
+    assert.ok(await p.evaluate(() => $("#chip-click-p").hidden && $("#chip-click-m").hidden));
+    assert.ok(await p.evaluate(() => $("#chip-hr").hidden));
+    assert.ok(await p.evaluate(() => $(".stat.hr").hidden));
+    assert.equal(await p.evaluate(() => document.querySelector(".stat.hr").getClientRects().length), 0, "the pulse cell is really not displayed");
+    assert.ok(await p.evaluate(() => $("#click-details").hidden), "the Click setup section is folded away");
+    await p.click('[data-view="workouts"]');
+    assert.ok(!(await p.textContent("#wo-list")).includes("Po pulsu"), "no heart-rate workouts without a strap");
+    await p.click('[data-view="settings"]');
+    assert.ok(await p.evaluate(() => $("#hr-on").checked === false && $("#click-on").checked === false), "both toggles start unticked");
+    await p.evaluate(() => document.querySelector("#hr-on").click());   // ticking takes effect at once
+    await p.evaluate(() => document.querySelector("#click-on").click());
+    assert.ok(!(await p.evaluate(() => $("#chip-hr").hidden)));
+    assert.ok(!(await p.evaluate(() => $("#chip-click-p").hidden)) && !(await p.evaluate(() => $("#chip-click-m").hidden)), "both Click chips are back");
+    assert.ok(!(await p.evaluate(() => $("#click-details").hidden)));
+    await p.context().close();
   });
 
   await browser.close(); await srv.close();

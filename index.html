@@ -594,6 +594,16 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
         <label class="full check"><input name="pauseVideo" type="checkbox"> Pauziraj video kad pauziram trening</label>
         <label class="full check"><input name="autoPause" type="checkbox"> Automatska pauza kad prestanem pedalirati</label>
       </form>
+      <h2 class="section-title">Puls</h2>
+      <p class="note">Pulsmetar je narukvica ili prsluk koji bežično šalje tvoj puls. Ako ga uključiš, gumb Puls gore desno spaja ga, a Pedala pokazuje puls uživo i nudi treninge po pulsu.</p>
+      <label class="check note" style="display:flex"><input type="checkbox" id="hr-on"> Koristim pulsmetar</label>
+      <h2 class="section-title">Zwift Click</h2>
+      <label class="check note" style="display:flex"><input type="checkbox" id="click-on"> Koristim Zwift Click</label>
+      <div id="click-details" hidden>
+        <p class="note">Click v2 ima dva dijela i svaki se spaja posebno: dio za težu brzinu gumbom <b>Click +</b> gore desno, dio za lakšu gumbom <b>Click −</b>. Prije spajanja probudi samo taj dio (pritisni mu tipku), pa će u popisu biti jedini. Svaka tipka na dijelu + diže brzinu, svaka na dijelu − je spušta. Ako su zamijenjeni, klikni <b>Odredi + i − dio</b>. Ako dio − ne šalje pritiske (poznati problem lijevog dijela Clicka v2), obje brzine stavi na desni dio: u <b>Odredi + i − dio</b> pritisni tipku za +, a zatim drugu tipku na istom dijelu za −. Prvo ga odspoji iz Zwifta. Stari Click (v1) s obje tipke spaja se bilo kojim od dva gumba.</p>
+        <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" id="btn-click-cal" type="button">Odredi + i − dio</button><button class="btn small" id="btn-click-yb" type="button">Sve na desni dio: Y +, B −</button></div>
+        <details class="note"><summary>Zadnji paketi s Clicka</summary><pre data-notr id="click-log" style="white-space:pre-wrap;font-size:12px;margin:8px 0 0">Još ništa.</pre></details>
+      </div>
       <h2 class="section-title">intervals.icu</h2>
       <p class="note">Besplatan servis za analizu treninga. Na intervals.icu otvori <b>Settings → Developer Settings</b>, stvori <b>API key</b> i zalijepi ga ovdje.</p>
       <div class="field" style="max-width:520px;margin:10px 0"><input id="icu-key" type="text" autocomplete="off" spellcheck="false" placeholder="API ključ" aria-label="intervals.icu API ključ"><button class="btn small" id="btn-icu" type="button">Spremi i provjeri</button></div>
@@ -618,10 +628,6 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <p class="note">Trenažer, puls i Click koje si jednom spojio aplikacija sama spaja kad se upale. Prvi put ih spoji ručno.</p>
       <p class="note" id="bt-auto-note" hidden></p>
       <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" type="button" id="btn-bt-auto">Potraži zapamćene uređaje</button></div>
-      <h2 class="section-title">Zwift Click</h2>
-      <p class="note">Click v2 ima dva dijela i svaki se spaja posebno: dio za težu brzinu gumbom <b>Click +</b> gore desno, dio za lakšu gumbom <b>Click −</b>. Prije spajanja probudi samo taj dio (pritisni mu tipku), pa će u popisu biti jedini. Svaka tipka na dijelu + diže brzinu, svaka na dijelu − je spušta. Ako su zamijenjeni, klikni <b>Odredi + i − dio</b>. Ako dio − ne šalje pritiske (poznati problem lijevog dijela Clicka v2), obje brzine stavi na desni dio: u <b>Odredi + i − dio</b> pritisni tipku za +, a zatim drugu tipku na istom dijelu za −. Prvo ga odspoji iz Zwifta. Stari Click (v1) s obje tipke spaja se bilo kojim od dva gumba.</p>
-      <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" id="btn-click-cal" type="button">Odredi + i − dio</button><button class="btn small" id="btn-click-yb" type="button">Sve na desni dio: Y +, B −</button></div>
-      <details class="note"><summary>Zadnji paketi s Clicka</summary><pre data-notr id="click-log" style="white-space:pre-wrap;font-size:12px;margin:8px 0 0">Još ništa.</pre></details>
       <h2 class="section-title">Tipkovnica</h2>
       <p class="note">Razmak: kreni / pauza. Strelice gore i dolje: intenzitet u ERG treningu ili brzina u slobodnoj vožnji.</p>
     </div></div>
@@ -723,7 +729,7 @@ const store = {
   }
 };
 let HAD_SETTINGS = false; try{ HAD_SETTINGS = localStorage.getItem(LS+"settings") != null; }catch{}
-const settings = Object.assign({ ftp: 230, weight: 80, chainring: 34, cog: 14, clickMap: {}, beep: true, pauseVideo: true, autoPause: true, maxHr: 185, voice: true }, store.get("settings", {}));
+const settings = Object.assign({ ftp: 230, weight: 80, chainring: 34, cog: 14, clickMap: {}, beep: true, pauseVideo: true, autoPause: true, maxHr: 185, voice: true, clickOn: false, hrOn: false }, store.get("settings", {}));
 /* ============ language ============
    The interface is written in Croatian; with English picked (Settings → Language, or a browser that is not set to
    Croatian on a fresh install) every Croatian text on the page is swapped for its English one as it appears:
@@ -902,6 +908,9 @@ const EN = new Map(Object.entries({
   "Besplatan servis za analizu treninga. Na intervals.icu otvori": "A free training analysis service. On intervals.icu open", ", stvori": ", create an", "i zalijepi ga ovdje.": "and paste it here.",
   "API ključ": "API key", "intervals.icu API ključ": "intervals.icu API key", "Spremi i provjeri": "Save and check", "Provjeravam…": "Checking…",
   "Automatski pošalji svaku spremljenu vožnju na intervals.icu": "Send every saved ride to intervals.icu automatically",
+  "Pulsmetar je narukvica ili prsluk koji bežično šalje tvoj puls. Ako ga uključiš, gumb Puls gore desno spaja ga, a Pedala pokazuje puls uživo i nudi treninge po pulsu.":
+    "A heart rate strap is a wristband or chest belt that sends your pulse wirelessly. If you enable it, the HR button in the top right connects it, and Pedala shows your live pulse and offers heart-rate workouts.",
+  "Koristim pulsmetar": "I use a heart rate strap", "Koristim Zwift Click": "I use a Zwift Click",
   "Virtualni trener": "Virtual coach", "Trener": "Coach", "Trener piše sam": "The coach writes on its own", "Tjedni pregled subotom (preporučeno)": "A weekly review on Saturdays (recommended)",
   "Komentar nakon svakog treninga": "A comment after every session", "Ništa, samo kad ga pitam": "Nothing, only when I ask", "Tjedni pregled": "Weekly review", "Tjedni pregled sada": "Weekly review now",
   "Nakon svakog treninga Claude (Anthropic) napiše kratak komentar na hrvatskom: na vožnje iz Pedale i na sve ostalo što stigne na intervals.icu, npr. trčanje i plivanje sa sata. Komentari su u Napretku i u izvještaju vožnje.":
@@ -2046,7 +2055,7 @@ function renderOverlay(p, tgt, rg){
   const hrOn = !!S.hrm;
   o("#o-hr", S.live.hr || "–");
   const hz = hrZone(S.live.hr); o("#o-hr-lbl", hz >= 0 ? `Puls · ${HR_ZONES[hz][2]}` : "Puls");
-  $("#o-hr-box").hidden = !hrOn;
+  $("#o-hr-box").hidden = !hrOn || !settings.hrOn;
   $("#o-hr-box").style.borderLeftColor = hrOn && hz >= 0 ? cssVar(HR_ZONES[hz][1]) : "transparent";
   if(!S.workout || cs?.s.free){ o("#o-gear", S.gear); o("#o-gear-lbl", `Brzina · omjer ${GEARS[S.gear - 1].toFixed(2)}`); o("#o-gear-unit", "/" + GEARS.length); }
   else if(cs?.s.hr){ o("#o-gear", hrTarget(cs.s)); o("#o-gear-lbl", "Ciljani puls"); o("#o-gear-unit", "bpm"); }
@@ -2173,7 +2182,7 @@ function renderWorkouts(){
   const list = $("#wo-list"); list.innerHTML = "";
   const groups = [["base", "Osnovni treninzi"], ["drill", "Pedal drills"], ["hr", "Po pulsu"], ["test", "Testovi"], ["imported", "Uvezeni"]];
   const all = allWorkouts(), catOf = w => w.imported ? "imported" : w.cat || "base";
-  for(const [cat, title] of groups){ const ws = all.filter(w => catOf(w) === cat); if(!ws.length) continue;
+  for(const [cat, title] of groups){ if(cat === "hr" && !settings.hrOn) continue; const ws = all.filter(w => catOf(w) === cat); if(!ws.length) continue;
     const h = document.createElement("h3"); h.className = "vsect"; h.textContent = title; list.append(h);
   for(const w of ws){
     const el = document.createElement("div"); el.className = "item";
@@ -2414,10 +2423,21 @@ function renderIcu(){
     : !k && !icuServer ? "Nije povezano." : who != null ? `Povezano${who ? ": " + who : ""}. Ako tablet nije na internetu, vožnje čekaju i pošalju se kad se veza vrati.`
     : "Ključ je upisan, ali još nije provjeren.";
   $("#icu-auto").checked = settings.icuAuto !== false;
+  $("#hr-on").checked = !!settings.hrOn;
+  $("#click-on").checked = !!settings.clickOn;
 }
 $("#btn-icu").onclick = () => icuSaveKey();
 $("#icu-key").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); icuSaveKey(); } });
 $("#icu-auto").onchange = e => { settings.icuAuto = e.target.checked; store.set("settings", settings); };
+/* the Click and heart-rate toggles hide the UI of devices this rider does not use; auto-connect checks them separately,
+   and a device that is already connected stays connected when its toggle is switched off */
+function applyToggles(){
+  $("#chip-click-p").hidden = $("#chip-click-m").hidden = !settings.clickOn;
+  $("#chip-hr").hidden = $(".stat.hr").hidden = !settings.hrOn;
+  $("#click-details").hidden = !settings.clickOn;
+}
+$("#hr-on").onchange = e => { settings.hrOn = e.target.checked; store.set("settings", settings); applyToggles(); };
+$("#click-on").onchange = e => { settings.clickOn = e.target.checked; store.set("settings", settings); applyToggles(); };
 window.addEventListener("online", () => syncIcu());
 document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") syncIcu(); });
 
@@ -2997,7 +3017,7 @@ function planToday(){
    Settings, the plan, imported workouts and routes go up as time-stamped sections; the newest wins and plan
    progress from both devices is merged. Rides go up and down one by one; deleted rides travel as tombstones.
    API keys and device-only settings stay on the device. */
-const SYNC_SKIP = ["ytKey", "icuKey", "clickMap", "voiceName", "voiceLang", "uiLang"];
+const SYNC_SKIP = ["ytKey", "icuKey", "clickMap", "voiceName", "voiceLang", "uiLang", "clickOn", "hrOn"];
 var syncBusy = false, syncTimer = null, syncOff = false;   // var: store.set may call syncSoon before this line runs
 function syncSoon(){ clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(), 3000); }
 const publicSettings = () => Object.fromEntries(Object.entries(settings).filter(([k]) => !SYNC_SKIP.includes(k)));
@@ -3378,8 +3398,8 @@ async function autoConnect(){
   if(!devs.length && remembered) btHint("Chrome nije zapamtio dopuštenje za tvoje uređaje. Spoji ih jednom ručno i od tada će se spajati sami.");
   for(const dev of devs){
     if(dev.id === k.trainer) watchDevice("trainer", dev, () => new BleTrainer(onData, trainerStatus), () => !!S.trainer, t => { S.trainer = t; applyControl(); startClock(); toast("Trenažer spojen"); });
-    else if(dev.id === k.hr) watchDevice("hr", dev, () => new BleHR(setHr, hrStatus), () => !!S.hrm, h => { S.hrm = h; });
-    else if(clicks.includes(dev.id)){
+    else if(dev.id === k.hr && settings.hrOn) watchDevice("hr", dev, () => new BleHR(setHr, hrStatus), () => !!S.hrm, h => { S.hrm = h; });
+    else if(clicks.includes(dev.id) && settings.clickOn){
       let role = clickRoleOf(dev.id); if(!role){ role = freeClickRole(); setClickRole(dev.id, role); }
       watchDevice(role === "minus" ? "clickMinus" : role === "plus" ? "clickPlus" : "click", dev, () => new ZwiftClick(role), () => S.clicks.some(z => z.device.id === dev.id), z => { S.clicks.push(z); z.onStatus("on"); });
     }
@@ -3548,6 +3568,7 @@ window.addEventListener("beforeunload", e => { if(S.started){ e.preventDefault()
   const v = store.get("video", null); v ? setVideo(v) : store.get("stageMode", null) === "dash" ? setDash() : showPicker();
   const mu = store.get("music", null); if(mu) setMusic(mu, false);
   fillSettings(); render();
+  applyToggles();
   remoteChip(); remoteConnect(); setInterval(() => { if(remote.phones) remoteSend(); }, 2000);
   autoConnect();
   if("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.register("/sw.js").catch(e => console.warn("sw", e));

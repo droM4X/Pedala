@@ -9,7 +9,7 @@
 ## Features
 
 **Riding**
-- **Bluetooth devices:** FTMS smart trainers (e.g. Elite Direto XR-T), heart rate straps and Zwift Click v1/v2. Devices you connected once reconnect by themselves as soon as they are switched on.
+- **Bluetooth devices:** FTMS smart trainers (e.g. Elite Direto XR-T), heart rate straps and Zwift Click v1/v2. Devices you connected once reconnect by themselves as soon as they are switched on. The strap and the Click are off until you tick *I use a heart rate strap* / *I use a Zwift Click* in Settings, which shows their buttons and lets them connect.
 - **ERG workouts:** built-in workouts (endurance, sweet spot, VO2max, threshold, ramp test) and `.zwo` import from Zwift, including cadence targets.
 - **Pedal drills** with cadence targets and cues: spin-ups, high/low cadence, low-cadence torque, cadence pyramid, single leg.
 - **Heart-rate workouts:** power is steered to keep your heart rate in Zone 2.
