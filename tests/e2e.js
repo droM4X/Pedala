@@ -625,6 +625,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.ok(!(await p.textContent("#wo-list")).includes("Po pulsu"), "no heart-rate workouts without a strap");
     await p.click('[data-view="settings"]');
     assert.ok(await p.evaluate(() => $("#hr-on").checked === false && $("#click-on").checked === false), "both toggles start unticked");
+    assert.equal(await p.evaluate(() => document.querySelector("#hr-on").closest("label").textContent.trim()), "Enable", "the HR toggle says Enable");
+    assert.equal(await p.evaluate(() => document.querySelector("#click-on").closest("label").textContent.trim()), "Enable", "the Click toggle says Enable");
+    assert.equal(await p.evaluate(() => [...document.querySelectorAll("h2.section-title")].some(h => h.textContent.trim() === "Heart Rate Strap (HR)")), true, "the HR section is titled Heart Rate Strap (HR)");
     await p.evaluate(() => document.querySelector("#hr-on").click());   // ticking takes effect at once
     await p.evaluate(() => document.querySelector("#click-on").click());
     assert.ok(!(await p.evaluate(() => $("#chip-hr").hidden)));

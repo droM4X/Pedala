@@ -594,11 +594,12 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
         <label class="full check"><input name="pauseVideo" type="checkbox"> Pauziraj video kad pauziram trening</label>
         <label class="full check"><input name="autoPause" type="checkbox"> Automatska pauza kad prestanem pedalirati</label>
       </form>
-      <h2 class="section-title">Puls</h2>
+      <h2 class="section-title" data-notr>Heart Rate Strap (HR)</h2>
       <p class="note">Pulsmetar je narukvica ili prsluk koji bežično šalje tvoj puls. Ako ga uključiš, gumb Puls gore desno spaja ga, a Pedala pokazuje puls uživo i nudi treninge po pulsu.</p>
-      <label class="check note" style="display:flex"><input type="checkbox" id="hr-on"> Koristim pulsmetar</label>
+      <label class="check note" style="display:flex" data-notr><input type="checkbox" id="hr-on"> Enable</label>
       <h2 class="section-title">Zwift Click</h2>
-      <label class="check note" style="display:flex"><input type="checkbox" id="click-on"> Koristim Zwift Click</label>
+      <p class="note">Zwift Click je mala Bluetooth tipka za brzine: svaki pritisak diže ili spušta jednu od 24 virtualne brzine, kao ručica na biciklu. Kad je uključen, gore desno se pojavljuju gumbi Click + i Click − kojima ga spajaš i mijenjaš brzine tijekom vožnje.</p>
+      <label class="check note" style="display:flex" data-notr><input type="checkbox" id="click-on"> Enable</label>
       <div id="click-details" hidden>
         <p class="note">Click v2 ima dva dijela i svaki se spaja posebno: dio za težu brzinu gumbom <b>Click +</b> gore desno, dio za lakšu gumbom <b>Click −</b>. Prije spajanja probudi samo taj dio (pritisni mu tipku), pa će u popisu biti jedini. Svaka tipka na dijelu + diže brzinu, svaka na dijelu − je spušta. Ako su zamijenjeni, klikni <b>Odredi + i − dio</b>. Ako dio − ne šalje pritiske (poznati problem lijevog dijela Clicka v2), obje brzine stavi na desni dio: u <b>Odredi + i − dio</b> pritisni tipku za +, a zatim drugu tipku na istom dijelu za −. Prvo ga odspoji iz Zwifta. Stari Click (v1) s obje tipke spaja se bilo kojim od dva gumba.</p>
         <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" id="btn-click-cal" type="button">Odredi + i − dio</button><button class="btn small" id="btn-click-yb" type="button">Sve na desni dio: Y +, B −</button></div>
@@ -910,7 +911,7 @@ const EN = new Map(Object.entries({
   "Automatski pošalji svaku spremljenu vožnju na intervals.icu": "Send every saved ride to intervals.icu automatically",
   "Pulsmetar je narukvica ili prsluk koji bežično šalje tvoj puls. Ako ga uključiš, gumb Puls gore desno spaja ga, a Pedala pokazuje puls uživo i nudi treninge po pulsu.":
     "A heart rate strap is a wristband or chest belt that sends your pulse wirelessly. If you enable it, the HR button in the top right connects it, and Pedala shows your live pulse and offers heart-rate workouts.",
-  "Koristim pulsmetar": "I use a heart rate strap", "Koristim Zwift Click": "I use a Zwift Click",
+  "Zwift Click je mala Bluetooth tipka za brzine: svaki pritisak diže ili spušta jednu od 24 virtualne brzine, kao ručica na biciklu. Kad je uključen, gore desno se pojavljuju gumbi Click + i Click − kojima ga spajaš i mijenjaš brzine tijekom vožnje.": "The Zwift Click is a small Bluetooth shifter: every press shifts one of the 24 virtual gears up or down, like the shifter on your bike. When enabled, the Click + and Click − buttons appear in the top right to connect it and change gears while riding.",
   "Virtualni trener": "Virtual coach", "Trener": "Coach", "Trener piše sam": "The coach writes on its own", "Tjedni pregled subotom (preporučeno)": "A weekly review on Saturdays (recommended)",
   "Komentar nakon svakog treninga": "A comment after every session", "Ništa, samo kad ga pitam": "Nothing, only when I ask", "Tjedni pregled": "Weekly review", "Tjedni pregled sada": "Weekly review now",
   "Nakon svakog treninga Claude (Anthropic) napiše kratak komentar na hrvatskom: na vožnje iz Pedale i na sve ostalo što stigne na intervals.icu, npr. trčanje i plivanje sa sata. Komentari su u Napretku i u izvještaju vožnje.":
