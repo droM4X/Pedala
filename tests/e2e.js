@@ -432,6 +432,30 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.waitForFunction(() => !document.querySelector("#chip-remote").classList.contains("on"), null, { timeout: 5000 });
     await p.context().close();
   });
+  await test("remote: the phone starts, pauses and finishes with a confirm dialog", async () => {
+    const p = await open({ speed: 100 });
+    await p.click("#chip-trainer"); await p.click("#c-sim");
+    await p.waitForFunction(() => __pedala.remote?.es?.readyState === 1);
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true, locale: "en-US" });
+    const ph = await ctx.newPage(); ph.on("pageerror", e => pageErrors.push(e.message));
+    await ph.goto(B + "/gear.html");
+    await ph.waitForFunction(() => document.querySelector("#dot").classList.contains("on"), null, { timeout: 5000 });
+    await ph.click("#go");
+    await p.waitForFunction(() => __pedala.S.running === true, null, { timeout: 3000 });
+    await p.waitForTimeout(300);   // 30 simulated seconds: enough samples for a summary
+    await ph.waitForFunction(() => document.querySelector("#go").textContent === "Pause", null, { timeout: 3000 });
+    await ph.click("#go");
+    await p.waitForFunction(() => __pedala.S.running === false, null, { timeout: 3000 });
+    await ph.waitForFunction(() => document.querySelector("#go").textContent === "Start", null, { timeout: 3000 });
+    await ph.click("#fin");
+    await ph.waitForFunction(() => document.querySelector("#confirm").open);
+    await ph.click("#fin-no");                            // cancel: the ride is not finished
+    assert.ok(await p.evaluate(() => !document.querySelector("#dlg-summary").open));
+    await ph.click("#fin"); await ph.click("#fin-yes");
+    await p.waitForFunction(() => document.querySelector("#dlg-summary").open, null, { timeout: 3000 });
+    await ctx.close();
+    await p.context().close();
+  });
   await test("remote: reconnect escalation preserves address and manual retry connects", async () => {
     const p = await open();
     await p.waitForFunction(() => Number.isFinite(__pedala.S.gear));
