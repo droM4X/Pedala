@@ -170,7 +170,7 @@ a.btn{display:inline-block;color:inherit;text-decoration:none}
   .ovl>div{padding:4px 10px 6px} .ovl small{font-size:12px} .ovl i{font-size:14px}
   .ovl b{font-size:28px} .ovl .o-pw b{font-size:52px} .ovl .o-pw i{font-size:20px} .ovl .o-tgt{font-size:18px}
   .ovl #o-iv-next{display:none}
-  .ovl #o-gear-box small{display:none}
+  .ovl #o-gear-box small,.ovl #o-dist-box small{display:none}
 }
 
 /* lists */
@@ -445,6 +445,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <div class="ovl" id="ovl" aria-hidden="true">
         <div class="o-pw"><b id="o-pw">0</b><i>W</i><span class="o-tgt" id="o-tgt"></span></div>
         <div class="o-iv" id="o-iv-box"><small id="o-iv-lbl"></small><b id="o-iv">0:00</b><small id="o-iv-next"></small></div>
+        <div class="o-hrb" id="o-dist-box" hidden><small id="o-dist-lbl">Udaljenost</small><b id="o-dist">0.0</b><i>km</i></div>
         <div class="o-hrb" id="o-cad-box"><small id="o-cad-lbl">Kadenca</small><b id="o-cad">–</b><i>rpm</i></div>
         <div class="o-hrb" id="o-hr-box"><small id="o-hr-lbl">Puls</small><b id="o-hr">–</b><i>bpm</i></div>
         <div class="o-hrb" id="o-gear-box"><small id="o-gear-lbl">Brzina</small><b id="o-gear">10</b><i id="o-gear-unit"></i></div>
@@ -2049,8 +2050,8 @@ function renderOverlay(p, tgt, rg){
   else if(cs?.s.hr){ o("#o-gear", hrTarget(cs.s)); o("#o-gear-lbl", "Ciljani puls"); o("#o-gear-unit", "bpm"); }
   else { o("#o-gear", Math.round(S.bias * 100)); o("#o-gear-lbl", "Intenzitet"); o("#o-gear-unit", "%"); }
   o("#o-time", fmtTime(S.t));
-  o("#o-x-lbl", S.route ? "Udaljenost" : "Brzina");
-  o("#o-x", S.route ? (S.dist / 1000).toFixed(1) : (S.live.speed || 0).toFixed(1)); o("#o-x-unit", S.route ? "km" : "km/h");
+  $("#o-dist-box").hidden = !S.route; o("#o-dist", (S.dist / 1000).toFixed(1));
+  o("#o-x", (S.live.speed || 0).toFixed(1));
   $("#o-paused").hidden = !(S.started && !S.running);
   drawProfile($("#o-prof"));
 }

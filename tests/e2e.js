@@ -502,6 +502,22 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.context().close();
   });
 
+  await test("ovl: distance has its own box before cadence, speed is always shown", async () => {
+    const p = await open();
+    await p.click("#btn-dash"); await p.evaluate(() => render()); await p.waitForTimeout(200);
+    await p.waitForFunction(() => !document.querySelector("#ovl").hidden && document.querySelector("#ovl").offsetParent !== null);
+    const order = await p.evaluate(() => [...document.querySelectorAll("#ovl > div")].map(d => d.id));
+    assert.ok(order.indexOf("o-dist-box") >= 0 && order.indexOf("o-dist-box") < order.indexOf("o-cad-box"), "distance before cadence");
+    assert.equal(await p.textContent("#o-x-unit"), "km/h");
+    assert.ok(await p.evaluate(() => document.querySelector("#o-dist-box").hidden), "no route: distance hidden");
+    /* no ride is running, so the distance stays exactly where the test puts it */
+    await p.evaluate(() => { __pedala.S.route = { len: 50000, ele: new Array(5001).fill(0) }; __pedala.S.dist = 1234; render(); });
+    await p.waitForFunction(() => !document.querySelector("#o-dist-box").hidden, null, { timeout: 5000 });
+    assert.equal(await p.textContent("#o-dist"), "1.2");
+    assert.equal(await p.textContent("#o-x-unit"), "km/h", "speed still visible with a route");
+    await p.context().close();
+  });
+
   await test("overlay: no heart-rate box without a strap, and the gear box takes its place", async () => {
     const p = await open();
     await p.click("#btn-dash"); await p.evaluate(() => render()); await p.waitForTimeout(200);
