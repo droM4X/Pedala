@@ -2025,6 +2025,8 @@ function render(){
   $("#btn-end").disabled = !S.started;
   drawProfile();
   renderOverlay(p, tgt, rg);
+  const rs = JSON.stringify(remoteState());   // send the remote state only when it actually changed
+  if(remote.es?.readyState === 1 && rs !== remote.sent){ remote.sent = rs; remoteSend(); }
 }
 
 const overlayOn = () => document.fullscreenElement === $("#stage") || isDash() && !$("#stage").classList.contains("picking");
@@ -3462,9 +3464,9 @@ $("#btn-click-yb").onclick = () => {
 $("#btn-start").onclick = () => { if(!S.started || !S.running) { S.started && S.autoPaused ? resume() : start(); } else pause(false); render(); };
 $("#btn-end").onclick = () => { pause(false); openSummary(); };
 /* phone remote: the phone (gear.html) shifts through the local server; the relay is /__remote/* */
-const remote = { es: null, phones: 0, links: [] };
+const remote = { es: null, phones: 0, links: [], sent: "" };
 function remoteState(){ const c = currentSeg(); const mode = !S.workout || c?.s.free ? "gear" : c?.s.hr ? "hr" : "bias";
-  return { gear: S.gear, mode, bias: S.bias, hrOff: S.hrOff }; }
+  return { gear: S.gear, mode, bias: S.bias, hrOff: S.hrOff, started: !!S.started, running: !!S.running }; }
 function remoteSend(){ if(remote.es?.readyState !== 1) return;
   fetch("/__remote/state", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(remoteState()) }).catch(() => {}); }
 function remoteChip(){ setChip("#chip-remote", remote.phones ? "on" : "", "Remote"); }
@@ -3477,6 +3479,9 @@ function remoteConnect(){
   es.addEventListener("hello", e => { const m = JSON.parse(e.data); remote.links = m.links || []; remoteSetPhones(m.phones); });
   es.addEventListener("phones", e => remoteSetPhones(JSON.parse(e.data).n));
   es.addEventListener("shift", e => { const m = JSON.parse(e.data); if(m.d === 1 || m.d === -1) bump(m.d); });
+  es.addEventListener("control", e => { const m = JSON.parse(e.data);
+    if(m.a === "finish"){ if(!$("#dlg-summary").open) $("#btn-end").click(); }   // a disabled #btn-end (ride never started) is a no-op
+    else if(m.a === "start" || m.a === "pause"){ if($("#dlg-summary").open){ if(m.a === "start") $("#sum-resume").click(); } else $("#btn-start").click(); } });
 }
 function openRemote(){
   const link = remote.links[0] || "";

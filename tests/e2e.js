@@ -393,6 +393,27 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.context().close();
   });
 
+  await test("remote: control from outside starts, pauses and finishes the ride", async () => {
+    const p = await open({ speed: 100 });
+    await p.click("#chip-trainer"); await p.click("#c-sim");
+    await p.waitForFunction(() => __pedala.remote?.es?.readyState === 1);
+    assert.equal(await p.evaluate(() => __pedala.S.started), false, "fresh page: the ride has not started");
+    const post = a => fetch(B + "/__remote/control", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ a }) });
+    await post("start");
+    await p.waitForFunction(() => __pedala.S.running === true);
+    await p.waitForTimeout(300);   // 30 simulated seconds: enough samples for a summary
+    await post("start");
+    await p.waitForFunction(() => __pedala.S.running === false);
+    await post("finish");
+    await p.waitForFunction(() => document.querySelector("#dlg-summary").open);
+    await post("finish");
+    await new Promise(r => setTimeout(r, 300));
+    assert.ok(await p.evaluate(() => document.querySelector("#dlg-summary").open), "finish ignored under the summary");
+    await post("start");
+    await p.waitForFunction(() => !document.querySelector("#dlg-summary").open && __pedala.S.running === true);
+    await p.context().close();
+  });
+
   await test("remote: the phone shifts the running ride, and the chip follows it", async () => {
     const p = await open();
     await p.waitForFunction(() => Number.isFinite(__pedala.S.gear));
