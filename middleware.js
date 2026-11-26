@@ -6,7 +6,7 @@
 // storage to use on the device.
 // A successful login leaves a signed cookie for a year, so the installed app does not ask again
 // after it is closed. Changing PEDALA_PASSWORD logs every device out.
-// The login page is in Croatian for browsers set to Croatian (or a close language), in English otherwise.
+// The login page is in English.
 export const config = { matcher: "/:path*" };
 
 /* Chrome fetches these without the login when it installs the app, and they hold nothing private */
@@ -33,8 +33,8 @@ async function sessionUser(request, all){
 export default async function middleware(request){
   const url = new URL(request.url);
   if(PUBLIC.test(url.pathname)) return;
-  const all = users(), hr = croatian(request);
-  if(!all[0].pass) return text(hr ? "Prijava nije postavljena: na Vercelu dodaj PEDALA_PASSWORD i napravi Redeploy." : "Login is not set up: add PEDALA_PASSWORD on Vercel and redeploy.", 503);
+  const all = users();
+  if(!all[0].pass) return text("Login is not set up: add PEDALA_PASSWORD on Vercel and redeploy.", 503);
   if(url.pathname === "/__login" && request.method === "POST"){
     let f; try{ f = await request.formData(); }catch{ f = new FormData(); }
     const next = safePath(f.get("next")), name = String(f.get("user") || "").trim(), password = String(f.get("password") || "");
@@ -48,9 +48,9 @@ export default async function middleware(request){
 
   if(request.method === "GET" && (request.headers.get("accept") || "").includes("text/html")){
     const login = url.pathname === "/__login";
-    return loginPage(login ? safePath(url.searchParams.get("next")) : url.pathname + url.search, login && url.searchParams.get("e") === "1", hr);
+    return loginPage(login ? safePath(url.searchParams.get("next")) : url.pathname + url.search, login && url.searchParams.get("e") === "1");
   }
-  return new Response(JSON.stringify({ error: hr ? "Potrebna je prijava" : "Login required" }), { status: 401, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+  return new Response(JSON.stringify({ error: "Login required" }), { status: 401, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 }
 
 /* session token: HMAC of the username keyed by the password, so a new password invalidates it */
@@ -63,7 +63,6 @@ function cookie(request, name){
   for(const part of (request.headers.get("cookie") || "").split(/;\s*/)){ const i = part.indexOf("="); if(part.slice(0, i) === name) return part.slice(i + 1); }
   return "";
 }
-const croatian = request => /^(hr|bs|sr|sh)\b/i.test(request.headers.get("accept-language") || "");
 const safePath = p => typeof p === "string" && p.startsWith("/") && !p.startsWith("//") && !p.startsWith("/__") ? p : "/";
 function redirect(location, setCookies){
   const h = new Headers({ location, "cache-control": "no-store" });
@@ -80,12 +79,11 @@ function same(a, b){
   return d === 0;
 }
 
-function loginPage(next, failed, hr){
-  const t = (h, e) => hr ? h : e;
+function loginPage(next, failed){
   return new Response(`<!doctype html>
-<html lang="${t("hr", "en")}" translate="no"><head><meta charset="utf-8">
+<html lang="en" translate="no"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#151b26"><title>Pedala · ${t("prijava", "login")}</title>
+<meta name="theme-color" content="#151b26"><title>Pedala · login</title>
 <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" type="image/png" href="/icons/icon-192.png">
 <style>
 :root{--bg:#151b26;--panel:#1f2735;--line:#2f3a4d;--text:#e9edf3;--muted:#8b97aa;--z3:#2fbf71;--z6:#e5484d}
@@ -102,11 +100,11 @@ button{width:100%;margin-top:6px;border:0;border-radius:12px;padding:12px;backgr
 </style></head><body>
 <form method="post" action="/__login">
   <img src="/icons/icon-192.png" alt="">
-  <h1>Pedala</h1><p>${t("Prijavi se. Ovaj uređaj ostaje prijavljen godinu dana.", "Log in. This device stays logged in for a year.")}</p>
-  ${failed ? `<div class="err" role="alert">${t("Krivo ime ili lozinka.", "Wrong username or password.")}</div>` : ""}
+  <h1>Pedala</h1><p>Log in. This device stays logged in for a year.</p>
+  ${failed ? `<div class="err" role="alert">Wrong username or password.</div>` : ""}
   <input type="hidden" name="next" value="${esc(next)}">
-  <label>${t("Korisničko ime", "Username")}<input name="user" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus></label>
-  <label>${t("Lozinka", "Password")}<input name="password" type="password" autocomplete="current-password" required></label>
-  <button type="submit">${t("Prijava", "Log in")}</button>
+  <label>Username<input name="user" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus></label>
+  <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+  <button type="submit">Log in</button>
 </form></body></html>`, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
 }

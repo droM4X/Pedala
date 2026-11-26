@@ -20,7 +20,7 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
     const page = await mw(req("/", { headers: { accept: "text/html" } }));
     const html = await page.text(); assert.equal(page.status, 200); assert.match(html, /action="\/__login"/);
     assert.match(html, /Password/, "English without Accept-Language");
-    assert.match(await (await mw(req("/", { headers: { accept: "text/html", "accept-language": "hr-HR,hr;q=0.9,en;q=0.8" } }))).text(), /Lozinka/, "Croatian for a Croatian browser");
+    assert.match(await (await mw(req("/", { headers: { accept: "text/html", "accept-language": "hr-HR,hr;q=0.9,en;q=0.8" } }))).text(), /Log in/, "English for a Croatian browser");
     assert.equal((await mw(req("/api/intervals"))).status, 401);
     assert.equal((await mw(req("/icons/../index.html", { headers: { accept: "text/html" } }))).status, 200);   // normalized to /index.html: login form
   });
