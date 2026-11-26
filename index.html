@@ -184,7 +184,12 @@ h1{font:700 40px/1.05 var(--num);margin:4px 0 4px}
 .item .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .metrics{display:flex;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--muted)}
 .metrics b{color:var(--text);font:600 19px/1 var(--num);margin-right:3px}
-.section-title{font:600 22px/1.1 var(--num);margin:26px 0 10px;color:var(--text)}
+.section-title{font:600 22px/1.1 var(--num);margin:38px 0 10px;color:var(--text)}
+/* in the settings form the grid gap adds 12px, so 26 + 12 keeps every title clearing the same 38px */
+.form .section-title{margin-top:26px}
+.about-rule{border:0;border-top:1px solid var(--line);margin:38px 0 14px;max-width:520px}
+.about{color:var(--muted);font-size:13px;margin:0;max-width:62ch}
+.about a{color:var(--muted)} .about a:hover{color:var(--text)}
 .weekbar{display:flex;gap:16px;flex-wrap:wrap;background:var(--panel);border-radius:14px;padding:12px 14px;margin-bottom:14px}
 .weekbar div small{display:block;color:var(--muted);font-size:13px}
 .weekbar div b{font:700 30px/1 var(--num)}
@@ -576,6 +581,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <h1>Settings</h1>
       <p class="lead">Saved on this device.</p>
       <form class="form" id="settings-form">
+        <h2 class="section-title full">Basic</h2>
         <label>FTP (W)<input name="ftp" type="number" min="80" max="600" step="1"></label>
         <label>Weight (kg)<input name="weight" type="number" min="30" max="200" step="0.5"></label>
         <label>Chainring (teeth)<input name="chainring" type="number" min="20" max="60" step="1"></label>
@@ -623,9 +629,6 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <h2 class="section-title">Sync</h2>
       <p class="note" id="sync-status">Checking…</p>
       <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" type="button" id="btn-sync">Sync now</button></div>
-      <h2 class="section-title">Login</h2>
-      <p class="note">This device stays logged in for a year, even after you close the app. Changing the password on Vercel (PEDALA_PASSWORD) logs out every device.</p>
-      <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><a class="btn small danger" href="/__logout">Log out on this device</a></div>
       <h2 class="section-title">Gears</h2>
       <p class="note">24 virtual gears with the same ratios as Zwift (0.75 to 5.49). Resistance comes from the gradient, your speed and the virtual gear against your real chainring/Cog ratio, so enter how many teeth your chainring and Cog have.</p>
       <h2 class="section-title">Automatic connection</h2>
@@ -634,6 +637,11 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" type="button" id="btn-bt-auto">Look for remembered devices</button></div>
       <h2 class="section-title">Keyboard</h2>
       <p class="note">Space: start / pause. Up and down arrows: intensity in an ERG workout, or gear in free ride.</p>
+      <h2 class="section-title">Login</h2>
+      <p class="note">This device stays logged in for a year, even after you close the app. Changing the password on Vercel (PEDALA_PASSWORD) logs out every device.</p>
+      <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><a class="btn small danger" href="/__logout">Log out on this device</a></div>
+      <hr class="about-rule">
+      <p class="about">Pedala <span id="app-version"></span> · <a href="https://github.com/droM4X/Pedala" target="_blank" rel="noopener">github.com/droM4X/Pedala</a></p>
     </div></div>
   </main>
 </div>
@@ -722,6 +730,7 @@ const SYNCED = ["settings", "plan", "workouts", "routes", "ytChannels", "ytPlayl
 /* profiles: a second person logged in (pedala_ns cookie, set by middleware.js) keeps everything under their own name */
 const NS = (() => { try{ const m = document.cookie.match(/(?:^|;\s*)pedala_ns=([^;]+)/); return m ? decodeURIComponent(m[1]).replace(/[^\w-]/g, "") : ""; }catch{ return ""; } })();
 const LS = "pedala." + (NS ? NS + "." : "");
+const APP_VERSION = "0.2.0";   // shown in Settings → About; bump it together with the git tag
 const store = {
   get(k, d){ try{ const v = localStorage.getItem(LS+k); return v==null ? d : JSON.parse(v); }catch{ return d; } },
   set(k, v){
@@ -2845,6 +2854,7 @@ $("#sum-resume").onclick = () => { $("#dlg-summary").close(); start(); };
 
 /* ============ settings ============ */
 function fillSettings(){ const f = $("#settings-form"); f.ftp.value = settings.ftp; f.weight.value = settings.weight; f.beep.checked = settings.beep; f.lapKm.value = lapKm(); f.pauseVideo.checked = settings.pauseVideo; f.pauseOn.value = pauseMode(); f.ytKey.value = settings.ytKey || ""; f.chainring.value = settings.chainring; f.cog.value = settings.cog; f.maxHr.value = settings.maxHr; f.voice.checked = settings.voice; fillVoices(); fillCoach(); }
+$("#app-version").textContent = APP_VERSION;
 $("#settings-form").addEventListener("input", e => { const f = e.currentTarget;
   const ftp = +f.ftp.value, wt = +f.weight.value; if(ftp >= 80 && ftp <= 600) settings.ftp = ftp; if(wt >= 30 && wt <= 200) settings.weight = wt;
   settings.beep = f.beep.checked; const lk = +f.lapKm.value; if(lk >= 1 && lk <= 50) settings.lapKm = lk; settings.pauseVideo = f.pauseVideo.checked; settings.pauseOn = f.pauseOn.value; settings.ytKey = f.ytKey.value.trim();
