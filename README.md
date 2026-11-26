@@ -19,8 +19,7 @@
 - **YouTube while riding**, full screen with your numbers on top and a Zwift-style workout profile with a heart-rate line behind them.
 - **A video feed of your own:** newest videos from favourite channels, your own playlists and a ride theme of the day (YouTube offers apps no personal recommendations).
 - **Music from YouTube Music** in a small player with ⏮ ⏯ ⏭, or **no video at all:** a large workout profile instead.
-- **English and Croatian:** the app follows your browser language; switch it any time under *Settings → Language*.
-- **Voice announcements** in English or Croatian ("In 10 seconds: 3 minutes at 265 watts"); YouTube is turned down while the voice speaks.
+- **Voice announcements** in English ("In 10 seconds: 3 minutes at 265 watts"); YouTube is turned down while the voice speaks.
 - **Heart-rate zones**, interval scoring and a phone layout that never scrolls while you ride.
 
 **After the ride**
@@ -28,7 +27,7 @@
 - **Progress:** fitness/fatigue/form (CTL/ATL/TSB), weekly volume, best powers, FTP over time.
 - **14-week training plan** (short weekday sessions, long Sunday Zone 2 ride; optionally two swims with technique drills, a brick run and an easy Friday run from 1 to 6 km, ticked off from intervals.icu) with progress tracking and a calendar file with reminders.
 - **intervals.icu upload** of every ride, `.FIT` export for Strava, GoldenCheetah and others.
-- **Virtual coach:** a weekly review every Saturday, or a short comment after every session (in Croatian), on your Pedala rides and on everything else that reaches intervals.icu, such as runs and swims from a watch. You can also ask it questions or for a plan change ("I have a cold, what about this week?"); proposed changes are applied when you confirm them. Needs `ANTHROPIC_API_KEY`; about 6 cents per comment or answer.
+- **Virtual coach:** a weekly review every Saturday, or a short comment after every session (in English), on your Pedala rides and on everything else that reaches intervals.icu, such as runs and swims from a watch. You can also ask it questions or for a plan change ("I have a cold, what about this week?"); proposed changes are applied when you confirm them. Needs `ANTHROPIC_API_KEY`; about 6 cents per comment or answer.
 - **Strength at home:** a 12-week bodyweight plan (three circuits a week) with a guided player: countdown, voice cues, next exercise.
 - **Profiles:** more people on one deploy, each with their own data.
 - **Sync between phone and tablet** through Vercel Blob; backup and restore as a single `.json` file.
@@ -71,7 +70,7 @@ Use the phone remote when the Zwift Click pods go to sleep during a ride. Open `
 
 ### Voice
 
-Croatian announcements need a Croatian text-to-speech voice (Android: *Text-to-speech → Speech Services by Google → Install voice data → Croatian*). In `auto`, announcements follow the interface language and fall back to English without a Croatian voice; manually choosing an announcement language overrides this. Hungarian announcements need a Hungarian text-to-speech voice; choose the language under *Settings → Announcement language*, as `auto` never picks Hungarian.
+Announcements use the device's English text-to-speech voices; pick one under *Settings → Announcement voice*. Android: any installed English voice works (*Text-to-speech → Speech Services by Google → Install voice data → English*).
 
 ## Development
 
@@ -100,7 +99,6 @@ npm test               # unit tests (login, sync) and end-to-end tests in Chromi
 | `metrics`, `renderReport`, `drawProgress` | Metrics, ride report, progress |
 | `encodeFit` | FIT export |
 | `say`, `duckStart` | Voice announcements, turning YouTube down |
-| `tr`, `EN`, `EN_RX`, `ui` | English interface: the page is written in Croatian and translated as it renders |
 | `syncNow`, `syncIcu` | Sync between devices, intervals.icu upload |
 
 Ride samples are `[t, power W, cadence, heart rate, speed cm/s, distance m]`, plus `lat, lon, elevation` on routes.
