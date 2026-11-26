@@ -14,7 +14,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
   const srv = await start(), B = srv.url, browser = await chromium.launch(), pageErrors = [];
   /* a fresh browser profile; fake YouTube player that answers volume questions and records commands */
-  async function open({ viewport = { width: 1280, height: 860 }, speed = 100, voices = [], settings, mobile = false, locale = "hr-HR", cookies = [] } = {}){
+  async function open({ viewport = { width: 1280, height: 860 }, speed = 100, voices = [], settings, mobile = false, locale = "en-US", cookies = [] } = {}){
     const ctx = await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile, acceptDownloads: true, locale });
     if(cookies.length) await ctx.addCookies(cookies.map(([name, value]) => ({ name, value, url: B })));
     const p = await ctx.newPage(); p.on("pageerror", e => pageErrors.push(e.message)); p.on("dialog", d => d.accept());
@@ -87,92 +87,28 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await a.context().close(); await b.context().close();
   });
 
-  await test("voice: Hungarian is spoken when picked by hand, and falls back with a notice without a Hungarian voice", async () => {
-    const hu = await open({ voices: [["Google magyar", "hu-HU"], ["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
-    await hu.click('[data-view="settings"]'); await hu.click("#btn-voice-test"); await hu.waitForTimeout(300);
-    const sentence = (await hu.evaluate(() => __spoken))[0];
-    assert.match(sentence, /10 másodperc/, sentence);
-    assert.match(sentence, /perc/, sentence);
-    assert.doesNotMatch(sentence, /sekundi|vata|kadenca|vat\\b/, "no Croatian words in a Hungarian sentence: " + sentence);
-    await hu.click('[data-view="ride"]');
-    await hu.evaluate(() => { S.workout = { ftp: 230 }; say(() => segSpeech({ d: 200, lo: 1, hi: 1, cad: [90, 100] }), true); }); await hu.waitForTimeout(300);
-    const workoutSentence = (await hu.evaluate(() => __spoken))[1];
-    assert.match(workoutSentence, /3 perc 20 másodperc/, workoutSentence);
-    assert.match(workoutSentence, /watton/, workoutSentence);
-    assert.match(workoutSentence, /kadencia 90 és 100 között/, workoutSentence);
-    assert.doesNotMatch(workoutSentence, /vat\\b|sekundi|kadenca/, workoutSentence);
-    await hu.evaluate(() => say(() => segSpeech({ d: 200, free: true, note: "Visoka kadenca, mirno sjedi", cad: [90, CAD_ANY] }), true)); await hu.waitForTimeout(300);
-    const cueSentence = (await hu.evaluate(() => __spoken)).at(-1);
-    assert.match(cueSentence, /Magas kadencia, maradj ülve/, cueSentence);
-    assert.match(cueSentence, /kadencia 90 vagy több/, cueSentence);
-    assert.doesNotMatch(cueSentence, /Visoka|kadenca|sekundi/, cueSentence);
-    await hu.evaluate(() => { hrVoice = pickVoice(); S.workout = { ftp: 200 }; S.hrOff = 0; say(() => segSpeechPower({ d: 180, hr: 145 / settings.maxHr }), true); });
-    await hu.waitForTimeout(300);
-    const hrSentence = (await hu.evaluate(() => __spoken)).at(-1);
-    assert.match(hrSentence, /145-ös pulzuson/, hrSentence);
-    await hu.evaluate(() => say(() => segSpeechPower({ d: 180, hr: 150 / settings.maxHr }), true)); await hu.waitForTimeout(300);
-    assert.match((await hu.evaluate(() => __spoken)).at(-1), /150-es pulzuson/);
-    await hu.evaluate(() => { S.workout = null; S.dist = 12000; lapResult({ kind: "dist", dur: 200, avgP: 250 }); }); await hu.waitForTimeout(300);
-    const lapSentence = (await hu.evaluate(() => __spoken)).at(-1);
-    assert.match(lapSentence, /12 kilométer/, lapSentence);
-
-    await hu.context().close();
-    const none = await open({ voices: [["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
-    await none.click('[data-view="settings"]'); await none.waitForTimeout(200);
-    assert.match(await none.textContent("#voice-note"), /Hungarian/);
-    await none.click("#btn-voice-test"); await none.waitForTimeout(300);
-    assert.match((await none.evaluate(() => __spoken))[0], /^In 10 seconds/);
-    await none.context().close();
-  });
-  await test("voice: the Settings offer Hungarian, name it, and notice when the device has no Hungarian voice", async () => {
-    const ok = await open({ voices: [["Google magyar", "hu-HU"], ["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
-    await ok.click('[data-view="settings"]'); await ok.waitForTimeout(200);
-    assert.equal(await ok.evaluate(() => __pedala.S && document.querySelector('[name="voiceLang"] option[value="hu"]')?.textContent.trim()), "Magyar");
-    assert.match(await ok.textContent("#voice-note"), /Announcements are in Hungarian/, "the note says announcements are in Hungarian");
-    await ok.context().close();
-
-    const none = await open({ voices: [["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
-    await none.click('[data-view="settings"]'); await none.waitForTimeout(200);
-    assert.match(await none.textContent("#voice-note"), /Hungarian voice missing; announcements fall back to English/, "the note names Hungarian as missing and English as the fallback");
-    await none.context().close();
-
-    const croatian = await open({ voices: [["Google hrvatski", "hr-HR"], ["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "hu", voiceName: "Google hrvatski", uiLang: "en" } });
-    await croatian.click('[data-view="settings"]'); await croatian.click("#btn-voice-test"); await croatian.waitForTimeout(300);
-    assert.match((await croatian.evaluate(() => __spoken))[0], /^In 10 seconds/, "a saved Croatian voice cannot override Hungarian mode's English fallback");
-    await croatian.context().close();
-  });
-  await test("voice: auto never picks Hungarian, even in a Hungarian browser", async () => {
-    const p = await open({ locale: "hu-HU", voices: [["Google magyar", "hu-HU"], ["Samsung English", "en-US"]], settings: { voice: true, voiceLang: "auto" } });
-    await p.click('[data-view="settings"]'); await p.click("#btn-voice-test"); await p.waitForTimeout(300);
-    assert.match((await p.evaluate(() => __spoken))[0], /^In 10 seconds/);
-    await p.context().close();
-  });
-
-  await test("voice: everything English without a Croatian voice, Croatian with one; YouTube is turned down while speaking", async () => {
+  await test("voice: English-only speech; YouTube is turned down while speaking", async () => {
     const en = await open({ voices: [["Samsung English", "en-US"]] });
     await en.click('[data-view="settings"]'); await en.click("#btn-voice-test"); await en.waitForTimeout(300);
     assert.equal((await en.evaluate(() => __spoken))[0], "In 10 seconds: 3 minutes at 265 watts, cadence 90 to 100.");
     await en.evaluate(() => setVideo("dQw4w9WgXcQ")); await en.waitForTimeout(800);
     await en.evaluate(() => say("Test.", true)); await en.waitForTimeout(1200);
     assert.deepEqual(await en.evaluate(() => __rec), ["setVolume(18)", "setVolume(70)"]);
-    const hr = await open({ voices: [["Google hrvatski", "hr-HR"], ["Samsung English", "en-US"]] });
-    await hr.click('[data-view="settings"]'); await hr.click("#btn-voice-test"); await hr.waitForTimeout(300);
-    assert.match((await hr.evaluate(() => __spoken))[0], /^Za 10 sekundi: 3 minute na 265 vata/);
-    await en.context().close(); await hr.context().close();
+    await en.context().close();
   });
 
-  await test("English: a browser in English gets the whole app in English, Croatian stays for Croatian", async () => {
-    const p = await open({ locale: "en-US", speed: 200 });
+  await test("English everywhere, in every browser", async () => {
+    const p = await open({ speed: 200 });
     const croatian = /[čćžšđ]|\b(je|na|ili|se|za|od|nije|treba|nema|vožnj\w*|trening\w*|Postavke|Spoji|Kreni|Tjedan|Zona|Puls|Kadenca|Brzina|Glazba|Snaga|Vrijeme|Još|Sljedeće)\b/i;
     const visible = () => p.evaluate(() => { const out = [], w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-      for(let n; (n = w.nextNode());){ const e = n.parentElement; if(e.closest("script,style,[data-notr]") || !e.getClientRects().length) continue; const t = n.nodeValue.trim(); if(t) out.push(t); }
+      for(let n; (n = w.nextNode());){ const e = n.parentElement; if(e.closest("script,style") || !e.getClientRects().length) continue; const t = n.nodeValue.trim(); if(t) out.push(t); }
       document.querySelectorAll("[placeholder],[aria-label]").forEach(e => out.push(e.getAttribute("placeholder") || e.getAttribute("aria-label")));
       return out; });
     const left = [];
     const check = async where => { for(const t of await visible()) if(croatian.test(t) && !/^(Učka|Sljeme|Biokovo)/.test(t)) left.push(where + ": " + t); };
     await check("ride");
     for(const v of ["plan", "workouts", "history", "progress", "settings"]){ await p.click(`[data-view="${v}"]`); await p.waitForTimeout(300); await check(v); }
-    await p.click('[data-view="plan"]'); if(await p.$("#plan-go")) await p.click("#plan-go"); await p.waitForTimeout(300); await check("plan started");   // the plan may have come from the sync test
+    await p.click('[data-view="plan"]'); if(await p.$("#plan-go")) await p.click("#plan-go"); await p.waitForTimeout(300); await check("plan started");
     await p.click("#chip-trainer"); await check("connect"); await p.click("#c-sim");
     await p.evaluate(() => setWorkout(allWorkouts().find(w => w.id === "d-hilo"))); await p.click("#btn-start"); await p.waitForTimeout(2500); await check("riding");
     await p.click("#btn-end"); await p.waitForTimeout(1200); await check("summary"); await p.click("#sum-save"); await p.waitForTimeout(600);
@@ -181,11 +117,16 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.equal(await p.textContent('[data-view="workouts"]'), "Workouts");
     assert.equal(await p.evaluate(async () => (await dbAll()).sort((a, b) => b.start - a.start)[0].name), "High and low cadence", "ride saved under its English name");
     await p.context().close();
-    const hr = await open({ locale: "en-US", settings: { ftp: 230 } });
-    assert.equal(await hr.textContent('[data-view="workouts"]'), "Treninzi", "a device that already used Pedala stays Croatian");
-    await hr.click('[data-view="settings"]'); await hr.selectOption('[name="uiLang"]', "en"); await hr.waitForLoadState("load"); await hr.waitForTimeout(400);
-    assert.equal(await hr.textContent('[data-view="workouts"]'), "Workouts", "switching the language in Settings");
-    await hr.context().close();
+  });
+
+  await test("stale language settings are ignored", async () => {
+    const errorsBefore = pageErrors.length;
+    const p = await open({ settings: { uiLang: "hr", voiceLang: "hu" }, voices: [["Samsung English", "en-US"]] });
+    assert.equal(await p.textContent('[data-view="workouts"]'), "Workouts");
+    await p.click('[data-view="settings"]'); await p.click("#btn-voice-test"); await p.waitForTimeout(300);
+    assert.equal((await p.evaluate(() => __spoken))[0], "In 10 seconds: 3 minutes at 265 watts, cadence 90 to 100.");
+    assert.equal(pageErrors.length, errorsBefore);
+    await p.context().close();
   });
 
   await test("Zwift Click v2: each pod is its own + or − device, or both directions on one pod", async () => {
@@ -231,7 +172,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
     const p = await open({ settings: { ftp: 160, maxHr: 185, weight: 100, coachAbout: "190 cm, vraćam se nakon pauze", coachMode: "each" } });
     await p.click('[data-view="settings"]'); await p.fill("#icu-key", "goodkey"); await p.click("#btn-icu"); await p.waitForTimeout(600);
-    assert.match(await p.textContent("#coach-status"), /uključen \(ANTHROPIC_API_KEY/);
+    assert.match(await p.textContent("#coach-status"), /coach is on.*ANTHROPIC_API_KEY/);
     await p.click("#chip-trainer"); await p.click("#c-sim"); await p.evaluate(() => setWorkout(allWorkouts().find(w => w.id === "b-ss")));
     await p.click("#btn-start"); await p.waitForTimeout(4000); await p.click("#btn-end"); await p.waitForTimeout(500); await p.click("#sum-save");
     await p.waitForFunction(() => Object.entries(store.get("coach", {})).some(([k, n]) => k.startsWith("ride:") && n.text), null, { timeout: 15000 });
@@ -259,19 +200,19 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const first = await p.evaluate(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
       store.set("plan", { id: PLAN.id, start: ymd(d), done: {}, skipped: {}, times: { wk: "18:00", sun: "09:00" }, remind: 120 }); return planSessions()[0].id; });
     await p.click('[data-view="progress"]'); await p.waitForTimeout(800);
-    await p.fill("#coach-q", "Prehlađen sam, što s ovim tjednom?"); await p.click("#coach-form button");
+    await p.fill("#coach-q", "I have a cold, what about this week?"); await p.click("#coach-form button");
     await p.waitForFunction(() => coachChat().at(-1)?.a, null, { timeout: 15000 });
     const sent = srv.claude.at(-1);
     assert.equal(sent.output_config.format.type, "json_schema");
-    assert.match(sent.messages[0].content, /Prehlađen sam/); assert.match(sent.messages[0].content, /"workout_id":"p-rec"|"id":"p-rec"/);
+    assert.match(sent.messages[0].content, /I have a cold/); assert.match(sent.messages[0].content, /"workout_id":"p-rec"|"id":"p-rec"/);
     assert.match(await p.textContent("#coach-thread"), /Odmori se/);
     assert.match(await p.textContent("#coach-thread"), /≈ \$0\.0[0-9]{2}/, "what the answer cost"); assert.match(await p.textContent("#coach-month"), /≈ \$0\.0/);
     assert.equal(await p.locator("#coach-thread li").count(), 1, "a change for a session that does not exist is dropped");
     assert.ok(!(await p.evaluate(() => plan().swap)), "nothing changes before confirming");
     await p.click("#coach-thread [data-apply]");
     assert.deepEqual(await p.evaluate(() => plan().swap), { [first]: "p-rec" });
-    assert.equal(await p.evaluate(id => planSessions().find(x => x.id === id).w.name, first), "Aktivni oporavak");
-    assert.match(await p.textContent("#coach-thread"), /Primijenjeno/);
+    assert.equal(await p.evaluate(id => planSessions().find(x => x.id === id).w.name, first), "Active recovery");
+    assert.match(await p.textContent("#coach-thread"), /Applied/);
     // a plain question: this week of the plan, no list of swaps, less effort
     await p.evaluate(() => coachQuestion("Kako napredujem?")); const plain = srv.claude.at(-1);
     assert.doesNotMatch(plain.messages[0].content, /Mogući treninzi/); assert.match(plain.messages[0].content, /Plan za ovaj tjedan/);
@@ -288,10 +229,10 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
       store.set("plan", { id: PLAN.id, start: ymd(d), done: {}, skipped: {}, extra: true }); });
     const wk1 = await p.evaluate(() => planSessions().filter(x => x.week === 1).map(x => x.day + ":" + (x.w.sport || "ride")));
     assert.deepEqual(wk1, ["mon:swim", "tue:ride", "tue2:run", "wed:swim", "thu:ride", "fri:run", "sun:ride"]);
-    assert.match(await p.evaluate(() => planSessions().find(x => x.id === "w1-mon").w.desc), /klizanje na prsima/);
-    assert.equal(await p.evaluate(() => planSessions().find(x => x.id === "w5-fri").w.name), "Trčanje · 2,5 km lagano");
+    assert.match(await p.evaluate(() => planSessions().find(x => x.id === "w1-mon").w.desc), /glide on your front/);
+    assert.equal(await p.evaluate(() => planSessions().find(x => x.id === "w5-fri").w.name), "Run · 2.5 km easy");
     assert.deepEqual(await p.evaluate(() => planSessions().filter(x => x.week === 14 && !x.w.segs).map(x => x.w.name)),
-      ["Test · 400 m plivanja", "Brick · 15 min trčanja", "Plivanje · lagano (neobavezno)", "Test · 5 km trčanja"], "week 14: tests for the next block");
+      ["Test · 400 m swim", "Brick · 15 min run", "Swim · easy (optional)", "Test · 5 km run"], "week 14: tests for the next block");
     assert.ok(await p.evaluate(() => planSessions().find(x => x.id === "w1-wed").optional), "Wednesday swim is optional");
     await p.click('[data-view="plan"]'); await p.waitForFunction(() => plan().done?.["w1-fri"], null, { timeout: 10000 });
     assert.equal(await p.locator(".sess .opt.missed").count(), 0, "a past optional swim is not missed"); assert.equal(await p.locator(".sess .opt").count() > 0, true);
@@ -299,7 +240,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.deepEqual(await p.evaluate(() => ["Run", "TrailRun", "Swim", "OpenWaterSwim", "Ride"].map(icuSport)), ["run", "run", "swim", "swim", null]);
     await p.evaluate(() => { store.set("coach", {}); coachCheck.at = 0; return coachCheck(); });   // comments synced from the earlier coach test
     await p.waitForFunction(() => store.get("coach", {})["icu:i777"]?.text, null, { timeout: 15000 });
-    assert.match(srv.claude.find(b => b.messages[0].content.includes("Jutarnje trčanje") && b.messages[0].content.includes("Trening koji komentiraš (intervals.icu)")).messages[0].content, /Što je plan tražio[\s\S]*1 km lagano/);
+    assert.match(srv.claude.find(b => b.messages[0].content.includes("Jutarnje trčanje") && b.messages[0].content.includes("Trening koji komentiraš (intervals.icu)")).messages[0].content, /Što je plan tražio[\s\S]*1 km easy/);
     // swims and runs added to a running plan count only from the day they were added
     assert.equal(await p.evaluate(() => { const q = { ...plan(), extraFrom: ymd(new Date()) }; return planSessions(q).filter(x => !x.w.segs && x.d < q.extraFrom).length; }), 0);
     await p.evaluate(() => planUpdate(q => { q.extra = false; }));
@@ -325,7 +266,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   });
 
   await test("strength at home: a 12-week plan of three circuits, a guided session ticks itself off", async () => {
-    const p = await open({ speed: 200, voices: [["Google hrvatski", "hr-HR"]] });
+    const p = await open({ speed: 200, voices: [["Samsung English", "en-US"]] });
     await p.evaluate(() => { settings.voice = true; const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
       store.set("plan", { id: STRENGTH.id, start: ymd(d), done: {}, skipped: {} }); });
     const ss = await p.evaluate(() => planSessions().map(x => x.day + ":" + x.w.strength));
@@ -334,29 +275,17 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.deepEqual([w1[1], w9[1], w12[1]], [18, 24, 18], "3 rounds, then 4, then an easier last week");
     assert.ok(w1[0] >= 20 && w9[0] <= 45, "20 to 45 minutes");
     await p.click('[data-view="plan"]'); await p.waitForTimeout(300);
-    assert.match(await p.textContent("#plan-body"), /Snaga kod kuće/);
+    assert.match(await p.textContent("#plan-body"), /Strength at home/);
     // run Monday's session in the player (200x faster): it announces the exercises and ticks Monday off
     await p.evaluate(() => { const x = planSessions()[0]; startStrength(x.w, x.id); });
     assert.equal(await p.evaluate(() => $("#dlg-strength").open), true);
     await p.waitForFunction(() => !$("#dlg-strength").open, null, { timeout: 30000 });
     assert.match(await p.evaluate(() => plan().done["w1-mon"]), /^app:/);
     const spoken = await p.evaluate(() => __spoken.join(" | "));
-    assert.match(spoken, /Čučanj, 30 sekundi/); assert.match(spoken, /Odmor\. Sljedeće: Iskorak unazad/); assert.match(spoken, /Trening je gotov/);
-    assert.ok(await p.evaluate(() => findWorkout("s-B-5")?.name.startsWith("Snaga B")), "the coach can swap a session for another circuit");
+    assert.match(spoken, /Squat, 30 seconds/); assert.match(spoken, /Rest\. Next: Reverse lunge, alternating/); assert.match(spoken, /Workout complete\. Well done/);
+    assert.ok(await p.evaluate(() => findWorkout("s-B-5")?.name.startsWith("Strength B")), "the coach can swap a session for another circuit");
     await p.context().close();
-    const hu = await open({ voices: [["Google magyar", "hu-HU"]], settings: { voice: true, voiceLang: "hu", uiLang: "en" } });
-    const missing = await hu.evaluate(() => {
-      const nameTriples = [...Object.values(EX).map(x => x[0]), ...WARMUP.map(w => w[0]), ...COOLDOWN.map(c => c[0])];
-      return { count: nameTriples.length, missing: nameTriples.filter(perLanguageNames => perLanguageNames[2] === undefined).map(perLanguageNames => perLanguageNames[0]) };
-    });
-    assert.equal(missing.count, 25, "fourteen exercises, six warm-up and five cool-down names");
-    assert.deepEqual(missing.missing, [], "every spoken movement name has a Hungarian form");
-    await hu.evaluate(() => startStrength({ name: "test", steps: [{ kind: "rest", s: 30 }, { kind: "work", n: EX.squat[0], s: 30 }], min: 1 }));
-    await hu.waitForTimeout(300);
-    const huStrength = (await hu.evaluate(() => __spoken))[0];
-    assert.match(huStrength, /Guggolás/, huStrength);
-    assert.doesNotMatch(huStrength, /Squat|Push-up|Reverse lunge/, huStrength);
-    await hu.evaluate(() => { clearInterval(WK.timer); WK.timer = null; }); await hu.context().close();
+
   });
 
   await test("profiles: a second person has her own data on her own phone", async () => {
@@ -572,10 +501,10 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.equal(await shown("#o-hr-box"), false, "no strap: no heart-rate box");
     assert.equal(await shown("#o-gear-box"), true, "the gear box is there instead");
     assert.equal(await p.textContent("#o-gear"), "10");
-    assert.equal(await p.textContent("#o-gear-lbl"), "Brzina · omjer 2.04");
+    assert.equal(await p.textContent("#o-gear-lbl"), "Speed · ratio 2.04");
     await p.keyboard.press("ArrowUp"); await p.waitForTimeout(150);
     assert.equal(await p.textContent("#o-gear"), "11", "the gear box follows the shift");
-    assert.equal(await p.textContent("#o-gear-lbl"), "Brzina · omjer 2.22");
+    assert.equal(await p.textContent("#o-gear-lbl"), "Speed · ratio 2.22");
     await p.evaluate(() => { __pedala.S.hrm = {}; render(); });   // a strap appears
     assert.equal(await shown("#o-hr-box"), true, "a strap brings the heart-rate box back");
     assert.equal(await shown("#o-gear-box"), true, "and the gear box stays, beside it");
