@@ -120,28 +120,62 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   });
 
   await test("video control: three auto-pause modes, the speed one waits for the coast-down", async () => {
-    const p = await open({ speed: 200, settings: { pauseOn: "speed" } });
-    await p.click("#chip-trainer"); await p.click("#c-sim");
+    const p = await open({ settings: { pauseOn: "speed" } });   // no trainer: S.live stays exactly as the test sets it
     await p.click('[data-view="settings"]'); await p.waitForTimeout(200);
     assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll('[name="pauseOn"] option')].map(o => o.textContent)),
-      ["Do not stop", "When I stop pedalling", "When speed below 1 km/h"]);
+      ["Do not stop", "When I stop pedalling", "When speed below 3 km/h"]);
     assert.equal(await p.evaluate(() => document.querySelector('[name="pauseOn"]').value), "speed", "speed is the default");
     await p.click('[data-view="ride"]');
     const still = await p.evaluate(() => {
-      S.started = true; S.running = true; S.autoPaused = false; S.idle = 0; S.workout = null; S.route = null; S.v = 20 / 3.6;
+      S.started = true; S.running = true; S.autoPaused = false; S.idle = 0; S.grace = 0; S.workout = null; S.route = null; S.v = 20 / 3.6;
       S.live = { power: 0, cadence: 0, hr: 0, speed: 20 };
       for(let i = 0; i < 10; i++) tick();
       return { running: S.running, speed: Math.round(S.v * 3.6) };
     });
-    assert.equal(still.running, true, "coasting above 1 km/h keeps the ride running");
-    assert.ok(still.speed > 1, "the speed fell but stayed above 1 km/h: " + still.speed);
+    assert.equal(still.running, true, "coasting above 3 km/h keeps the ride running");
+    assert.ok(still.speed > 3, "the speed fell but stayed above 3 km/h: " + still.speed);
+    const between = await p.evaluate(() => {
+      S.v = 2 / 3.6; S.idle = 0; S.grace = 0; S.running = true; S.autoPaused = false;
+      for(let i = 0; i < 5; i++) tick();
+      return { running: S.running, autoPaused: S.autoPaused };
+    });
+    assert.equal(between.running, false, "2 km/h is below the 3 km/h threshold and stops the ride");
     const stopped = await p.evaluate(() => {
-      S.v = 0.2 / 3.6; S.idle = 0; S.running = true;
+      S.v = 0.2 / 3.6; S.idle = 0; S.grace = 0; S.running = true; S.autoPaused = false;
       for(let i = 0; i < 5; i++) tick();
       return { running: S.running, autoPaused: S.autoPaused };
     });
     assert.equal(stopped.running, false, "a near standstill stops the ride");
     assert.equal(stopped.autoPaused, true, "and it is flagged as an automatic pause");
+    await p.context().close();
+  });
+
+  await test("video control: a start and a resume give the rider time to spin up before auto-pause", async () => {
+    const p = await open({ settings: { pauseOn: "speed" } });   // no trainer: S.live stays exactly as the test sets it
+    const g = await p.evaluate(() => {
+      S.started = true; S.running = true; S.autoPaused = true; S.workout = null; S.route = null; S.live = { power: 0, cadence: 0, hr: 0, speed: 0 };
+      S.v = 0; resume();
+      const grace = S.grace;
+      for(let i = 0; i < 10; i++) tick();      // 10 s standing still inside the grace
+      return { grace, running: S.running, left: S.grace };
+    });
+    assert.ok(g.grace >= 10, "a resume grants a grace window: " + g.grace);
+    assert.equal(g.running, true, "the grace keeps the ride running while the rider spins up");
+    assert.ok(g.left > 0, "10 s of standing still is still inside the grace: " + g.left);
+    const gone = await p.evaluate(() => {
+      S.idle = 0;                             // the grace runs out
+      for(let i = 0; i < 20; i++) tick();
+      return { running: S.running, autoPaused: S.autoPaused };
+    });
+    assert.equal(gone.running, false, "once the grace is over a standstill pauses again");
+    assert.equal(gone.autoPaused, true);
+    const up = await p.evaluate(() => {       // spinning up drops the grace at once
+      S.running = true; S.autoPaused = false; S.v = 0; S.live = { power: 150, cadence: 80, hr: 0, speed: 0 };
+      S.grace = 15; S.v = 15 / 3.6;
+      tick();
+      return S.grace;
+    });
+    assert.equal(up, 0, "being above 3 km/h ends the grace immediately");
     await p.context().close();
   });
 

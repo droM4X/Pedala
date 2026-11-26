@@ -591,8 +591,8 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
         <div class="full dlg-acts" style="justify-content:flex-start;margin-top:-4px"><button class="btn small" type="button" id="btn-voice-test">Test the voice</button></div>
         <p class="full note" id="voice-note" hidden></p>
         <h2 class="section-title full">Video control</h2>
-        <label class="full">Auto-pause<select name="pauseOn"><option value="off">Do not stop</option><option value="cadence">When I stop pedalling</option><option value="speed">When speed below 1 km/h</option></select></label>
-        <p class="full note" style="margin:-4px 0 4px">The ride and the video stop when you have stopped. On the speed setting the bike coasts first, so it takes a while before the video pauses. Your own pause and Finish are not affected.</p>
+        <label class="full">Auto-pause<select name="pauseOn"><option value="off">Do not stop</option><option value="cadence">When I stop pedalling</option><option value="speed">When speed below 3 km/h</option></select></label>
+        <p class="full note" style="margin:-4px 0 4px">The ride and the video stop when you have stopped. On the speed setting the bike coasts first, so it takes a while before the video pauses — quick uphill, never on a descent. A start or a resume gives you a moment to get going. Your own pause and Finish are not affected.</p>
         <label class="full check"><input name="pauseVideo" type="checkbox"> Pause the video when I pause the workout</label>
         <label class="full">YouTube API key (only if it is not set on Vercel)<input name="ytKey" type="text" autocomplete="off" spellcheck="false" placeholder="AIza…"></label>
         <p class="full note" style="margin:-4px 0 4px">It's free: at console.cloud.google.com create a project, enable <b>YouTube Data API v3</b> and create an API key under Credentials. The daily quota covers about 100 searches. Without a key you can still paste a link.</p>
@@ -943,7 +943,7 @@ const S = {
   live: { power: 0, cadence: 0, speed: 0, hr: 0 }, pBuf: [],
   workout: null, route: null, bias: 1, gear: 10, v: 0,
   running: false, started: false, t: 0, woT: 0, startMs: 0,
-  samples: [], dist: 0, lastSeg: -1, idle: 0, autoPaused: false,
+  samples: [], dist: 0, lastSeg: -1, idle: 0, autoPaused: false, grace: 0,
   laps: [], lap: null, hrP: null, hrOff: 0, hrWarned: false, hrAt: 0, hrHold: 0, soft: null, lowCad: 0,
 };
 /* virtual gearing: same ratios as Zwift */
@@ -1252,8 +1252,9 @@ function applyControl(){
 }
 
 /* Settings → Video control, auto-pause: "off" never stops on its own, "cadence" stops as soon as the
-   pedals stop, "speed" lets the bike coast and stops the ride once it is below 1 km/h. Power is checked
+   pedals stop, "speed" lets the bike coast and stops the ride once it is below 3 km/h. Power is checked
    in both so that a very slow but real climb (a steep route in a low gear) is not mistaken for a rest. */
+const PAUSE_KMH = 3, GRACE_S = 15;   // GRACE_S outlasts the SOFT_S soft-start ramp, so a start never pauses on the way up
 const pauseMode = () => ["off", "cadence", "speed"].includes(settings.pauseOn) ? settings.pauseOn : "speed";
 /* Settings → Video control used to be a single on/off switch: keep each user's choice in the new menu.
    Runs on load and again whenever settings arrive from a backup or another device. */
@@ -1263,13 +1264,15 @@ function migratePauseOn(){
   if(!["off", "cadence", "speed"].includes(settings.pauseOn)) settings.pauseOn = "speed";
 }
 const autoPauseDue = () => pauseMode() !== "off" && S.live.power < 5
-  && (pauseMode() === "cadence" ? S.live.cadence < 5 : S.v * 3.6 < 1);
+  && (pauseMode() === "cadence" ? S.live.cadence < 5 : S.v * 3.6 < PAUSE_KMH);
 
 function tick(){
   const dt = 1;
   if(S.running){
+    // a start or a resume gives the rider GRACE_S seconds to spin up, dropped early once up to speed
+    if(S.grace > 0){ if(S.v * 3.6 >= PAUSE_KMH) S.grace = 0; else S.grace--; }
     // auto pause when the rider has stopped (Settings → Video control); 4 s of grace so one missed pedal stroke does not stop the ride
-    if(autoPauseDue()){ S.idle++; if(S.idle >= 4){ pause(true); return render(); } } else S.idle = 0;
+    if(S.grace <= 0 && autoPauseDue()){ S.idle++; if(S.idle >= 4){ pause(true); return render(); } } else S.idle = 0;
     S.t += dt; if(S.workout) S.woT += dt;
     const erg = targetNow() != null;
     const v = erg ? (S.v = speedFromPower(S.live.power)) : stepSpeed(S.live.power, roadGrade(), dt);
@@ -1298,11 +1301,11 @@ function startClock(){ if(!tickTimer) tickTimer = setInterval(tick, 1000 / (S.tr
 function start(){
   if(!S.trainer){ $("#dlg-connect").showModal(); return; }
   if(!S.started){ S.started = true; S.startMs = Date.now(); S.samples = []; S.t = 0; S.woT = 0; S.dist = 0; S.v = 0; S.lastSeg = -1; S.laps = []; S.lap = null; S.hrP = null; S.hrWarned = false; }
-  S.running = true; S.autoPaused = false; S.idle = 0; if(S.trainer.stopped) S.trainer.stopped = false;
+  S.running = true; S.autoPaused = false; S.idle = 0; S.grace = GRACE_S; if(S.trainer.stopped) S.trainer.stopped = false;
   softStart(); S.hrHold = 60; applyControl(); startClock(); wakeLock(); yt("playVideo"); render();
 }
 function pause(auto){ S.running = false; S.autoPaused = !!auto; S.soft = null; applyControl(); if(settings.pauseVideo) yt("pauseVideo"); if(auto) notify("Paused: start pedalling to resume"); render(); }
-function resume(){ S.running = true; S.autoPaused = false; S.idle = 0; softStart(); S.hrHold = 60; applyControl(); yt("playVideo"); toast("Resuming"); }
+function resume(){ S.running = true; S.autoPaused = false; S.idle = 0; S.grace = GRACE_S; softStart(); S.hrHold = 60; applyControl(); yt("playVideo"); toast("Resuming"); }
 function finishWorkout(){ S.running = false; S.soft = null; applyControl(); if(settings.beep) beep(660, .4); say(() => S.route ? "You made it to the finish." : "Workout complete. Well done."); openSummary(); }
 
 /* ============ metrics ============ */
