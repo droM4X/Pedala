@@ -115,7 +115,7 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
   await test("coach: no credit left gives a clear 402", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-test";
     global.fetch = async () => new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "Your credit balance is too low to access the Anthropic API." } }), { status: 400, headers: { "content-type": "application/json" } });
-    try{ const r = await callCoach("POST", { action: "comment", ride: coachRide }); assert.equal(r.status, 402); assert.match(r.body.error, /nema kredita/); }
+    try{ const r = await callCoach("POST", { action: "comment", ride: coachRide }); assert.equal(r.status, 402); assert.match(r.body.error, /^The Anthropic account has no credits\. Add credit at console\.anthropic\.com → Billing\.$/); }
     finally{ global.fetch = realFetch; delete process.env.ANTHROPIC_API_KEY; }
   });
   await test("coach: a refusal is reported, not shown as a comment", async () => {
