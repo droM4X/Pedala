@@ -503,10 +503,10 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.equal(await shown("#o-hr-box"), false, "no strap: no heart-rate box");
     assert.equal(await shown("#o-gear-box"), true, "the gear box is there instead");
     assert.equal(await p.textContent("#o-gear"), "10");
-    assert.equal(await p.textContent("#o-gear-lbl"), "Speed · ratio 2.04");
+    assert.equal(await p.textContent("#o-gear-lbl"), "Gear · ratio 2.04");
     await p.keyboard.press("ArrowUp"); await p.waitForTimeout(150);
     assert.equal(await p.textContent("#o-gear"), "11", "the gear box follows the shift");
-    assert.equal(await p.textContent("#o-gear-lbl"), "Speed · ratio 2.22");
+    assert.equal(await p.textContent("#o-gear-lbl"), "Gear · ratio 2.22");
     await p.evaluate(() => { __pedala.S.hrm = {}; render(); });   // a strap appears
     assert.equal(await shown("#o-hr-box"), true, "a strap brings the heart-rate box back");
     assert.equal(await shown("#o-gear-box"), true, "and the gear box stays, beside it");

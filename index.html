@@ -609,7 +609,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <p class="note" id="icu-status"></p>
       <label class="check note" style="display:flex"><input type="checkbox" id="icu-auto"> Send every saved ride to intervals.icu automatically</label>
       <h2 class="section-title">Virtual coach</h2>
-      <p class="note">After every session Claude (Anthropic) writes a short comment in Croatian: on rides from Pedala and on everything else that reaches intervals.icu, such as runs and swims from a watch. Comments are under Progress and in the ride report.</p>
+      <p class="note">After every session Claude (Anthropic) writes a short comment in English: on rides from Pedala and on everything else that reaches intervals.icu, such as runs and swims from a watch. Comments are under Progress and in the ride report.</p>
       <p class="note" id="coach-status"></p>
       <label class="note" style="display:block;max-width:520px">The coach writes on its own<select id="coach-mode" style="display:block;margin-top:5px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit">
         <option value="week">A weekly review on Saturdays (recommended)</option><option value="each">A comment after every session</option><option value="off">Nothing, only when I ask</option></select></label>
@@ -1392,7 +1392,7 @@ function rememberVideo(v){ const r = recentVideos().filter(x => x.id !== v.id); 
 function isoDur(d){ const m = String(d).match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/); return m ? (+m[1]||0)*3600 + (+m[2]||0)*60 + (+m[3]||0) : 0; }
 const unesc = t => { const e = document.createElement("textarea"); e.innerHTML = t; return e.value; };
 function vidCard(v, onPick = () => { rememberVideo(v); setVideo(v.id); }){
-  const b = document.createElement("button"); b.className = "vcard"; b.type = "button"; b.dataset.notr = "";
+  const b = document.createElement("button"); b.className = "vcard"; b.type = "button";
   b.innerHTML = `<div class="th"><img loading="lazy" alt=""></div><b></b><small></small>`;
   b.querySelector("img").src = v.thumb || `https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`;
   if(v.dur){ const d = document.createElement("span"); d.className = "dur"; d.textContent = fmtTime(v.dur); b.querySelector(".th").append(d); }
@@ -1684,7 +1684,7 @@ function renderOverlay(p, tgt, rg){
   const hz = hrZone(S.live.hr); o("#o-hr-lbl", hz >= 0 ? `HR · ${HR_ZONES[hz][2]}` : "HR");
   $("#o-hr-box").hidden = !hrOn || !settings.hrOn;
   $("#o-hr-box").style.borderLeftColor = hrOn && hz >= 0 ? cssVar(HR_ZONES[hz][1]) : "transparent";
-  if(!S.workout || cs?.s.free){ o("#o-gear", S.gear); o("#o-gear-lbl", `Speed · ratio ${GEARS[S.gear - 1].toFixed(2)}`); o("#o-gear-unit", "/" + GEARS.length); }
+  if(!S.workout || cs?.s.free){ o("#o-gear", S.gear); o("#o-gear-lbl", `Gear · ratio ${GEARS[S.gear - 1].toFixed(2)}`); o("#o-gear-unit", "/" + GEARS.length); }
   else if(cs?.s.hr){ o("#o-gear", hrTarget(cs.s)); o("#o-gear-lbl", "Target HR"); o("#o-gear-unit", "bpm"); }
   else { o("#o-gear", Math.round(S.bias * 100)); o("#o-gear-lbl", "Intensity"); o("#o-gear-unit", "%"); }
   o("#o-time", fmtTime(S.t));
@@ -2225,7 +2225,7 @@ async function coachQuestion(q){
 function changeText(c){
   const x = planSessions().find(s => s.id === c.session_id), w = c.workout_id && findWorkout(c.workout_id);
   const where = x ? `${x.label} ${shortDate(x.date)} · ${x.w.name}` : c.session_id;
-  const what = c.action === "replace" ? `swap for „${w?.name || c.workout_id}“` : c.action === "skip" ? "skip" : "restore the original session";
+  const what = c.action === "replace" ? `swap for “${w?.name || c.workout_id}”` : c.action === "skip" ? "skip" : "restore the original session";
   return `<b>${esc(where)}</b>: ${esc(what)}${c.reason ? ` <span>(${esc(c.reason)})</span>` : ""}`;
 }
 function applyChanges(at){
@@ -2495,7 +2495,7 @@ const WARMUP = [["Marching on the spot, knees up", 60], ["Arm circles forwards a
 const COOLDOWN = [["Quad stretch, left leg", 30], ["Quad stretch, right leg", 30], ["Hamstring stretch, seated", 40], ["Chest stretch in a doorway", 30], ["Back stretch: sit on your heels, arms forward", 40]];
 const CIRCUITS = { A: ["squat", "lunge", "bridge", "sideLunge", "wallSit", "calf"], B: ["pushup", "dips", "superman", "plank", "sidePlank", "deadBug"], C: ["squat", "pushup", "lunge", "climber", "tap", "bridge"] };
 const CIRCUIT_NAME = { A: "legs and glutes", B: "upper body and core", C: "full body" };
-const STRENGTH = { id: "strength12", weeks: 12, deload: [4, 8, 12], days: [["mon", 0, "Mon", "A"], ["wed", 2, "Wed", "B"], ["fri", 4, "Fri", "C"]] };
+const STRENGTH = { id: "snaga12", weeks: 12, deload: [4, 8, 12], days: [["mon", 0, "Mon", "A"], ["wed", 2, "Wed", "B"], ["fri", 4, "Fri", "C"]] };
 const ROUND_REST = 60;
 function strengthWorkout(k, wi){
   const ph = wi < 4 ? 0 : wi < 8 ? 1 : 2, [work, rest] = [[30, 30], [40, 20], [45, 15]][ph], rounds = [3, 3, 4][ph] - (STRENGTH.deload.includes(wi + 1) ? 1 : 0);

@@ -43,7 +43,7 @@ Answer (the answer field):
 Plan changes (the changes field):
 - Propose changes only when the athlete asks for one or when one is clearly needed (illness, fatigue, travel); otherwise return an empty list.
 - session_id must be one of the listed sessions in the plan, and workout_id must be one of the listed possible workouts (or null).
-- The session's stanje field uses English status values such as done, skipped, missed, optional, not done, today, and upcoming.
+- The session's stanje field uses English status values such as done, skipped, missed, "optional, not done", today, and upcoming.
 - replace: replace a session with another (workout_id); skip: skip it (e.g. illness, or replacing it with a run or swim outside Pedala; workout_id null); restore: restore the original session (workout_id null).
 - Do not change sessions that have already been completed; reason should briefly explain why.
 - In your answer, say what you propose: changes are applied only after the athlete confirms them in the app.`;
@@ -56,7 +56,7 @@ Review:
 - fitness and recovery: fitness, fatigue, sleep, resting heart rate, and HRV, when available;
 - what to watch for next week, with one or two specific tips for upcoming workouts.
 
-Rules: Write in English, warm and direct, second person singular; respect the athlete's notes and decisions; if there are signs of injury, illness, or overtraining, say so clearly without diagnosing; do not guess when data is missing. Each session's stanje field uses English status values such as done, skipped, missed, optional, not done, today, and upcoming. Length: 120 to 220 words, plain text with no heading or markdown, no more than four short paragraphs.`;
+Rules: Write in English, warm and direct, second person singular; respect the athlete's notes and decisions; if there are signs of injury, illness, or overtraining, say so clearly without diagnosing; do not guess when data is missing. Each session's stanje field uses English status values such as done, skipped, missed, "optional, not done", today, and upcoming. Length: 120 to 220 words, plain text with no heading or markdown, no more than four short paragraphs.`;
 
 const ASK_SCHEMA = { type: "object", additionalProperties: false, required: ["answer", "changes"], properties: {
   answer: { type: "string" },
