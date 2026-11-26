@@ -284,6 +284,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const spoken = await p.evaluate(() => __spoken.join(" | "));
     assert.match(spoken, /Squat, 30 seconds/); assert.match(spoken, /Rest\. Next: Reverse lunge, alternating/); assert.match(spoken, /Workout complete\. Well done/);
     assert.ok(await p.evaluate(() => findWorkout("s-B-5")?.name.startsWith("Strength B")), "the coach can swap a session for another circuit");
+    await p.evaluate(() => { WK.paused = true; startStrength({ name: "Reset check", steps: [{ kind: "work", n: "Squat", s: 1 }], min: 1 }); });
+    await p.waitForFunction(() => !$("#dlg-strength").open, null, { timeout: 5000 });
     await p.context().close();
 
   });
@@ -551,7 +553,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.equal(await p.evaluate(() => document.querySelector(".stat.hr").getClientRects().length), 0, "the pulse cell is really not displayed");
     assert.ok(await p.evaluate(() => $("#click-details").hidden), "the Click setup section is folded away");
     await p.click('[data-view="workouts"]');
-    assert.ok(!(await p.textContent("#wo-list")).includes("Po pulsu"), "no heart-rate workouts without a strap");
+    assert.ok(!(await p.textContent("#wo-list")).includes("By heart rate"), "no heart-rate workouts without a strap");
     await p.click('[data-view="settings"]');
     assert.ok(await p.evaluate(() => $("#hr-on").checked === false && $("#click-on").checked === false), "both toggles start unticked");
     assert.equal(await p.evaluate(() => document.querySelector("#hr-on").closest("label").textContent.trim()), "Enable", "the HR toggle says Enable");

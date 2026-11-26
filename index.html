@@ -2031,7 +2031,7 @@ async function syncIcu(){
     for(const r of queue){ if(!await icuUpload(r)) break; if(r.icu.status === "done") sent++; else toast("intervals.icu: " + r.icu.error); renderHistoryIfOpen(); }
   }catch(e){ console.warn("intervals.icu sync", e); }
   finally{ icuBusy = false; renderHistoryIfOpen(); }
-  if(sent) toast(sent === 1 ? "The ride is on intervals.icu" : `To intervals.icu poslano rides: ${sent}`);
+  if(sent) toast(sent === 1 ? "The ride is on intervals.icu" : `Rides sent to intervals.icu: ${sent}`);
 }
 async function queueIcu(r){ r.icu = { status: "pending" }; await dbPut(r); renderHistory(); syncIcu(); }
 function icuButton(r){
@@ -2091,7 +2091,7 @@ function coachRidePayload(r){
   return { id: r.id, name: r.name, start: new Date(r.start).toISOString(), desc: w?.desc, route: r.route || undefined, ftp: r.ftp, maxHr: r.maxHr,
     plan: sess ? { tjedan: sess.week, dan: sess.day, trening: sess.w.name } : undefined,
     m: { ...m, trajanje_min: Math.round(m.duration / 60), najbolje_w: best },
-    laps: (r.laps || []).filter(l => l.dur >= 20).map(l => ({ naziv: l.name, s: l.dur, strength: l.avgP, cilj: l.tgt, vrsta_cilja: l.kind, ostvareno_posto: l.score,
+    laps: (r.laps || []).filter(l => l.dur >= 20).map(l => ({ naziv: l.name, s: l.dur, snaga: l.avgP, cilj: l.tgt, vrsta_cilja: l.kind, ostvareno_posto: l.score,
       puls: l.avgHr || null, kadenca: l.avgCad, cilj_kadenca: l.cadTgt, uputa: l.note })),
     minutes: { korak_s: step, stupci: ["min", "W", "rpm", "bpm"], podaci: rows } };
 }
@@ -2209,7 +2209,7 @@ async function coachQuestion(q){
   const options = wantsChange && isStrengthPlan(p) ? ["A", "B", "C"].map(k => strengthWorkout(k, wi)).map(w => ({ id: w.id, naziv: w.name, min: w.min }))
     : wantsChange ? [...new Map(Object.values(PLAN_WO).map(w => [w.id, w])).values()].map(w => ({ id: w.id, naziv: w.name, min: woMin(w), opis: String(w.desc || "").slice(0, 70) })) : [];
   let rides = []; if(!icuOn()) try{ rides = (await dbAll()).filter(r => r.start > now - 21 * 864e5).sort((a, b) => b.start - a.start)   // intervals.icu already has them
-    .map(r => ({ datum: ymd(new Date(r.start)), naziv: r.name, min: Math.round(r.m.duration / 60), tss: r.m.tss, strength: r.m.avgP, puls: r.m.avgHr || undefined })); }catch{}
+    .map(r => ({ datum: ymd(new Date(r.start)), naziv: r.name, min: Math.round(r.m.duration / 60), tss: r.m.tss, snaga: r.m.avgP, puls: r.m.avgHr || undefined })); }catch{}
   const comments = Object.values(coachNotes()).filter(n => n.text).sort((a, b) => (b.date || b.at) - (a.date || a.at)).slice(0, 3)
     .map(n => ({ trening: n.title, datum: ymd(new Date(n.date || n.at)), komentar: n.text.slice(0, 600) }));
   const chat = coachChat().filter(x => x.a).slice(-2).flatMap(x => [{ sportas: x.q.slice(0, 400) }, { trener: x.a.slice(0, 600) }]);
@@ -2517,7 +2517,7 @@ const planWeeks = p => isStrengthPlan(p) ? STRENGTH.weeks : PLAN.weeks.length;
 /* ---- guided player ---- */
 const WK = { steps: [], i: -1, left: 0, done: 0, total: 0, paused: false, timer: null, last: 0, sess: null, w: null };
 function startStrength(w, sess = null){
-  Object.assign(WK, { steps: w.steps, i: -1, done: 0, total: w.steps.reduce((a, x) => a + x.s, 0), thenused: false, sess, w, last: performance.now() });
+  Object.assign(WK, { steps: w.steps, i: -1, done: 0, total: w.steps.reduce((a, x) => a + x.s, 0), paused: false, sess, w, last: performance.now() });
   $("#wk-title").textContent = w.name; $("#wk-pause").textContent = "Pause";
   $("#dlg-sess").open && $("#dlg-sess").close();
   $("#dlg-strength").showModal(); wakeLock(); wkNext();
