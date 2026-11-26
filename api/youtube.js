@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
   try{
     if(p.get("channel")){
       const c = await resolveChannel(api, p.get("channel").trim());
-      return c ? res.status(200).json(c) : res.status(404).json({ error: "Kanal nije pronađen" });
+      return c ? res.status(200).json(c) : res.status(404).json({ error: "Channel not found" });
     }
     if(p.get("playlist")){
       const t = p.get("playlist").trim(), id = (t.match(/[?&]list=([\w-]+)/) || t.match(/^([\w-]{10,})$/) || [])[1];
@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
       const [info, list] = await Promise.all([
         id.startsWith("UU") ? Promise.resolve(null) : api("/playlists", { part: "snippet", id }),
         api("/playlistItems", { part: "snippet,contentDetails", playlistId: id, maxResults: 25 })]);
-      if(info && !info.items?.length) return res.status(404).json({ error: "Playlista nije pronađena ili je privatna" });
+      if(info && !info.items?.length) return res.status(404).json({ error: "Playlist not found or private" });
       const items = (list.items || []).filter(i => i.contentDetails?.videoId && !/^(Private|Deleted) video$/.test(i.snippet?.title));
       const d = await durations(items.map(i => i.contentDetails.videoId));
       return res.status(200).json({ id, title: info?.items[0].snippet.title || "", items: items.map(i => ({ id: i.contentDetails.videoId, title: i.snippet.title,

@@ -16,7 +16,7 @@ module.exports = async (req, res) => {
   let b = req.body || {};
   if(typeof b === "string"){ try{ b = JSON.parse(b); }catch{ return res.status(400).json({ error: "Neispravan JSON" }); } }
   const key = serverKey || b.key;
-  if(!key) return res.status(401).json({ error: "Nema API ključa" });
+  if(!key) return res.status(401).json({ error: "No API key" });
   const auth = { Authorization: "Basic " + Buffer.from("API_KEY:" + key).toString("base64") };
   try{
     if(b.action === "athlete"){

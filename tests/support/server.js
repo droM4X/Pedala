@@ -67,13 +67,13 @@ async function fakeClaude(_url, opt){
   log.push(`claude ${body.model} ${body.messages[0].content.length} chars`);
   if(body.output_config?.format){   // a question: propose swapping the first listed session for active recovery, plus one invalid change
     const id = body.messages[0].content.match(/"id":"(w\d+-\w+)"/)?.[1];
-    const out = { answer: "Odmori se. Predlažem lagani oporavak umjesto ovog treninga.", changes: [
-      { session_id: id, action: "replace", workout_id: "p-rec", reason: "prehlada" }, { session_id: "w99-xyz", action: "skip", workout_id: null, reason: "ne postoji" }] };
+    const out = { answer: "Rest and do an easy recovery session instead of this workout.", changes: [
+      { session_id: id, action: "replace", workout_id: "p-rec", reason: "cold" }, { session_id: "w99-xyz", action: "skip", workout_id: null, reason: "does not exist" }] };
     return J({ id: "msg_q", type: "message", role: "assistant", model: body.model, stop_reason: "end_turn", stop_details: null,
       content: [{ type: "text", text: JSON.stringify(out) }], usage: { input_tokens: 5000, output_tokens: 300 } });
   }
   return J({ id: "msg_test", type: "message", role: "assistant", model: body.model, stop_reason: "end_turn", stop_details: null,
-    content: [{ type: "thinking", thinking: "", signature: "x" }, { type: "text", text: "Dobar trening. Puls je stabilan, nastavi ovako." }],
+    content: [{ type: "thinking", thinking: "", signature: "x" }, { type: "text", text: "Good workout. Your heart rate is steady; keep it up." }],
     usage: { input_tokens: 3000, output_tokens: 400 } });
 }
 

@@ -25,7 +25,7 @@ module.exports = async (req, res) => {
       const id = new URL(req.url, "http://x").searchParams.get("ride");
       if(!id) return res.status(200).json({ ok: true });
       const ride = await readJson(`${P}rides/${safeId(id)}.json`);
-      return ride ? res.status(200).json(ride) : res.status(404).json({ error: "Nema te vožnje" });
+      return ride ? res.status(200).json(ride) : res.status(404).json({ error: "Ride not found" });
     }
     if(req.method !== "POST") return res.status(405).json({ error: "Dozvoljeni su samo GET i POST" });
     let b = req.body || {};
@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
 
     if(b.action === "ride"){
       const r = b.ride;
-      if(!r?.id || !r.m || !Array.isArray(r.samples)) return res.status(400).json({ error: "Neispravna vožnja" });
+      if(!r?.id || !r.m || !Array.isArray(r.samples)) return res.status(400).json({ error: "Invalid ride" });
       await writeJson(`${P}rides/${safeId(r.id)}.json`, r);
       return res.status(200).json({ ok: true });
     }
@@ -49,7 +49,7 @@ module.exports = async (req, res) => {
     }
     return res.status(400).json({ error: "Nepoznata akcija" });
   }catch(e){
-    return res.status(502).json({ error: "Spremište nije dostupno: " + e.message });
+    return res.status(502).json({ error: "Store unavailable: " + e.message });
   }
 };
 
