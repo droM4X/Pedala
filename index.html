@@ -582,8 +582,6 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
         <label>Zwift Cog (teeth)<input name="cog" type="number" min="10" max="30" step="1"></label>
         <label>Max heart rate (bpm)<input name="maxHr" type="number" min="120" max="230" step="1"></label>
         <p class="note" style="margin:22px 0 0">Heart-rate zones: Z1 up to 60%, Z2 60–70%, Z3 70–80%, Z4 80–90%, Z5 above 90% of max.</p>
-        <label class="full">YouTube API key (only if it is not set on Vercel)<input name="ytKey" type="text" autocomplete="off" spellcheck="false" placeholder="AIza…"></label>
-        <p class="full note" style="margin:-4px 0 4px">It's free: at console.cloud.google.com create a project, enable <b>YouTube Data API v3</b> and create an API key under Credentials. The daily quota covers about 100 searches. Without a key you can still paste a link.</p>
         <h2 class="section-title full">Announcements</h2>
         <label class="full check"><input name="beep" type="checkbox"> Beep when the interval changes</label>
         <label class="full check"><input name="voice" type="checkbox"> Voice announcements (next interval, interval and lap results)</label>
@@ -592,8 +590,12 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
         <label>Announcement voice<select name="voiceName"><option value="">Automatic</option></select></label>
         <div class="full dlg-acts" style="justify-content:flex-start;margin-top:-4px"><button class="btn small" type="button" id="btn-voice-test">Test the voice</button></div>
         <p class="full note" id="voice-note" hidden></p>
+        <h2 class="section-title full">Video control</h2>
+        <label class="full">Auto-pause<select name="pauseOn"><option value="off">Do not stop</option><option value="cadence">When I stop pedalling</option><option value="speed">When speed below 1 km/h</option></select></label>
+        <p class="full note" style="margin:-4px 0 4px">The ride and the video stop when you have stopped. On the speed setting the bike coasts first, so it takes a while before the video pauses. Your own pause and Finish are not affected.</p>
         <label class="full check"><input name="pauseVideo" type="checkbox"> Pause the video when I pause the workout</label>
-        <label class="full check"><input name="autoPause" type="checkbox"> Pause automatically when I stop pedalling</label>
+        <label class="full">YouTube API key (only if it is not set on Vercel)<input name="ytKey" type="text" autocomplete="off" spellcheck="false" placeholder="AIza…"></label>
+        <p class="full note" style="margin:-4px 0 4px">It's free: at console.cloud.google.com create a project, enable <b>YouTube Data API v3</b> and create an API key under Credentials. The daily quota covers about 100 searches. Without a key you can still paste a link.</p>
       </form>
       <h2 class="section-title">Heart Rate Strap (HR)</h2>
       <p class="note">A heart rate strap is a wristband or chest belt that sends your pulse wirelessly. If you enable it, the HR button in the top right connects it, and Pedala shows your live pulse and offers heart-rate workouts.</p>
@@ -730,7 +732,8 @@ const store = {
     }catch{ return false; }
   }
 };
-const settings = Object.assign({ ftp: 230, weight: 80, chainring: 34, cog: 14, clickMap: {}, beep: true, lapKm: 5, pauseVideo: true, autoPause: true, maxHr: 185, voice: true, clickOn: false, hrOn: false }, store.get("settings", {}));
+const settings = Object.assign({ ftp: 230, weight: 80, chainring: 34, cog: 14, clickMap: {}, beep: true, lapKm: 5, pauseVideo: true, pauseOn: "speed", maxHr: 185, voice: true, clickOn: false, hrOn: false }, store.get("settings", {}));
+migratePauseOn();
 document.documentElement.lang = "en";
 /* heart-rate zones as fractions of max HR: [upper bound, colour, name] */
 const HR_ZONES = [[.6, "--z1", "Z1"], [.7, "--z2", "Z2"], [.8, "--z3", "Z3"], [.9, "--z4", "Z4"], [99, "--z6", "Z5"]];
@@ -1248,11 +1251,25 @@ function applyControl(){
   } else { const g = trainerGrade(); S.trainer.setGrade(g > 0 ? g * k : g); }
 }
 
+/* Settings → Video control, auto-pause: "off" never stops on its own, "cadence" stops as soon as the
+   pedals stop, "speed" lets the bike coast and stops the ride once it is below 1 km/h. Power is checked
+   in both so that a very slow but real climb (a steep route in a low gear) is not mistaken for a rest. */
+const pauseMode = () => ["off", "cadence", "speed"].includes(settings.pauseOn) ? settings.pauseOn : "speed";
+/* Settings → Video control used to be a single on/off switch: keep each user's choice in the new menu.
+   Runs on load and again whenever settings arrive from a backup or another device. */
+function migratePauseOn(){
+  if(settings.pauseOn == null && settings.autoPause != null) settings.pauseOn = settings.autoPause ? "cadence" : "off";
+  delete settings.autoPause;
+  if(!["off", "cadence", "speed"].includes(settings.pauseOn)) settings.pauseOn = "speed";
+}
+const autoPauseDue = () => pauseMode() !== "off" && S.live.power < 5
+  && (pauseMode() === "cadence" ? S.live.cadence < 5 : S.v * 3.6 < 1);
+
 function tick(){
   const dt = 1;
   if(S.running){
-    // auto pause when not pedaling for 4 s
-    if(settings.autoPause && S.live.cadence < 5 && S.live.power < 5){ S.idle++; if(S.idle >= 4){ pause(true); return render(); } } else S.idle = 0;
+    // auto pause when the rider has stopped (Settings → Video control); 4 s of grace so one missed pedal stroke does not stop the ride
+    if(autoPauseDue()){ S.idle++; if(S.idle >= 4){ pause(true); return render(); } } else S.idle = 0;
     S.t += dt; if(S.workout) S.woT += dt;
     const erg = targetNow() != null;
     const v = erg ? (S.v = speedFromPower(S.live.power)) : stepSpeed(S.live.power, roadGrade(), dt);
@@ -1984,7 +2001,7 @@ async function importBackup(file){
   const merge = (key, list) => { const cur = store.get(key, []), ids = new Set(cur.map(x => x.id)); return store.set(key, cur.concat((list || []).filter(x => x?.id && !ids.has(x.id)))); };
   merge("workouts", data.workouts);
   if(!merge("routes", data.routes)) toast("The routes did not fit in the browser");
-  if(data.settings && confirm("Also take the settings from the backup (FTP, weight, gears)?")){ Object.assign(settings, data.settings); store.set("settings", settings); fillSettings(); }
+  if(data.settings && confirm("Also take the settings from the backup (FTP, weight, gears)?")){ Object.assign(settings, data.settings); migratePauseOn(); store.set("settings", settings); fillSettings(); }
   toast(`New rides imported: ${n}`); renderHistory();
 }
 $("#btn-backup").onclick = () => exportBackup().catch(e => toast("Export failed: " + e.message));
@@ -2644,7 +2661,7 @@ const publicSettings = () => Object.fromEntries(Object.entries(settings).filter(
 function applySection(k, data){
   store.quiet = true;
   try{
-    if(k === "settings"){ for(const [x, v] of Object.entries(data || {})) if(!SYNC_SKIP.includes(x)) settings[x] = v; store.set("settings", settings); }
+    if(k === "settings"){ for(const [x, v] of Object.entries(data || {})) if(!SYNC_SKIP.includes(x)) settings[x] = v; migratePauseOn(); store.set("settings", settings); }
     else store.set(k, data);
   }finally{ store.quiet = false; }
 }
@@ -2824,10 +2841,10 @@ $("#sum-discard").onclick = () => { if(confirm("Discard the ride without saving?
 $("#sum-resume").onclick = () => { $("#dlg-summary").close(); start(); };
 
 /* ============ settings ============ */
-function fillSettings(){ const f = $("#settings-form"); f.ftp.value = settings.ftp; f.weight.value = settings.weight; f.beep.checked = settings.beep; f.lapKm.value = lapKm(); f.pauseVideo.checked = settings.pauseVideo; f.autoPause.checked = settings.autoPause; f.ytKey.value = settings.ytKey || ""; f.chainring.value = settings.chainring; f.cog.value = settings.cog; f.maxHr.value = settings.maxHr; f.voice.checked = settings.voice; fillVoices(); fillCoach(); }
+function fillSettings(){ const f = $("#settings-form"); f.ftp.value = settings.ftp; f.weight.value = settings.weight; f.beep.checked = settings.beep; f.lapKm.value = lapKm(); f.pauseVideo.checked = settings.pauseVideo; f.pauseOn.value = pauseMode(); f.ytKey.value = settings.ytKey || ""; f.chainring.value = settings.chainring; f.cog.value = settings.cog; f.maxHr.value = settings.maxHr; f.voice.checked = settings.voice; fillVoices(); fillCoach(); }
 $("#settings-form").addEventListener("input", e => { const f = e.currentTarget;
   const ftp = +f.ftp.value, wt = +f.weight.value; if(ftp >= 80 && ftp <= 600) settings.ftp = ftp; if(wt >= 30 && wt <= 200) settings.weight = wt;
-  settings.beep = f.beep.checked; const lk = +f.lapKm.value; if(lk >= 1 && lk <= 50) settings.lapKm = lk; settings.pauseVideo = f.pauseVideo.checked; settings.autoPause = f.autoPause.checked; settings.ytKey = f.ytKey.value.trim();
+  settings.beep = f.beep.checked; const lk = +f.lapKm.value; if(lk >= 1 && lk <= 50) settings.lapKm = lk; settings.pauseVideo = f.pauseVideo.checked; settings.pauseOn = f.pauseOn.value; settings.ytKey = f.ytKey.value.trim();
   const cr = +f.chainring.value, cg = +f.cog.value; if(cr >= 20 && cr <= 60) settings.chainring = cr; if(cg >= 10 && cg <= 30) settings.cog = cg;
   const mh = +f.maxHr.value; if(mh >= 120 && mh <= 230) settings.maxHr = mh; settings.voice = f.voice.checked; settings.voiceName = f.voiceName.value; voice = null;
   if(e.target.name === "voiceName") fillVoices();

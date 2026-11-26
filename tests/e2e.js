@@ -119,6 +119,48 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.context().close();
   });
 
+  await test("video control: three auto-pause modes, the speed one waits for the coast-down", async () => {
+    const p = await open({ speed: 200, settings: { pauseOn: "speed" } });
+    await p.click("#chip-trainer"); await p.click("#c-sim");
+    await p.click('[data-view="settings"]'); await p.waitForTimeout(200);
+    assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll('[name="pauseOn"] option')].map(o => o.textContent)),
+      ["Do not stop", "When I stop pedalling", "When speed below 1 km/h"]);
+    assert.equal(await p.evaluate(() => document.querySelector('[name="pauseOn"]').value), "speed", "speed is the default");
+    await p.click('[data-view="ride"]');
+    const still = await p.evaluate(() => {
+      S.started = true; S.running = true; S.autoPaused = false; S.idle = 0; S.workout = null; S.route = null; S.v = 20 / 3.6;
+      S.live = { power: 0, cadence: 0, hr: 0, speed: 20 };
+      for(let i = 0; i < 10; i++) tick();
+      return { running: S.running, speed: Math.round(S.v * 3.6) };
+    });
+    assert.equal(still.running, true, "coasting above 1 km/h keeps the ride running");
+    assert.ok(still.speed > 1, "the speed fell but stayed above 1 km/h: " + still.speed);
+    const stopped = await p.evaluate(() => {
+      S.v = 0.2 / 3.6; S.idle = 0; S.running = true;
+      for(let i = 0; i < 5; i++) tick();
+      return { running: S.running, autoPaused: S.autoPaused };
+    });
+    assert.equal(stopped.running, false, "a near standstill stops the ride");
+    assert.equal(stopped.autoPaused, true, "and it is flagged as an automatic pause");
+    await p.context().close();
+  });
+
+  await test("video control: an old on/off auto-pause setting becomes cadence or off", async () => {
+    const p = await open();
+    const got = await p.evaluate(() => {
+      const out = {};
+      for(const [old, key] of [[false, "off"], [true, "on"]]){ settings.pauseOn = null; settings.autoPause = old; migratePauseOn(); out[key] = settings.pauseOn; }
+      settings.pauseOn = null; delete settings.autoPause; migratePauseOn(); out.fresh = settings.pauseOn;
+      settings.pauseOn = "cadence"; settings.autoPause = true; migratePauseOn(); out.chosen = settings.pauseOn;
+      return out;
+    });
+    assert.equal(got.off, "off", "an old 'off' becomes Do not stop");
+    assert.equal(got.on, "cadence", "an old 'on' becomes When I stop pedalling");
+    assert.equal(got.fresh, "speed", "a device without the old setting takes the new default");
+    assert.equal(got.chosen, "cadence", "a real menu choice is never overwritten by the old key");
+    await p.context().close();
+  });
+
   await test("English everywhere, in every browser", async () => {
     const p = await open({ speed: 200 });
     const croatian = /[čćžšđ]|\b(je|na|ili|se|za|od|nije|treba|nema|vožnj\w*|trening\w*|Postavke|Spoji|Kreni|Tjedan|Zona|Puls|Kadenca|Brzina|Glazba|Snaga|Vrijeme|Još|Sljedeće)\b/i;
