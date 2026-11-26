@@ -2,8 +2,6 @@
 
 **Indoor cycling in the browser.** Connect your smart trainer, heart rate strap and Zwift Click over Bluetooth, ride ERG workouts, pedal drills or real climbs, and watch YouTube while you ride. No app store, no subscription: one web page you deploy yourself, installable as an app on Android and desktop.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fjspisi88%2FPedala&project-name=pedala&repository-name=pedala&env=PEDALA_PASSWORD&envDescription=Password%20for%20logging%20in%20to%20your%20Pedala&envLink=https%3A%2F%2Fgithub.com%2Fjspisi88%2FPedala%23environment-variables)
-
 ## Features
 
 **Riding**
