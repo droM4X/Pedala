@@ -12,9 +12,9 @@ module.exports = async (req, res) => {
   res.setHeader("cache-control", "no-store");
   const serverKey = profile(req).icuKey;
   if(req.method === "GET") return res.status(200).json({ serverKey: !!serverKey });
-  if(req.method !== "POST") return res.status(405).json({ error: "Dozvoljeni su samo GET i POST" });
+  if(req.method !== "POST") return res.status(405).json({ error: "Only GET and POST are allowed" });
   let b = req.body || {};
-  if(typeof b === "string"){ try{ b = JSON.parse(b); }catch{ return res.status(400).json({ error: "Neispravan JSON" }); } }
+  if(typeof b === "string"){ try{ b = JSON.parse(b); }catch{ return res.status(400).json({ error: "Invalid JSON" }); } }
   const key = serverKey || b.key;
   if(!key) return res.status(401).json({ error: "No API key" });
   const auth = { Authorization: "Basic " + Buffer.from("API_KEY:" + key).toString("base64") };
@@ -25,7 +25,7 @@ module.exports = async (req, res) => {
       return res.status(200).json({ id: j.id, name: j.name || [j.firstname, j.lastname].filter(Boolean).join(" ") });
     }
     if(b.action === "upload"){
-      if(!b.fit) return res.status(400).json({ error: "Nema FIT datoteke" });
+      if(!b.fit) return res.status(400).json({ error: "No FIT file" });
       const u = new URL(ICU + "/activities");
       for(const k of ["name", "description", "external_id"]) if(b[k]) u.searchParams.set(k, String(b[k]));
       const fd = new FormData();
@@ -36,11 +36,11 @@ module.exports = async (req, res) => {
       const a = Array.isArray(j) ? j[0] : j.activities?.[0] || j;
       return res.status(200).json({ id: a?.id ?? null, created: r.status === 201 });
     }
-    return res.status(400).json({ error: "Nepoznata akcija" });
+    return res.status(400).json({ error: "Unknown action" });
   }catch(e){
-    return res.status(502).json({ error: "intervals.icu nije dostupan: " + e.message });
+    return res.status(502).json({ error: "intervals.icu unavailable: " + e.message });
   }
 };
 
 async function body(r){ const t = await r.text(); try{ return JSON.parse(t); }catch{ return { error: t.slice(0, 200) }; } }
-const fail = (res, r, j) => res.status(r.status).json({ error: j.error || j.message || `intervals.icu je vratio ${r.status}` });
+const fail = (res, r, j) => res.status(r.status).json({ error: j.error || j.message || `intervals.icu returned ${r.status}` });

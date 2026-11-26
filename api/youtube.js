@@ -26,7 +26,7 @@ module.exports = async (req, res) => {
     }
     if(p.get("playlist")){
       const t = p.get("playlist").trim(), id = (t.match(/[?&]list=([\w-]+)/) || t.match(/^([\w-]{10,})$/) || [])[1];
-      if(!id) return res.status(400).json({ error: "To nije link playliste" });
+      if(!id) return res.status(400).json({ error: "That is not a playlist link" });
       const [info, list] = await Promise.all([
         id.startsWith("UU") ? Promise.resolve(null) : api("/playlists", { part: "snippet", id }),
         api("/playlistItems", { part: "snippet,contentDetails", playlistId: id, maxResults: 25 })]);
@@ -37,7 +37,7 @@ module.exports = async (req, res) => {
         channel: i.snippet.videoOwnerChannelTitle || "", thumb: i.snippet.thumbnails?.medium?.url, dur: d[i.contentDetails.videoId] || 0,
         published: i.contentDetails.videoPublishedAt || i.snippet.publishedAt })) });
     }
-    if(!q) return res.status(400).json({ error: "Nema pojma za pretragu" });
+    if(!q) return res.status(400).json({ error: "No search query" });
     const params = { part: "snippet", type: "video", maxResults: 24, videoEmbeddable: "true", q };
     if(p.get("long") === "1") params.videoDuration = "long";
     if(p.get("music") === "1") params.videoCategoryId = "10";   // Music

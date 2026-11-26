@@ -27,9 +27,9 @@ module.exports = async (req, res) => {
       const ride = await readJson(`${P}rides/${safeId(id)}.json`);
       return ride ? res.status(200).json(ride) : res.status(404).json({ error: "Ride not found" });
     }
-    if(req.method !== "POST") return res.status(405).json({ error: "Dozvoljeni su samo GET i POST" });
+    if(req.method !== "POST") return res.status(405).json({ error: "Only GET and POST are allowed" });
     let b = req.body || {};
-    if(typeof b === "string"){ try{ b = JSON.parse(b); }catch{ return res.status(400).json({ error: "Neispravan JSON" }); } }
+    if(typeof b === "string"){ try{ b = JSON.parse(b); }catch{ return res.status(400).json({ error: "Invalid JSON" }); } }
 
     if(b.action === "ride"){
       const r = b.ride;
@@ -47,7 +47,7 @@ module.exports = async (req, res) => {
       if(gone.length){ const urls = (await Promise.all(gone.map(id => urlsOf(`${P}rides/${id}.json`)))).flat(); if(urls.length) await blob.del(urls); }
       return res.status(200).json({ ...merged, rides: ids.filter(id => !merged.deleted.includes(id)) });
     }
-    return res.status(400).json({ error: "Nepoznata akcija" });
+    return res.status(400).json({ error: "Unknown action" });
   }catch(e){
     return res.status(502).json({ error: "Store unavailable: " + e.message });
   }
