@@ -584,8 +584,11 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
         <p class="note" style="margin:22px 0 0">Heart-rate zones: Z1 up to 60%, Z2 60–70%, Z3 70–80%, Z4 80–90%, Z5 above 90% of max.</p>
         <label class="full">YouTube API key (only if it is not set on Vercel)<input name="ytKey" type="text" autocomplete="off" spellcheck="false" placeholder="AIza…"></label>
         <p class="full note" style="margin:-4px 0 4px">It's free: at console.cloud.google.com create a project, enable <b>YouTube Data API v3</b> and create an API key under Credentials. The daily quota covers about 100 searches. Without a key you can still paste a link.</p>
+        <h2 class="section-title full">Announcements</h2>
         <label class="full check"><input name="beep" type="checkbox"> Beep when the interval changes</label>
         <label class="full check"><input name="voice" type="checkbox"> Voice announcements (next interval, interval and lap results)</label>
+        <label>Lap length in free rides (km)<input name="lapKm" type="number" min="1" max="50" step="1"></label>
+        <p class="full note" style="margin:-4px 0 4px">In a free ride or on a route a lap is that many kilometres long, and the voice announces its average. Workout intervals make their own laps.</p>
         <label>Announcement voice<select name="voiceName"><option value="">Automatic</option></select></label>
         <div class="full dlg-acts" style="justify-content:flex-start;margin-top:-4px"><button class="btn small" type="button" id="btn-voice-test">Test the voice</button></div>
         <p class="full note" id="voice-note" hidden></p>
@@ -727,7 +730,7 @@ const store = {
     }catch{ return false; }
   }
 };
-const settings = Object.assign({ ftp: 230, weight: 80, chainring: 34, cog: 14, clickMap: {}, beep: true, pauseVideo: true, autoPause: true, maxHr: 185, voice: true, clickOn: false, hrOn: false }, store.get("settings", {}));
+const settings = Object.assign({ ftp: 230, weight: 80, chainring: 34, cog: 14, clickMap: {}, beep: true, lapKm: 5, pauseVideo: true, autoPause: true, maxHr: 185, voice: true, clickOn: false, hrOn: false }, store.get("settings", {}));
 document.documentElement.lang = "en";
 /* heart-rate zones as fractions of max HR: [upper bound, colour, name] */
 const HR_ZONES = [[.6, "--z1", "Z1"], [.7, "--z2", "Z2"], [.8, "--z3", "Z3"], [.9, "--z4", "Z4"], [99, "--z6", "Z5"]];
@@ -1078,15 +1081,17 @@ function steerHr(c){
 }
 
 /* ============ laps ============
-   Workout: one lap per segment. Free ride and routes: one lap every 5 km.
+   Workout: one lap per segment. Free ride and routes: one lap every few km (Settings → Announcements).
    An open lap sums power, heart rate and target each second; closing it gives the averages and,
    for power or heart-rate targets, how close the ride came (score in %, hit = within ±5%). */
-const LAP_KM = 5;
-function lapOpen(extra){ S.lap = { t0: S.t, d0: S.dist, n: 0, p: 0, c: 0, hr: 0, hrN: 0, tgt: 0, tgtN: 0, ...extra }; }
+const LAP_KM_DEFAULT = 5;
+/* free-ride lap length in km: Settings → Announcements; an unusable stored value falls back to 5 */
+const lapKm = () => { const v = +settings.lapKm; return v >= 1 && v <= 50 ? v : LAP_KM_DEFAULT; };
+function lapOpen(extra){ S.lap = { t0: S.t, d0: S.dist, n: 0, p: 0, c: 0, hr: 0, hrN: 0, tgt: 0, tgtN: 0, kmLimit: lapKm(), ...extra }; }
 function lapSummary(l){
   const lap = { name: l.name, kind: l.kind, t0: l.t0, dur: l.n, km: +((S.dist - l.d0) / 1000).toFixed(2), avgP: l.n ? Math.round(l.p / l.n) : 0,
     avgCad: l.n ? Math.round(l.c / l.n) : 0, cadTgt: l.cadTgt || null, note: l.note || null,
-    avgHr: l.hrN ? Math.round(l.hr / l.hrN) : 0, tgt: l.tgtN && (l.kind === "power" || l.kind === "hr") ? Math.round(l.tgt / l.tgtN) : null };
+    avgHr: l.hrN ? Math.round(l.hr / l.hrN) : 0, tgt: l.tgtN && (l.kind === "power" || l.kind === "hr") ? Math.round(l.tgt / l.tgtN) : null, kmLimit: l.kmLimit };
   const actual = l.kind === "hr" ? lap.avgHr : lap.avgP;
   if(lap.tgt && actual){ lap.score = Math.round(actual / lap.tgt * 100); lap.hit = Math.abs(lap.score - 100) <= 5; }
   if(lap.cadTgt) lap.cadHit = cadIn(lap.avgCad, lap.cadTgt);
@@ -1106,7 +1111,7 @@ function lapTick(c, tgt){
     if(nx && Math.round(c.left) === 10 && c.s.d >= 20) say(() => `In 10 seconds: ${segSpeech(nx)}.`);
   } else if(!S.workout){
     if(!S.lap) lapOpen({ name: `Lap ${S.laps.length + 1}`, kind: "dist" });
-    else if(S.dist - S.lap.d0 >= LAP_KM * 1000){ lapResult(lapClose()); lapOpen({ name: `Lap ${S.laps.length + 1}`, kind: "dist" }); }
+    else if(S.dist - S.lap.d0 >= S.lap.kmLimit * 1000){ lapResult(lapClose()); lapOpen({ name: `Lap ${S.laps.length + 1}`, kind: "dist" }); }
   }
   const l = S.lap; if(!l) return;
   l.n++; l.p += S.live.power; l.c += S.live.cadence; if(S.live.hr){ l.hr += S.live.hr; l.hrN++; }
@@ -1126,7 +1131,7 @@ function lapResult(lap){
   if(lap.kind === "dist"){
     notify(`${lap.name}: ${fmtTime(lap.dur)} · ${lap.avgP} W${lap.avgHr ? " · " + lap.avgHr + " bpm" : ""}`);
     const km = Math.round(S.dist / 1000);
-    say(() => `${km} kilometers. Last ${LAP_KM} in ${sayDur(lap.dur)}, average ${watts(lap.avgP)}.`);
+    say(() => `${km} kilometers. Last ${lap.kmLimit} in ${sayDur(lap.dur)}, average ${watts(lap.avgP)}.`);
   } else if(lap.score != null && lap.dur >= 30 && !S.workout?.test){
     const what = lap.kind === "hr" ? `${lap.avgHr} bpm of ${lap.tgt}` : `${lap.avgP} W of ${lap.tgt}`;
     notify(`${lap.name}: ${what} (${lap.score}%)`);
@@ -2819,10 +2824,10 @@ $("#sum-discard").onclick = () => { if(confirm("Discard the ride without saving?
 $("#sum-resume").onclick = () => { $("#dlg-summary").close(); start(); };
 
 /* ============ settings ============ */
-function fillSettings(){ const f = $("#settings-form"); f.ftp.value = settings.ftp; f.weight.value = settings.weight; f.beep.checked = settings.beep; f.pauseVideo.checked = settings.pauseVideo; f.autoPause.checked = settings.autoPause; f.ytKey.value = settings.ytKey || ""; f.chainring.value = settings.chainring; f.cog.value = settings.cog; f.maxHr.value = settings.maxHr; f.voice.checked = settings.voice; fillVoices(); fillCoach(); }
+function fillSettings(){ const f = $("#settings-form"); f.ftp.value = settings.ftp; f.weight.value = settings.weight; f.beep.checked = settings.beep; f.lapKm.value = lapKm(); f.pauseVideo.checked = settings.pauseVideo; f.autoPause.checked = settings.autoPause; f.ytKey.value = settings.ytKey || ""; f.chainring.value = settings.chainring; f.cog.value = settings.cog; f.maxHr.value = settings.maxHr; f.voice.checked = settings.voice; fillVoices(); fillCoach(); }
 $("#settings-form").addEventListener("input", e => { const f = e.currentTarget;
   const ftp = +f.ftp.value, wt = +f.weight.value; if(ftp >= 80 && ftp <= 600) settings.ftp = ftp; if(wt >= 30 && wt <= 200) settings.weight = wt;
-  settings.beep = f.beep.checked; settings.pauseVideo = f.pauseVideo.checked; settings.autoPause = f.autoPause.checked; settings.ytKey = f.ytKey.value.trim();
+  settings.beep = f.beep.checked; const lk = +f.lapKm.value; if(lk >= 1 && lk <= 50) settings.lapKm = lk; settings.pauseVideo = f.pauseVideo.checked; settings.autoPause = f.autoPause.checked; settings.ytKey = f.ytKey.value.trim();
   const cr = +f.chainring.value, cg = +f.cog.value; if(cr >= 20 && cr <= 60) settings.chainring = cr; if(cg >= 10 && cg <= 30) settings.cog = cg;
   const mh = +f.maxHr.value; if(mh >= 120 && mh <= 230) settings.maxHr = mh; settings.voice = f.voice.checked; settings.voiceName = f.voiceName.value; voice = null;
   if(e.target.name === "voiceName") fillVoices();

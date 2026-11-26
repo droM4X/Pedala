@@ -97,6 +97,28 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await en.context().close();
   });
 
+  await test("laps: the free-ride lap length comes from Settings, and the average is announced at that length", async () => {
+    const p = await open({ voices: [["Samsung English", "en-US"]] });
+    await p.click('[data-view="settings"]'); await p.waitForTimeout(200);
+    assert.equal(await p.evaluate(() => document.querySelector('[name="lapKm"]').value), "5", "the lap length starts at 5 km");
+    await p.fill('[name="lapKm"]', "1"); await p.waitForTimeout(200);
+    assert.equal(await p.evaluate(() => settings.lapKm), 1, "the lap length is saved");
+    const r = await p.evaluate(() => {
+      S.workout = null; S.lap = null; S.dist = 0; S.laps = []; S.live = { power: 200, cadence: 90, hr: 0 };
+      lapTick(null, 0);                     // opens lap 1
+      S.dist = 900; lapTick(null, 0);       // 0.9 km: still lap 1
+      const one = S.laps.length;
+      S.dist = 1200; lapTick(null, 0);      // 1.2 km: lap 1 closes, lap 2 opens
+      return { one, two: S.laps.length, kmLimit: S.laps[0]?.kmLimit };
+    });
+    assert.equal(r.one, 0, "no lap before the lap length is reached");
+    assert.equal(r.two, 1, "a lap closes at the configured length");
+    assert.equal(r.kmLimit, 1, "the lap carries the length it was ridden at");
+    await p.waitForTimeout(300);
+    assert.match((await p.evaluate(() => __spoken)).at(-1), /^1 kilometers\. Last 1 in 2 seconds, average 200 watts\.$/);
+    await p.context().close();
+  });
+
   await test("English everywhere, in every browser", async () => {
     const p = await open({ speed: 200 });
     const croatian = /[čćžšđ]|\b(je|na|ili|se|za|od|nije|treba|nema|vožnj\w*|trening\w*|Postavke|Spoji|Kreni|Tjedan|Zona|Puls|Kadenca|Brzina|Glazba|Snaga|Vrijeme|Još|Sljedeće)\b/i;
