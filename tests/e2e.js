@@ -4,8 +4,9 @@ const assert = require("node:assert/strict");
 const { chromium } = require("playwright");
 const { start } = require("./support/server.js");
 
-const results = [];
+const results = [], filter = (process.argv[2] || "").toLowerCase();
 async function test(name, fn){
+  if(filter && !name.toLowerCase().includes(filter)) return;
   const t0 = Date.now();
   try{ await fn(); results.push(["ok", name, null, Date.now() - t0]); }catch(e){ results.push(["FAIL", name, e, Date.now() - t0]); }
 }
@@ -1136,6 +1137,6 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   if(pageErrors.length) results.push(["FAIL", "no JavaScript errors in the page", new Error(pageErrors.join("; ")), 0]);
   for(const [s, n, e, ms] of results) console.log(`${s === "ok" ? "✓" : "✗"} ${n} (${(ms / 1000).toFixed(1)} s)${e ? "\n    " + e.message : ""}`);
   const failed = results.filter(r => r[0] !== "ok").length;
-  console.log(`\n${results.length - failed} passed, ${failed} failed`);
+  console.log(filter ? `\n${results.length} ran, ${results.length - failed} passed, ${failed} failed` : `\n${results.length - failed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })();

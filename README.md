@@ -90,6 +90,7 @@ Tests (Node 20+):
 ```bash
 npm i --no-save jsqr playwright && npx playwright install chromium  # jsqr decodes what qr.js encodes; Playwright runs end-to-end tests
 npm test               # unit tests (login, sync) and end-to-end tests in Chromium
+node tests/e2e.js word # only end-to-end tests whose name contains "word"
 ```
 
 | Part | What it does |
