@@ -176,6 +176,7 @@
       const v = version || manifest.find(e => e.code === next)?.v;
       const url = "/lang/" + next + ".js" + (v ? "?v=" + encodeURIComponent(v) : "");
       fetch(url).then(r => {
+        if(done) return;
         if(!r.ok) return finish(null);
         const mime = (r.headers.get("content-type") || "").toLowerCase();
         if(!/javascript|ecmascript/.test(mime)) return finish(null);   // the test server's HTML fallback is not a language
