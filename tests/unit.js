@@ -129,6 +129,60 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
     }finally{ global.fetch = realFetch; delete process.env.ANTHROPIC_API_KEY; }
   });
 
+  /* ---------- api/models.js ---------- */
+  delete process.env.OPENROUTER_API_KEY;
+  const models = require("../api/models.js");
+  const callModels = async body => { let out; await models({ method: "POST", body }, { setHeader(){}, status(c){ this.c = c; return this; }, json(o){ out = { status: this.c, body: o }; } }); return out; };
+  const orModel = (id, prompt, completion, params, endpoints = ["/api/v1/chat/completions"]) => ({
+    id, name: id.toUpperCase(), context_length: 32000, pricing: { prompt, completion },
+    supported_parameters: params, endpoints, architecture: { output_modalities: ["text"] } });
+
+  await test("models: no key is 409, a rejected key is 401", async () => {
+    assert.equal((await callModels({})).status, 409);
+    global.fetch = async () => new Response(JSON.stringify({ error: { message: "No auth credentials found" } }), { status: 401 });
+    try{ assert.equal((await callModels({ orKey: "sk-bad" })).status, 401); }
+    finally{ global.fetch = realFetch; }
+  });
+  await test("models: only chat models of the key's list, with prices and caps", async () => {
+    let sent;
+    global.fetch = async (url, opt) => { sent = { url: String(url), auth: opt.headers.Authorization }; return new Response(JSON.stringify({ data: [
+      orModel("deepseek/deepseek-v4.1-flash-1017", "0.00000004", "0.0000001", ["max_tokens", "reasoning", "structured_outputs"]),
+      orModel("acme/plain", "0.000001", "0.000002", ["max_completion_tokens"]),
+      orModel("acme/batch:batch", "0.00001", "0.00002", ["max_tokens"]),
+      orModel("acme/image", "0.00001", "0.00002", ["max_tokens"], ["/api/v1/images"]),
+    ] }), { status: 200 }); };
+    try{
+      const r = await callModels({ orKey: "sk-good-models" });
+      assert.equal(r.status, 200);
+      assert.equal(sent.url, "https://openrouter.ai/api/v1/models/user?output_modalities=text");
+      assert.equal(sent.auth, "Bearer sk-good-models");
+      assert.deepEqual(r.body.models.map(m => m.id), ["deepseek/deepseek-v4.1-flash-1017", "acme/plain"]);
+      assert.deepEqual(r.body.models[0], { id: "deepseek/deepseek-v4.1-flash-1017", name: "DEEPSEEK/DEEPSEEK-V4.1-FLASH-1017", priceIn: 0.04, priceOut: 0.1, ctx: 32000,
+        caps: { mc: false, reasoning: "reasoning", schema: true } });
+      assert.deepEqual(r.body.models[1].caps, { mc: true, reasoning: null, schema: false });
+      assert.equal(r.body.default, "deepseek/deepseek-v4.1-flash-1017");
+    }finally{ global.fetch = realFetch; }
+  });
+  await test("models: the default follows the list, and a list of one is the default", async () => {
+    const answer = data => { global.fetch = async () => new Response(JSON.stringify({ data }), { status: 200 }); };
+    try{
+      answer([orModel("a/one", "0.1", "0.2", ["max_tokens"]), orModel("b/two", "0.1", "0.2", ["max_tokens"])]);
+      assert.equal((await callModels({ orKey: "sk-two" })).body.default, null);
+      answer([orModel("a/only", "0.1", "0.2", ["max_tokens"])]);
+      assert.equal((await callModels({ orKey: "sk-one" })).body.default, "a/only");
+    }finally{ global.fetch = realFetch; }
+  });
+  await test("models: the list is cached per key, not across keys", async () => {
+    let calls = 0;
+    global.fetch = async () => { calls++; return new Response(JSON.stringify({ data: [orModel("a/x", "0.1", "0.2", ["max_tokens"])] }), { status: 200 }); };
+    try{
+      await callModels({ orKey: "sk-cache-a" }); await callModels({ orKey: "sk-cache-a" });
+      assert.equal(calls, 1, "the same key is fetched once");
+      await callModels({ orKey: "sk-cache-b" });
+      assert.equal(calls, 2, "another key is its own list");
+    }finally{ global.fetch = realFetch; }
+  });
+
   /* ---------- lib/remote.js ---------- */
   const http = require("node:http"), { createRemote, lanLinks } = require("../lib/remote.js");
 
