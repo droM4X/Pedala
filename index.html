@@ -1143,11 +1143,11 @@ function lapTick(c, tgt){
     if(!S.lap || S.lap.seg !== c.i){
       const done = lapClose(); if(done) lapResult(done);
       lapOpen({ seg: c.i, name: PedalaI18n.t("Interval {i}", { i: c.i + 1 }), kind: c.s.free ? "free" : c.s.hr ? "hr" : "power", cadTgt: c.s.cad, note: c.s.note });
-      if(c.i === 0 && S.t <= 1) say(() => `Workout starting. ${segSpeech(c.s)}.`);
+      if(c.i === 0 && S.t <= 1) say(() => `${PedalaI18n.speech.start()} ${segmentSpeech(c.s)}.`);
     }
     // next segment in 10 seconds
     const nx = S.workout.segs[c.i + 1];
-    if(nx && Math.round(c.left) === 10 && c.s.d >= 20) say(() => `In 10 seconds: ${segSpeech(nx)}.`);
+    if(nx && Math.round(c.left) === 10 && c.s.d >= 20) say(() => PedalaI18n.speech.soon(segmentSpeech(nx)));
   } else if(!S.workout){
     if(!S.lap) lapOpen({ name: PedalaI18n.t("Lap {n}", { n: S.laps.length + 1 }), kind: "dist" });
     else if(S.dist - S.lap.d0 >= S.lap.kmLimit * 1000){ lapResult(lapClose()); lapOpen({ name: PedalaI18n.t("Lap {n}", { n: S.laps.length + 1 }), kind: "dist" }); }
@@ -1160,71 +1160,79 @@ function lapTick(c, tgt){
 function lapResult(lap){
   if(!lap) return;
   if(lap.cadTgt && S.workout?.cat === "drill"){
-    // drills: report the cadence of the drill parts, stay quiet on recoveries
-    if(lap.cadTgt[0] >= 100 || lap.cadTgt[1] <= 70){
+    // drills: the speech builder reports the cadence of the drill parts and stays quiet on recoveries
+    if(lap.cadTgt[0] >= 100 || lap.cadTgt[1] <= 70)
       notify(PedalaI18n.t("{name}: {cad} rpm (target {target})", { name: lap.name, cad: lap.avgCad, target: cadTxt(lap.cadTgt) }));
-      say(() => `Average cadence ${lap.avgCad}.`);
-    }
+    say(() => lapSpeech(lap));
     return;
   }
   if(lap.kind === "dist"){
     notify(`${lap.name}: ${fmtTime(lap.dur)} · ${lap.avgP} W${lap.avgHr ? " · " + lap.avgHr + " bpm" : ""}`);
-    const km = Math.round(S.dist / 1000);
-    say(() => `${PedalaI18n.tn(km, "{n} kilometer", "{n} kilometers", { n: km })}. Last ${lap.kmLimit} in ${sayDur(lap.dur)}, average ${watts(lap.avgP)}.`);
+    say(() => lapSpeech(lap));
   } else if(lap.score != null && lap.dur >= 30 && !S.workout?.test){
     const what = lap.kind === "hr" ? PedalaI18n.t("{value} bpm of {target}", { value: lap.avgHr, target: lap.tgt }) : PedalaI18n.t("{value} W of {target}", { value: lap.avgP, target: lap.tgt });
     notify(`${lap.name}: ${what} (${lap.score}%)`);
-    say(() => lap.kind === "hr" ? `Interval done. Average heart rate ${lap.avgHr}.`
-      : `Interval done. Average ${watts(lap.avgP)}, ${lap.score} percent.`);
+    say(() => lapSpeech(lap));
   }
 }
 
-/* ============ voice ============ */
-const isEn = v => /^en([-_]|$)/i.test(v?.lang || "");
+/* ============ voice ============
+   Speech is in the selected voice's language, not the UI language: a voice whose language
+   does not match the UI code is passed over, and with no matching voice the announcements
+   stay English while the UI is translated. */
+const voiceLang = v => String(v?.lang || "").toLowerCase().split(/[-_]/)[0];
+const isVoiceLang = (v, code) => voiceLang(v) === code;
 const voices = () => window.speechSynthesis?.getVoices() || [];
 let voice = null;
+function voiceList(){
+  const vs = voices(), code = PedalaI18n.code, own = vs.filter(v => isVoiceLang(v, code));
+  return { list: own.length ? own : vs.filter(v => isVoiceLang(v, "en")), fallback: !own.length && code !== "en" };
+}
 function pickVoice(){
-  const vs = voices(), byName = vs.find(v => v.voiceURI === settings.voiceName && isEn(v));
-  if(byName) return byName;
-  return vs.find(v => isEn(v) && /GB|US/i.test(v.lang) && v.localService) || vs.find(isEn) || null;
+  const vs = voices(), code = PedalaI18n.code;
+  const saved = vs.find(v => v.voiceURI === settings.voiceName && isVoiceLang(v, code));
+  if(saved) return saved;
+  const own = vs.filter(v => isVoiceLang(v, code));
+  if(own.length) return own.find(v => v.localService && /GB|US/i.test(v.lang)) || own.find(v => v.localService) || own[0];
+  return vs.find(v => isVoiceLang(v, "en") && /GB|US/i.test(v.lang) && v.localService) || vs.find(v => isVoiceLang(v, "en")) || null;
 }
-const watts = n => PedalaI18n.tn(n, "{n} watt", "{n} watts", { n });
-function sayDur(sec){
-  sec = Math.round(sec); const m = Math.floor(sec / 60), x = sec % 60;
-  const mm = m ? PedalaI18n.tn(m, "{n} minute", "{n} minutes", { n: m }) : "";
-  const ss = x ? PedalaI18n.tn(x, "{n} second", "{n} seconds", { n: x }) : "";
-  return [mm, ss].filter(Boolean).join(" and ");
+const speechCtx = sp => ({ duration: sp.duration, watts: sp.watts, cadence: sp.cadence, anyCad: CAD_ANY });
+/* The English cue is the key; it becomes the speech language's text only when the voice speaks the UI language. */
+const speechNote = s => !s.note ? "" : S.workout?.builtin && (PedalaI18n.speechLang || "en") === PedalaI18n.code ? PedalaI18n.t(s.note) : s.note;
+function segmentSpeech(s){
+  const sp = PedalaI18n.speech;
+  return sp.segment({ d: s.d, free: !!s.free, hr: s.hr ? hrTarget(s) : undefined,
+    loW: Math.round(toWatts(S.workout, s.lo) * S.bias), hiW: Math.round(toWatts(S.workout, s.hi) * S.bias),
+    cad: s.cad, note: speechNote(s) }, speechCtx(sp));
 }
-const cadSay = ([lo, hi]) => hi >= CAD_ANY ? `cadence ${lo} or more` : `cadence ${lo} to ${hi}`;
-function segSpeech(sg){
-  const note = sg.note ? sg.note + ". " : "", cad = sg.cad ? ", " + cadSay(sg.cad) : "";
-  return note + segSpeechPower(sg) + cad;
-}
-function segSpeechPower(sg){
-  const w = S.workout, d = sayDur(sg.d);
-  if(sg.free) return `${d} free riding`;
-  if(sg.hr) return `${d} at heart rate ${hrTarget(sg)}`;
-  const a = Math.round(toWatts(w, sg.lo) * S.bias), b = Math.round(toWatts(w, sg.hi) * S.bias);
-  return Math.abs(a - b) < 5 ? `${d} at ${watts(a)}` : `${d}, from ${a} to ${watts(b)}`;
+function lapSpeech(lap){
+  const sp = PedalaI18n.speech;
+  return sp.lap({ kind: lap.kind, km: Math.round(S.dist / 1000), kmLimit: lap.kmLimit, dur: lap.dur, avgP: lap.avgP,
+    avgCad: lap.avgCad, avgHr: lap.avgHr, score: lap.score, cadTgt: lap.cadTgt }, speechCtx(sp));
 }
 function say(text, force = false){
   if(!(settings.voice || force) || !("speechSynthesis" in window)) return;
   try{
     voice ||= pickVoice();
     if(!voice) return;
-    const u = new SpeechSynthesisUtterance(typeof text === "function" ? text() : text); u.voice = voice; u.lang = voice.lang; u.rate = 1.05;
+    PedalaI18n.setSpeechLang(isVoiceLang(voice, PedalaI18n.code) ? PedalaI18n.code : "en");
+    const txt = typeof text === "function" ? text() : text;
+    if(!txt) return;
+    const u = new SpeechSynthesisUtterance(txt); u.voice = voice; u.lang = voice.lang; u.rate = 1.05;
     duckStart(u); speechSynthesis.speak(u);
   }catch{}
 }
 function fillVoices(){
-  const f = $("#settings-form"), sel = f.voiceName, vs = voices(), en = vs.filter(isEn);
-  sel.innerHTML = `<option value="">Automatic</option>` + en
+  const f = $("#settings-form"), sel = f.voiceName, { list, fallback } = voiceList();
+  sel.innerHTML = `<option value="">${PedalaI18n.t("Automatic")}</option>` + list
     .map(v => `<option value="${v.voiceURI.replace(/"/g, "&quot;")}">${v.name.replace(/</g, "")} · ${v.lang}</option>`).join("");
-  sel.value = en.some(v => v.voiceURI === settings.voiceName) ? settings.voiceName : "";
-  const using = pickVoice(), note = $("#voice-note");
+  sel.value = list.some(v => v.voiceURI === settings.voiceName) ? settings.voiceName : "";
+  const using = pickVoice(), note = $("#voice-note"), language = PedalaI18n.active?.name || (PedalaI18n.code === "en" ? "English" : PedalaI18n.code);
+  const name = using ? using.name.replace(/</g, "") : "";
   note.hidden = false;
-  note.innerHTML = !using ? "There is no voice for announcements on this device."
-    : `Announcements are in <b>English</b> (${using.name.replace(/</g, "")}).`;
+  note.innerHTML = !using ? PedalaI18n.tHtml("There is no voice for announcements on this device.")
+    : fallback ? PedalaI18n.tHtml("There is no <b>{language}</b> voice on this device; announcements are in <b>English</b> ({voice}).", { language, voice: name })
+    : PedalaI18n.tHtml("Announcements are in <b>{language}</b> ({voice}).", { language, voice: name });
 }
 window.speechSynthesis?.addEventListener?.("voiceschanged", () => { voice = null; if($("#view-settings").classList.contains("active")) fillVoices(); });
 
@@ -1342,7 +1350,7 @@ function start(){
 }
 function pause(auto){ S.running = false; S.autoPaused = !!auto; S.soft = null; applyControl(); if(settings.pauseVideo) yt("pauseVideo"); if(auto) notify(PedalaI18n.t("Paused: start pedalling to resume")); render(); }
 function resume(){ S.running = true; S.autoPaused = false; S.idle = 0; S.grace = GRACE_S; softStart(); S.hrHold = 60; applyControl(); yt("playVideo"); toast(PedalaI18n.t("Resuming")); }
-function finishWorkout(){ S.running = false; S.soft = null; applyControl(); if(settings.beep) beep(660, .4); say(() => S.route ? "You made it to the finish." : "Workout complete. Well done."); openSummary(); }
+function finishWorkout(){ S.running = false; S.soft = null; applyControl(); if(settings.beep) beep(660, .4); say(() => PedalaI18n.speech.finish(!!S.route)); openSummary(); }
 
 /* ============ metrics ============ */
 function metrics(samples, ftp){
@@ -1641,7 +1649,7 @@ $("#mus-play").onclick = () => { musicOn = !musicOn; musicCmd(musicOn ? "playVid
 $("#mus-min").onclick = () => { const m = $("#music"); m.classList.toggle("min"); $("#mus-min").textContent = m.classList.contains("min") ? "+" : "–"; };
 $("#btn-dash").onclick = () => setDash();
 $("#vid-long").addEventListener("change", () => renderFeed());
-$("#btn-voice-test").onclick = () => { voice = null; fillVoices(); say(() => "In 10 seconds: 3 minutes at 265 watts, cadence 90 to 100.", true); };
+$("#btn-voice-test").onclick = () => { voice = null; fillVoices(); say(() => { const sp = PedalaI18n.speech; return sp.soon(sp.segment({ d: 180, loW: 265, hiW: 265, cad: [90, 100] }, speechCtx(sp))); }, true); };
 
 /* ============ sound + wake lock ============ */
 let actx;
@@ -2632,15 +2640,13 @@ function wkNext(){
   if(!st) return wkFinish(true);
   WK.left = st.s; WK.beeped = 4;
   const nx = WK.steps.slice(WK.i + 1).find(x => x.kind !== "rest");
-  const name = x => x.n || "", spoken = x => x.n || "";
   $("#wk-phase").textContent = st.kind === "warm" ? PedalaI18n.t("Warm-up") : st.kind === "cool" ? PedalaI18n.t("Stretching") : st.kind === "rest" ? PedalaI18n.t("Rest")
     : PedalaI18n.t("Round {r}/{rounds} · exercise {j}/{of}", { r: st.r, rounds: st.rounds, j: st.j, of: st.of });
   $("#wk-name").textContent = stepName(st);
   $("#wk-cue").textContent = st.c ? PedalaI18n.t(st.c) : "";
   $("#wk-next").textContent = nx ? PedalaI18n.t("Next: {name}", { name: exerciseName(nx) }) : PedalaI18n.t("Last exercise");
   $("#dlg-strength").dataset.kind = st.kind;
-  if(st.kind === "rest") say(() => `Rest. Next: ${spoken(nx)}.`);
-  else say(() => st.kind === "work" ? `${spoken(st)}, ${PedalaI18n.tn(st.s, "{n} second", "{n} seconds", { n: st.s })}.` : spoken(st));
+  say(() => PedalaI18n.speech.strength(st, nx));
   wkRender();
 }
 function wkTick(){
@@ -2660,7 +2666,7 @@ function wkFinish(complete){
   const share = (WK.done + (WK.steps[WK.i] ? WK.steps[WK.i].s - WK.left : 0)) / WK.total;
   if($("#dlg-strength").open) $("#dlg-strength").close();
   if(complete || share >= .5){
-    if(complete) say(() => "Workout complete. Well done.");
+    if(complete) say(() => PedalaI18n.speech.finish(false));
     if(WK.sess && plan()) planUpdate(p => { p.done = { ...p.done, [WK.sess]: "app:" + Date.now() }; if(p.skipped) delete p.skipped[WK.sess]; });
     toast(PedalaI18n.t("Strength session done"));
   }

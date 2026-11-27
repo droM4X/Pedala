@@ -329,6 +329,30 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await en.context().close();
   });
 
+  await test("voice: a dropped-in language speaks with its own voice", async () => {
+    // the saved English voice does not match Testish, so it is ignored in favour of the Testish voice
+    const z = await open({ settings: { lang: "zz", voiceName: "Samsung English" }, voices: [["Samsung English", "en-US"], ["Testish Voice", "zz-ZZ"]] });
+    await z.click('[data-view="settings"]');
+    assert.equal(await z.evaluate(() => pickVoice().voiceURI), "Testish Voice");
+    assert.deepEqual(await z.evaluate(() => [...document.querySelectorAll('[name="voiceName"] option')].map(o => o.textContent)),
+      ["zz:Automatic", "Testish Voice · zz-ZZ"], "only voices for the active language are listed");
+    await z.click("#btn-voice-test"); await z.waitForTimeout(300);
+    assert.match((await z.evaluate(() => __spoken))[0], /^zz:soon /, "the voice test speaks Testish");
+    await z.context().close();
+  });
+
+  await test("voice: a language without a voice falls back to English announcements and says so", async () => {
+    const z = await open({ settings: { lang: "zz" }, voices: [["Samsung English", "en-US"]] });
+    await z.click('[data-view="settings"]');
+    assert.equal(await z.textContent("#voice-note"),
+      "zz:There is no Testish voice on this device; announcements are in English (Samsung English).");
+    assert.deepEqual(await z.evaluate(() => [...document.querySelectorAll('[name="voiceName"] option')].map(o => o.textContent)),
+      ["zz:Automatic", "Samsung English · en-US"], "English voices are listed when the language has none");
+    await z.click("#btn-voice-test"); await z.waitForTimeout(300);
+    assert.equal((await z.evaluate(() => __spoken))[0], "In 10 seconds: 3 minutes at 265 watts, cadence 90 to 100.");
+    await z.context().close();
+  });
+
   await test("laps: the free-ride lap length comes from Settings, and the average is announced at that length", async () => {
     const p = await open({ voices: [["Samsung English", "en-US"]] });
     await p.click('[data-view="settings"]'); await p.waitForTimeout(200);

@@ -41,6 +41,17 @@ assert.equal(I.speech.lap({ kind: "dist", km: 1, dur: 60, avgP: 200, kmLimit: 5 
 assert.equal(I.speech.lap({ kind: "dist", km: 2, dur: 60, avgP: 200, kmLimit: 5 }, enCtx), "2 kilometers. Last 5 in 1 minute, average 200 watts.");
 assert.equal(I.speech.strength({ kind: "work", n: "Squat", s: 1 }, null), "Squat, 1 second.");
 assert.equal(I.speech.strength({ kind: "work", n: "Squat", s: 30 }, null), "Squat, 30 seconds.");
+/* the voice test sentence is pinned, byte for byte */
+const voiceCtx = { duration: I.speech.duration, watts: I.speech.watts, cadence: I.speech.cadence, anyCad: 999 };
+assert.equal(I.speech.soon(I.speech.segment({ d: 180, loW: 265, hiW: 265, cad: [90, 100] }, voiceCtx)),
+  "In 10 seconds: 3 minutes at 265 watts, cadence 90 to 100.");
+assert.equal(I.speech.start(), "Workout starting.");
+assert.equal(I.speech.finish(true), "You made it to the finish.");
+assert.equal(I.speech.finish(false), "Workout complete. Well done.");
+assert.equal(I.speech.lap({ kind: "power", score: 90, dur: 60, avgP: 200 }, enCtx), "Interval done. Average 200 watts, 90 percent.");
+assert.equal(I.speech.lap({ kind: "hr", score: 90, dur: 60, avgHr: 140 }, enCtx), "Interval done. Average heart rate 140.");
+assert.equal(I.speech.lap({ cadTgt: [85, 95], avgCad: 90 }, enCtx), "");
+assert.equal(I.speech.lap({ cadTgt: [110, 999], avgCad: 112 }, enCtx), "Average cadence 112.");
 
 /* language index generator: build writes the manifest, check fails when it is stale */
 const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
