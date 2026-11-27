@@ -663,6 +663,22 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     srv.setEnv({ OPENROUTER_API_KEY: null }); await p.context().close();
   });
 
+  await test("coach: with no comment yet the report's coach button is a light call to action", async () => {
+    srv.setEnv({ OPENROUTER_API_KEY: "sk-test" }); srv.setOpenRouter({ reset: true }); srv.openrouter.length = 0;
+    const p = await open({ settings: { ftp: 160, maxHr: 185, weight: 100, coachMode: "each" }, sync: false });
+    await p.waitForFunction(() => coachServer === true, null, { timeout: 5000 });
+    await p.evaluate(async () => {   // a saved ride the coach has not commented on
+      const samples = Array.from({ length: 600 }, (_, i) => [i, 100 + (i % 50), 85, 120 + (i % 30)]);
+      await dbPut({ id: "r-cta", start: Date.now() - 36e5, workoutId: null, name: "No comment yet", route: false, ftp: 160, maxHr: 185, samples, laps: [], m: metrics(samples, 160) });
+    });
+    await p.click('[data-view="history"]'); await p.waitForTimeout(400); await p.locator("[data-rep]").first().click(); await p.waitForTimeout(600);
+    assert.equal(await p.locator("#rep-coach-go").count(), 1, "the report offers the coach button");
+    const cta = await p.evaluate(() => { const s = getComputedStyle($("#rep-coach-go")); return { color: s.color, background: s.backgroundColor }; });
+    assert.equal(cta.color, "rgb(180, 35, 24)", "the darker red reads on the light button");
+    assert.equal(cta.background, "rgb(233, 237, 243)", "the button uses the light text colour as its background");
+    srv.setEnv({ OPENROUTER_API_KEY: null }); await p.context().close();
+  });
+
   await test("coach: a question gets an answer, a proposed plan change is applied only after confirming", async () => {
     srv.setEnv({ OPENROUTER_API_KEY: "sk-test" }); srv.setOpenRouter({ reset: true }); srv.openrouter.length = 0;
     const p = await open();

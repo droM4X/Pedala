@@ -18,6 +18,7 @@
   --bg:#151b26; --panel:#1f2735; --panel2:#262f40; --line:#2f3a4d;
   --text:#e9edf3; --muted:#8b97aa; --faint:#5d6a80;
   --z1:#7d8ea8; --z2:#3d8bfd; --z3:#2fbf71; --z4:#f2c230; --z5:#f28c28; --z6:#e5484d;
+  --red-ink:#b42318;   /* dark red for text on a light surface (about 5:1 on --text) */
   --zone:var(--z1);
   --num:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --ui:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -97,6 +98,7 @@ button{cursor:pointer}
 .btn.grow{flex:1}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .btn.danger{color:var(--z6)}
+.btn.coach-cta{background:var(--text);color:var(--red-ink);border-color:var(--red-ink);font-weight:700}
 .btn.small{padding:7px 12px;border-radius:10px;font-size:14px}
 a.btn{display:inline-block;color:inherit;text-decoration:none}
 
@@ -2421,7 +2423,7 @@ function renderRepCoach(r){
   const box = $("#rep-coach"); if(!box) return; box.dataset.ride = r.id;
   const n = coachNotes()["ride:" + r.id];
   box.innerHTML = n ? `<div class="rep"><h3>${PedalaI18n.t("Coach")}</h3>${coachNoteHtml(n)}</div>`
-    : coachEnabled() ? `<div class="dlg-acts" style="justify-content:flex-start;margin:4px 0 0"><button class="btn small" id="rep-coach-go">${PedalaI18n.t("Coach's comment")}</button></div>` : "";
+    : coachEnabled() ? `<div class="dlg-acts" style="justify-content:flex-start;margin:4px 0 0"><button class="btn small coach-cta" id="rep-coach-go">${PedalaI18n.t("Coach's comment")}</button></div>` : "";
   $("#rep-coach-go")?.addEventListener("click", () => coachRide(r).catch(e => toast(e.message)));
 }
 async function renderCoachViews(){
