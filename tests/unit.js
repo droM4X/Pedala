@@ -107,26 +107,55 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
   const coach = require("../api/coach.js"), realFetch = global.fetch;
   const callCoach = async (method, body) => { let out; await coach({ method, body }, { setHeader(){}, status(c){ this.c = c; return this; }, json(o){ out = { status: this.c, body: o }; } }); return out; };
   const coachRide = { id: "r-9", name: "Sweet spot", start: "2026-11-17T18:00:00Z", m: { duration: 1620, avgP: 134 }, laps: [], minutes: { podaci: [[0, 89, 59, 120]] } };
-  await test("coach: off without ANTHROPIC_API_KEY", async () => {
-    delete process.env.ANTHROPIC_API_KEY;
+  await test("coach: off without OPENROUTER_API_KEY", async () => {
+    delete process.env.OPENROUTER_API_KEY;
     assert.deepEqual((await callCoach("GET")).body, { enabled: false });
     assert.equal((await callCoach("POST", { action: "comment", ride: coachRide })).status, 501);
   });
-  await test("coach: no credit left gives a clear 402", async () => {
-    process.env.ANTHROPIC_API_KEY = "sk-test";
-    global.fetch = async () => new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "Your credit balance is too low to access the Anthropic API." } }), { status: 400, headers: { "content-type": "application/json" } });
-    try{ const r = await callCoach("POST", { action: "comment", ride: coachRide }); assert.equal(r.status, 402); assert.match(r.body.error, /^The Anthropic account has no credits\. Add credit at console\.anthropic\.com → Billing\.$/); }
-    finally{ global.fetch = realFetch; delete process.env.ANTHROPIC_API_KEY; }
-  });
-  await test("coach: a refusal is reported, not shown as a comment", async () => {
-    process.env.ANTHROPIC_API_KEY = "sk-test"; let sent;
-    global.fetch = async (url, opt) => { sent = JSON.parse(opt.body); return new Response(JSON.stringify({ id: "m", type: "message", role: "assistant", model: "claude-opus-5-5",
-      content: [], stop_reason: "refusal", stop_details: { type: "refusal", category: null }, usage: { input_tokens: 1, output_tokens: 0 } }), { headers: { "content-type": "application/json" } }); };
+  await test("coach: capabilities shape the request, and cost becomes usd", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-test"; let sent;
+    global.fetch = async (url, opt) => { sent = { url: String(url), body: JSON.parse(opt.body), auth: opt.headers.Authorization };
+      return new Response(JSON.stringify({ model: "m", choices: [{ message: { content: "Good workout." }, finish_reason: "stop" }], usage: { prompt_tokens: 3000, completion_tokens: 400, cost: 0.0004 } }), { status: 200 }); };
     try{
-      assert.equal((await callCoach("POST", { action: "comment", ride: coachRide, notes: "190 cm" })).status, 422);
-      assert.equal(sent.model, "claude-opus-5-5"); assert.equal(sent.output_config.effort, "low");
-      assert.match(sent.messages[0].content, /190 cm/); assert.match(sent.messages[0].content, /Sweet spot/);
-    }finally{ global.fetch = realFetch; delete process.env.ANTHROPIC_API_KEY; }
+      const r = await callCoach("POST", { action: "comment", ride: coachRide, notes: "190 cm", model: "acme/x",
+        caps: { mc: true, reasoning: "reasoning_effort", schema: true } });
+      assert.equal(r.status, 200); assert.equal(r.body.text, "Good workout.");
+      assert.equal(sent.url, "https://openrouter.ai/api/v1/chat/completions");
+      assert.equal(sent.auth, "Bearer sk-test"); assert.equal(sent.body.model, "acme/x");
+      assert.equal(sent.body.max_completion_tokens, 4000); assert.equal(sent.body.max_tokens, undefined);
+      assert.equal(sent.body.reasoning_effort, "low");
+      assert.equal(sent.body.reasoning, undefined);
+      assert.equal(sent.body.response_format, undefined, "a comment never asks for JSON");
+      assert.match(sent.body.messages[1].content, /190 cm/); assert.match(sent.body.messages[1].content, /Sweet spot/);
+      assert.deepEqual(r.body.usage, { input: 3000, output: 400, usd: 0.0004 });
+    }finally{ global.fetch = realFetch; delete process.env.OPENROUTER_API_KEY; }
+  });
+  await test("coach: without caps the body is conservative and a schema answer still parses", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-test"; let sent;
+    const out = { answer: "Rest today.", changes: [{ session_id: "w1-tue", action: "skip", workout_id: null, reason: "cold" }] };
+    global.fetch = async (url, opt) => { sent = JSON.parse(opt.body);
+      return new Response(JSON.stringify({ model: "m", choices: [{ message: { content: "```json\n" + JSON.stringify(out) + "\n```" }, finish_reason: "stop" }], usage: { prompt_tokens: 10, completion_tokens: 5 } }), { status: 200 }); };
+    try{
+      const r = await callCoach("POST", { action: "ask", question: "I have a cold", plan: { sessions: [{ id: "w1-tue" }], options: [] } });
+      assert.equal(r.status, 200); assert.equal(r.body.answer, "Rest today."); assert.equal(r.body.changes.length, 1);
+      assert.equal(sent.max_tokens, 4000); assert.equal(sent.reasoning, undefined); assert.equal(sent.response_format, undefined);
+      assert.match(sent.messages[0].content, /Return only JSON/); assert.match(sent.messages[1].content, /I have a cold/);
+      assert.deepEqual(r.body.usage, { input: 10, output: 5, usd: null }, "no cost, no invented price");
+    }finally{ global.fetch = realFetch; delete process.env.OPENROUTER_API_KEY; }
+  });
+  await test("coach: 402, 403, 404 and 429 are told apart", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-test";
+    const fail = (status, message) => { global.fetch = async () => new Response(JSON.stringify({ error: { message, code: status } }), { status }); };
+    try{
+      fail(402, "Insufficient credits"); assert.equal((await callCoach("POST", { action: "comment", ride: coachRide })).status, 402);
+      fail(403, "Request blocked: model not allowed by your guardrail");
+      const blocked = await callCoach("POST", { action: "comment", ride: coachRide });
+      assert.equal(blocked.status, 403); assert.match(blocked.body.error, /guardrail/);
+      fail(404, "No endpoints found for model"); assert.equal((await callCoach("POST", { action: "comment", ride: coachRide })).status, 404);
+      fail(429, "Provider returned error");
+      const busy = await callCoach("POST", { action: "comment", ride: coachRide });
+      assert.equal(busy.status, 429); assert.match(busy.body.error, /busy/i);
+    }finally{ global.fetch = realFetch; delete process.env.OPENROUTER_API_KEY; }
   });
 
   /* ---------- api/models.js ---------- */

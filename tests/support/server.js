@@ -1,5 +1,5 @@
 // Local stand-in for Vercel used by the tests: serves the app and runs the real api/*.js functions,
-// with intervals.icu, the YouTube Data API, the Anthropic API and Vercel Blob replaced by small in-memory fakes.
+// with intervals.icu, the YouTube Data API, the OpenRouter API and Vercel Blob replaced by small in-memory fakes.
 const http = require("http"), fs = require("fs"), path = require("path");
 const ROOT = path.join(__dirname, "..", "..");
 const { createRemote } = require("../../lib/remote.js");
@@ -14,7 +14,7 @@ global.fetch = async (url, opt = {}) => {
   url = String(url);
   if(url.startsWith("https://www.googleapis.com")) return fakeYouTube(new URL(url));
   if(url.startsWith("https://intervals.icu")) return fakeIntervals(new URL(url), opt);
-  if(url.startsWith("https://api.anthropic.com")) return fakeClaude(url, opt);
+  if(url.startsWith("https://openrouter.ai")) return fakeOpenRouter(new URL(url), opt);
   return realFetch(url, opt);
 };
 
@@ -60,21 +60,44 @@ async function fakeIntervals(u, opt){
   return J({ error: "not found" }, 404);
 }
 
-/* Anthropic Messages API: answers every request with a short comment and remembers what it was sent */
-const claude = [];
-async function fakeClaude(_url, opt){
-  const body = JSON.parse(opt.body); claude.push(body);
-  log.push(`claude ${body.model} ${body.messages[0].content.length} chars`);
-  if(body.output_config?.format){   // a question: propose swapping the first listed session for active recovery, plus one invalid change
-    const id = body.messages[0].content.match(/"id":"(w\d+-\w+)"/)?.[1];
-    const out = { answer: "Rest and do an easy recovery session instead of this workout.", changes: [
-      { session_id: id, action: "replace", workout_id: "p-rec", reason: "cold" }, { session_id: "w99-xyz", action: "skip", workout_id: null, reason: "does not exist" }] };
-    return J({ id: "msg_q", type: "message", role: "assistant", model: body.model, stop_reason: "end_turn", stop_details: null,
-      content: [{ type: "text", text: JSON.stringify(out) }], usage: { input_tokens: 5000, output_tokens: 300 } });
+/* OpenRouter: a key-scoped model list and OpenAI-compatible chat answers, remembering what was sent */
+const orModel = (id, prompt, completion, params, endpoints = ["/api/v1/chat/completions"], modalities = ["text"]) => ({
+  id, name: id.toUpperCase(), context_length: 32000, pricing: { prompt, completion }, supported_parameters: params,
+  endpoints, architecture: { output_modalities: modalities } });
+const DEFAULT_OR = () => ({ models: [
+  orModel("deepseek/deepseek-v4.1-flash-1017", "0.00000004", "0.0000001", ["max_tokens", "reasoning", "structured_outputs"]),
+  orModel("acme/plain-model", "0.000001", "0.000002", ["max_tokens"]),
+  orModel("deepseek/deepseek-v4.1-flash-1017:batch", "0.00000002", "0.00000005", ["max_tokens"]),
+  orModel("acme/image-only", "0.00001", "0.00002", ["max_tokens"], ["/api/v1/chat/completions"], ["image"]),
+], cost: 0.02, fail: null });
+let or = DEFAULT_OR();
+const openrouter = [], openrouterAuth = [];
+async function fakeOpenRouter(u, opt){
+  const auth = (opt.headers || {}).Authorization || "";
+  if(u.pathname === "/api/v1/models/user"){
+    if(!auth.startsWith("Bearer sk-") || auth === "Bearer sk-bad") return J({ error: { message: "No auth credentials found" } }, 401);
+    log.push(`openrouter models ${or.models.length}`);
+    return J({ data: or.models });
   }
-  return J({ id: "msg_test", type: "message", role: "assistant", model: body.model, stop_reason: "end_turn", stop_details: null,
-    content: [{ type: "thinking", thinking: "", signature: "x" }, { type: "text", text: "Good workout. Your heart rate is steady; keep it up." }],
-    usage: { input_tokens: 3000, output_tokens: 400 } });
+  if(u.pathname === "/api/v1/chat/completions"){
+    const body = JSON.parse(opt.body); openrouter.push(body); openrouterAuth.push(auth);
+    log.push(`openrouter ${body.model} ${(body.messages?.[1]?.content || "").length} chars`);
+    if(or.fail){
+      const message = or.fail === 403 ? "Request blocked: model not allowed by your guardrail" : "Provider returned error";
+      return J({ error: { message, code: or.fail } }, or.fail);
+    }
+    const user = body.messages?.[1]?.content || "";
+    if(body.response_format || user.includes("## The athlete's message")){   // a question: swap the first plan session, plus one invalid change
+      const id = user.match(/"id":"(w\d+-\w+)"/)?.[1];
+      const out = { answer: "Rest and do an easy recovery session instead of this workout.", changes: [
+        { session_id: id, action: "replace", workout_id: "p-rec", reason: "cold" }, { session_id: "w99-xyz", action: "skip", workout_id: null, reason: "does not exist" }] };
+      return J({ model: body.model, choices: [{ message: { content: JSON.stringify(out) }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 5000, completion_tokens: 300, cost: or.cost } });
+    }
+    return J({ model: body.model, choices: [{ message: { content: "Good workout. Your heart rate is steady; keep it up." }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 3000, completion_tokens: 400, cost: or.cost } });
+  }
+  return J({ error: { message: "not found" } }, 404);
 }
 
 /* Vercel Blob, private store, in memory */
@@ -85,7 +108,7 @@ blob.list = async ({ prefix }) => ({ blobs: [...blobs.values()].filter(b => b.pa
 blob.del = async urls => { for(const u of [].concat(urls)) blobs.delete(String(u).replace("mem://", "")); };
 process.env.BLOB_READ_WRITE_TOKEN = "test";
 
-const api = { intervals: require("../../api/intervals.js"), youtube: require("../../api/youtube.js"), sync: require("../../api/sync.js"), coach: require("../../api/coach.js") };
+const api = { intervals: require("../../api/intervals.js"), youtube: require("../../api/youtube.js"), sync: require("../../api/sync.js"), coach: require("../../api/coach.js"), models: require("../../api/models.js") };
 const TYPES = { ".png": "image/png", ".js": "text/javascript", ".json": "application/json", ".webmanifest": "application/manifest+json", ".html": "text/html; charset=utf-8" };
 
 function start(port = 0){
@@ -120,8 +143,9 @@ function start(port = 0){
     res.setHeader("content-type", TYPES[".html"]); res.end(fs.readFileSync(path.join(ROOT, "index.html")));
   });
   return new Promise(resolve => server.listen(port, () => resolve({
-    url: `http://localhost:${server.address().port}`, log, blobs, claude,
+    url: `http://localhost:${server.address().port}`, log, blobs, openrouter, openrouterAuth,
     setEnv(vars){ for(const [k, v] of Object.entries(vars)){ if(v == null) delete process.env[k]; else process.env[k] = v; } },
+    setOpenRouter(patch = {}){ if(patch.reset) or = DEFAULT_OR(); for(const k of ["models", "cost", "fail"]) if(k in patch) or[k] = patch[k]; return or; },
     close: () => new Promise(r => { remote.close(); server.close(r); }),
   })));
 }

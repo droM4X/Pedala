@@ -1,20 +1,22 @@
-// Virtual coach: a short English comment on one training session, written by Claude (Anthropic API).
-// The key is ANTHROPIC_API_KEY on Vercel; without it the coach is off. Context comes from intervals.icu
-// (INTERVALS_API_KEY on Vercel, or the key the app sends): the last six weeks of activities and wellness.
-//   GET  /api/coach                                    -> { enabled: true | false }
+// Virtual coach: a short English comment on one training session, written by OpenRouter.
+// The key comes from the device (Settings, sent as orKey) or OPENROUTER_API_KEY on Vercel; without either the coach is off.
+// Context comes from intervals.icu (INTERVALS_API_KEY on Vercel, or the key the app sends): the last six weeks of
+// activities and wellness.
+//   GET  /api/coach                                    -> { enabled: true | false }   (the Vercel key only)
 //   POST /api/coach { action: "list", icuKey }         -> { activities: [...] }   intervals.icu, last 10 days
-//   POST /api/coach { action: "comment", icuKey, notes, athlete, ride | icuId } -> { text, model }
+//   POST /api/coach { action: "comment", icuKey, notes, athlete, ride | icuId } -> { text, model, usage }
 //     ride:  a ride recorded in Pedala (summary, laps, minute-by-minute power, cadence and heart rate)
 //     icuId: any activity on intervals.icu (runs and swims from a watch, outdoor rides…)
-//   POST /api/coach { action: "week", icuKey, notes, athlete, plan, rides } -> { text }   review of the last seven days (Saturdays)
+//   POST /api/coach { action: "week", icuKey, notes, athlete, plan, rides } -> { text, model, usage }   review of the last seven days (Saturdays)
 //   POST /api/coach { action: "ask", icuKey, notes, athlete, question, chat, plan, rides, comments }
-//     -> { answer, changes: [{ session_id, action: "replace" | "skip" | "restore", workout_id, reason }] }
+//     -> { answer, changes: [{ session_id, action: "replace" | "skip" | "restore", workout_id, reason }], model, usage }
 //     a question outside a session; changes to the plan are only proposals, the app applies them when the athlete confirms
-const AnthropicSDK = require("@anthropic-ai/sdk");
+// The model and its capabilities come with the request (from the list the picker already has), so no state is
+// shared between serverless functions and a models outage cannot break commenting.
 const { profile } = require("../lib/session.js");
-const Anthropic = AnthropicSDK.default || AnthropicSDK;
 
-const MODEL = "claude-opus-5-5";
+const DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash-1017";
+const OR = "https://openrouter.ai/api/v1";
 const ICU = "https://intervals.icu/api/v1";
 const DAY = 864e5;
 
@@ -64,9 +66,12 @@ const ASK_SCHEMA = { type: "object", additionalProperties: false, required: ["an
     session_id: { type: "string" }, action: { type: "string", enum: ["replace", "skip", "restore"] },
     workout_id: { anyOf: [{ type: "string" }, { type: "null" }] }, reason: { type: "string" } } } } } };
 
+/* added to SYSTEM_ASK when the model has no structured output: the answer still has to be that JSON */
+const JSON_ONLY = `\n\nReturn only JSON in this shape: {"answer": string, "changes": [{"session_id": string, "action": "replace" | "skip" | "restore", "workout_id": string | null, "reason": string}]}`;
+
 module.exports = async (req, res) => {
   res.setHeader("cache-control", "no-store");
-  const enabled = !!process.env.ANTHROPIC_API_KEY;
+  const enabled = !!process.env.OPENROUTER_API_KEY;
   if(req.method === "GET") return res.status(200).json({ enabled });
   if(req.method !== "POST") return res.status(405).json({ error: "Only GET and POST are allowed" });
   let b = req.body || {};
@@ -81,9 +86,11 @@ module.exports = async (req, res) => {
         minutes: a.moving_time ? Math.round(a.moving_time / 60) : null })) });
     }
     if(!["comment", "ask", "week"].includes(b.action)) return res.status(400).json({ error: "Unknown action" });
-    if(!enabled) return res.status(501).json({ error: "Coach is not enabled: add ANTHROPIC_API_KEY on Vercel and redeploy." });
-    if(b.action === "ask") return ask(b, icuKey, res);
-    if(b.action === "week") return week(b, icuKey, res);
+    const key = keyOf(b);
+    if(!key) return res.status(501).json({ error: "Coach is not enabled: add an OpenRouter API key in Settings, or OPENROUTER_API_KEY on Vercel." });
+    const ctx = { key, model: b.model, caps: b.caps, host: req.headers?.host };
+    if(b.action === "ask") return ask(b, icuKey, res, ctx);
+    if(b.action === "week") return week(b, icuKey, res, ctx);
     if(!b.ride && !b.icuId) return res.status(400).json({ error: "No session to comment on" });
 
     // what the coach looks at; intervals.icu parts are optional (no key, or the service is down)
@@ -93,25 +100,26 @@ module.exports = async (req, res) => {
     let exclude = null;
     if(b.ride){ parts.push(section("Session to comment on (Pedala, indoor trainer)", trimRide(b.ride))); exclude = b.ride.id; }
     if(icuKey){
-      const ctx = await icuContext(icuKey, b.icuId);
+      const icuCtx = await icuContext(icuKey, b.icuId);
       if(b.icuId){
-        if(!ctx.one) return res.status(404).json({ error: "Session not found on intervals.icu" });
-        parts.push(section("Session to comment on (intervals.icu)", trimIcuActivity(ctx.one)));
+        if(!icuCtx.one) return res.status(404).json({ error: "Session not found on intervals.icu" });
+        parts.push(section("Session to comment on (intervals.icu)", trimIcuActivity(icuCtx.one)));
         if(b.planned) parts.push(section("What the plan called for that day", b.planned));
       }
-      parts.push(...ctx.parts(a => String(a.id) !== String(b.icuId) && (!exclude || a.external_id !== exclude)));
+      parts.push(...icuCtx.parts(a => String(a.id) !== String(b.icuId) && (!exclude || a.external_id !== exclude)));
     } else if(b.icuId) return res.status(401).json({ error: "An intervals.icu key is required for intervals.icu sessions" });
 
-    const msg = await claude({ system: SYSTEM, content: parts.join("\n\n") + "\n\nWrite a comment." });
-    if(msg.stop_reason === "refusal") return res.status(422).json({ error: "The coach did not write a comment this time" });
-    const text = msg.content.filter(c => c.type === "text").map(c => c.text).join("\n").trim();
+    const j = await orChat({ ...ctx, system: SYSTEM, content: parts.join("\n\n") + "\n\nWrite a comment." });
+    const cut = cutOff(j); if(cut) return res.status(502).json({ error: cut });
+    if(j.choices?.[0]?.finish_reason === "content_filter") return res.status(422).json({ error: "The coach did not write a comment this time" });
+    const text = messageText(j).trim();
     if(!text) return res.status(502).json({ error: "The coach returned an empty comment" });
-    return res.status(200).json({ text, model: msg.model, usage: usage(msg) });
-  }catch(e){ return apiError(res, e); }
+    return res.status(200).json({ text, model: replyModel(j, ctx.model), usage: usage(j) });
+  }catch(e){ return apiError(res, e, b.model); }
 };
 
 /* a question outside a session, with the plan, so the coach can propose changes the app applies on confirmation */
-async function ask(b, icuKey, res){
+async function ask(b, icuKey, res, ctx){
   const q = String(b.question || "").trim().slice(0, 2000);
   if(!q) return res.status(400).json({ error: "No question provided" });
   const parts = [section("Athlete", { ...pick(b.athlete || {}, ["ftp", "maxHr", "weight"]), danas: ymd(Date.now()) })];
@@ -122,56 +130,93 @@ async function ask(b, icuKey, res){
       : "## Swaps\nNo replacement options were provided: you can only propose skip or restore. If another session should replace one, tell the athlete to explicitly request it.");
   } else parts.push("## Plan\nThe athlete does not currently have an active plan, so plan changes are not possible.");
   if(Array.isArray(b.rides) && b.rides.length) parts.push(section("Pedala rides from the last 3 weeks", b.rides.slice(0, 15)));
-  if(icuKey){ const ctx = await icuContext(icuKey); parts.push(...ctx.parts(() => true)); }
+  if(icuKey){ const c = await icuContext(icuKey); parts.push(...c.parts(() => true)); }
   if(Array.isArray(b.comments) && b.comments.length) parts.push(section("Your recent session comments", b.comments.slice(0, 3)));
   if(Array.isArray(b.chat) && b.chat.length) parts.push(section("Conversation so far (oldest to newest)", b.chat.slice(-4)));
-  const msg = await claude({ system: SYSTEM_ASK, content: parts.join("\n\n") + "\n\n## The athlete's message\n" + q, format: ASK_SCHEMA });
-  if(msg.stop_reason === "refusal") return res.status(422).json({ error: "The coach did not respond this time" });
-  let out; try{ out = JSON.parse(msg.content.filter(c => c.type === "text").map(c => c.text).join("")); }catch{ return res.status(502).json({ error: "The coach returned an invalid response" }); }
+  // a strict schema only when the key's model supports one; otherwise the prompt asks for JSON and it is parsed tolerantly
+  const strict = !!ctx.caps?.schema;
+  const j = await orChat({ ...ctx, system: SYSTEM_ASK + (strict ? "" : JSON_ONLY), content: parts.join("\n\n") + "\n\n## The athlete's message\n" + q,
+    schema: strict ? ASK_SCHEMA : null });
+  const cut = cutOff(j); if(cut) return res.status(502).json({ error: cut });
+  if(j.choices?.[0]?.finish_reason === "content_filter") return res.status(422).json({ error: "The coach did not respond this time" });
+  const out = parseJson(messageText(j));
+  if(!out) return res.status(502).json({ error: "The coach returned an invalid response" });
   const ids = new Set((b.plan?.sessions || []).map(x => x.id)), opts = new Set((b.plan?.options || []).map(x => x.id));
   const changes = (out.changes || []).filter(c => ids.has(c.session_id) && (c.action !== "replace" || opts.has(c.workout_id)));   // only what the app can apply
-  return res.status(200).json({ answer: String(out.answer || "").trim(), changes, model: msg.model, usage: usage(msg) });
+  return res.status(200).json({ answer: String(out.answer || "").trim(), changes, model: replyModel(j, ctx.model), usage: usage(j) });
 }
 
 /* Saturday review of the week: the plan around it, Pedala's rides, intervals.icu and wellness */
-async function week(b, icuKey, res){
+async function week(b, icuKey, res, ctx){
   const parts = [section("Athlete", { ...pick(b.athlete || {}, ["ftp", "maxHr", "weight"]), danas: ymd(Date.now()) })];
   if(b.notes) parts.push(`## Athlete notes\n${String(b.notes).slice(0, 2000)}`);
   if(b.plan) parts.push(section("Plan: past 7 days and next 8 days, with status", (b.plan.sessions || []).slice(0, 40)));
   if(Array.isArray(b.rides) && b.rides.length) parts.push(section("Pedala rides from the past 7 days", b.rides.slice(0, 15)));
-  if(icuKey){ const ctx = await icuContext(icuKey); parts.push(...ctx.parts(() => true)); }
-  const msg = await claude({ system: SYSTEM_WEEK, content: parts.join("\n\n") + "\n\nWrite a weekly review." });
-  if(msg.stop_reason === "refusal") return res.status(422).json({ error: "The coach did not write a review this time" });
-  const text = msg.content.filter(c => c.type === "text").map(c => c.text).join("\n").trim();
+  if(icuKey){ const c = await icuContext(icuKey); parts.push(...c.parts(() => true)); }
+  const j = await orChat({ ...ctx, system: SYSTEM_WEEK, content: parts.join("\n\n") + "\n\nWrite a weekly review." });
+  const cut = cutOff(j); if(cut) return res.status(502).json({ error: cut });
+  if(j.choices?.[0]?.finish_reason === "content_filter") return res.status(422).json({ error: "The coach did not write a review this time" });
+  const text = messageText(j).trim();
   if(!text) return res.status(502).json({ error: "The coach returned an empty review" });
-  return res.status(200).json({ text, model: msg.model, usage: usage(msg) });
+  return res.status(200).json({ text, model: replyModel(j, ctx.model), usage: usage(j) });
 }
 
-async function claude({ system, content, format }){
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  return client.beta.messages.create({
-    model: MODEL,
-    max_tokens: 4000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",                         // a declined request is retried on a fallback model
-    // effort low: short coaching answers, and thinking is most of the cost
-    output_config: { effort: "low", ...(format ? { format: { type: "json_schema", schema: format } } : {}) },
-    system,
-    messages: [{ role: "user", content }],
-  });
+/* one OpenAI-compatible call to OpenRouter; caps shape the body, and a stale hint is retried once conservatively */
+async function orChat({ key, model, caps, system, content, schema, host }){
+  const c = caps && typeof caps === "object" ? caps : {};
+  const body = { model: model || DEFAULT_MODEL, messages: [{ role: "system", content: system }, { role: "user", content }], max_tokens: 4000 };
+  if(c.mc === true){ delete body.max_tokens; body.max_completion_tokens = 4000; }
+  if(c.reasoning === "reasoning") body.reasoning = { effort: "low", exclude: true };
+  else if(c.reasoning === "reasoning_effort") body.reasoning_effort = "low";
+  if(c.schema === true && schema) body.response_format = { type: "json_schema", json_schema: { name: "coach_answer", strict: true, schema } };
+  const optional = body.max_completion_tokens != null || body.reasoning != null || body.reasoning_effort != null || body.response_format != null;
+  const send = async payload => {
+    const r = await fetch(`${OR}/chat/completions`, { method: "POST", headers: {
+      Authorization: `Bearer ${key}`, "content-type": "application/json",
+      "HTTP-Referer": `https://${host || "pedala.vercel.app"}`, "X-Title": "Pedala" },
+      body: JSON.stringify(payload) });
+    const j = await r.json().catch(() => ({}));
+    if(!r.ok){
+      const e = new Error(String(j.error?.metadata?.raw || j.error?.message || `OpenRouter error ${r.status}`).slice(0, 300));
+      e.status = r.status; throw e;
+    }
+    return j;
+  };
+  try{ return await send(body); }
+  catch(e){ if(e.status === 400 && optional) return send({ model: body.model, messages: body.messages, max_tokens: 4000 }); throw e; }
 }
-/* tokens and an estimate in dollars at Claude Opus 5.5 prices ($4 / $20 per million), so the app can show what an answer cost */
-function usage(msg){
-  const u = msg.usage || {}, input = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0), output = u.output_tokens || 0;
-  return { input, output, usd: +((input * 4 + output * 20) / 1e6).toFixed(4) };
+/* the answer was cut off at the token limit */
+function cutOff(j){
+  return j.choices?.[0]?.finish_reason === "length" ? "The answer was cut off; try again" : "";
 }
-function apiError(res, e){
-  if(e instanceof Anthropic.AuthenticationError) return res.status(500).json({ error: "Anthropic rejected ANTHROPIC_API_KEY" });
-  // out of prepaid credit: a clear message, and 402 so the app stops trying for a while (failed requests cost nothing)
-  if(e instanceof Anthropic.APIError && e.status === 400 && /credit balance/i.test(e.message)) return res.status(402).json({ error: "The Anthropic account has no credits. Add credit at console.anthropic.com → Billing." });
-  if(e instanceof Anthropic.RateLimitError) return res.status(429).json({ error: "The coach is busy right now; try again later" });
-  if(e instanceof Anthropic.APIError) return res.status(502).json({ error: `Anthropic error ${e.status ?? ""}: ${e.message}`.slice(0, 300) });
-  return res.status(502).json({ error: "The coach is unavailable: " + e.message });
+function messageText(j){
+  const content = j.choices?.[0]?.message?.content;
+  return Array.isArray(content) ? content.map(c => c?.text || "").join("") : String(content || "");
+}
+const replyModel = (j, asked) => j.model || asked || DEFAULT_MODEL;
+/* tolerant JSON: fences from a prompt-only answer, or text around the object */
+function parseJson(text){
+  let t = String(text || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+  try{ return JSON.parse(t); }catch{}
+  const a = t.indexOf("{"), b = t.lastIndexOf("}");
+  if(a < 0 || b <= a) return null;
+  try{ return JSON.parse(t.slice(a, b + 1)); }catch{ return null; }
+}
+const keyOf = b => String(b.orKey || process.env.OPENROUTER_API_KEY || "").trim();
+/* tokens and the real cost OpenRouter reports, so the app can show what an answer cost (never an estimate) */
+function usage(j){
+  const u = j.usage || {};
+  return { input: u.prompt_tokens || 0, output: u.completion_tokens || 0, usd: typeof u.cost === "number" ? u.cost : null };
+}
+function apiError(res, e, model){
+  switch(e.status){
+    case 401: return res.status(401).json({ error: "OpenRouter rejected the API key" });
+    case 402: return res.status(402).json({ error: "The OpenRouter account has no credit. Add credit at openrouter.ai/settings/credits." });
+    case 403: return res.status(403).json({ error: String(e.message || "OpenRouter refused the request").slice(0, 300) });
+    case 404: return res.status(404).json({ error: `Unknown model: ${model || DEFAULT_MODEL}`.slice(0, 300) });
+    case 429: return res.status(429).json({ error: "The coach is busy right now; try again later" });
+    default: return res.status(502).json({ error: String(e.message || e).slice(0, 300) });
+  }
 }
 /* the last four weeks of activities and one week of wellness from intervals.icu (each part optional) */
 async function icuContext(key, oneId){

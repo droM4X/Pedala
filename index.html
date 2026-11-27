@@ -2336,8 +2336,8 @@ async function renderCoachViews(){
 }
 function fillCoach(){
   const st = $("#coach-status"); if(!st) return;
-  st.innerHTML = coachServer ? PedalaI18n.tHtml("The coach is on (ANTHROPIC_API_KEY is set on Vercel). Other activities also need an intervals.icu key.")
-    : PedalaI18n.tHtml("The coach is off. On <b>console.anthropic.com</b> create an API key, add it on Vercel as <b>ANTHROPIC_API_KEY</b> and <b>Redeploy</b>. One comment costs about 6 cents; set a monthly spend limit in the Console.");
+  st.innerHTML = coachServer ? PedalaI18n.tHtml("The coach is on (OPENROUTER_API_KEY is set on Vercel). Other activities also need an intervals.icu key.")
+    : PedalaI18n.tHtml("The coach is off. Add an OpenRouter API key in Settings (or OPENROUTER_API_KEY on Vercel).");
   $("#coach-mode").value = coachMode();
   if(document.activeElement !== $("#coach-about")) $("#coach-about").value = settings.coachAbout || "";
 }

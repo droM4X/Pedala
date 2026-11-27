@@ -637,18 +637,18 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   });
 
   await test("coach: a saved ride and a run from intervals.icu each get a comment, Pedala's own upload does not", async () => {
-    srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
+    srv.setEnv({ OPENROUTER_API_KEY: "sk-test" }); srv.setOpenRouter({ reset: true }); srv.openrouter.length = 0;
     const p = await open({ settings: { ftp: 160, maxHr: 185, weight: 100, coachAbout: "190 cm, vraćam se nakon pauze", coachMode: "each" } });
     await p.click('[data-view="settings"]'); await p.fill("#icu-key", "goodkey"); await p.click("#btn-icu"); await p.waitForTimeout(600);
-    assert.match(await p.textContent("#coach-status"), /coach is on.*ANTHROPIC_API_KEY/);
+    assert.match(await p.textContent("#coach-status"), /coach is on.*OPENROUTER_API_KEY/);
     await p.click("#chip-trainer"); await p.click("#c-sim"); await p.evaluate(() => setWorkout(allWorkouts().find(w => w.id === "b-ss")));
     await p.click("#btn-start"); await p.waitForTimeout(4000); await p.click("#btn-end"); await p.waitForTimeout(500); await p.click("#sum-save");
     await p.waitForFunction(() => Object.entries(store.get("coach", {})).some(([k, n]) => k.startsWith("ride:") && n.text), null, { timeout: 15000 });
-    const ride = srv.claude.find(b => b.messages[0].content.includes("Pedala, indoor trainer"));
+    const ride = srv.openrouter.find(b => b.messages[1].content.includes("Pedala, indoor trainer"));
     assert.ok(ride, "the ride was sent to the coach");
-    assert.equal(ride.model, "claude-opus-5-5"); assert.equal(ride.fallbacks, "default");
-    assert.match(ride.messages[0].content, /190 cm, vraćam se nakon pauze/); assert.match(ride.messages[0].content, /po_minutama/);
-    assert.match(ride.messages[0].content, /Jutarnje trčanje/, "the last six weeks from intervals.icu are included");
+    assert.equal(ride.model, "deepseek/deepseek-v4.1-flash-1017"); assert.equal(ride.fallbacks, undefined); assert.equal(ride.max_tokens, 4000);
+    assert.match(ride.messages[1].content, /190 cm, vraćam se nakon pauze/); assert.match(ride.messages[1].content, /po_minutama/);
+    assert.match(ride.messages[1].content, /Jutarnje trčanje/, "the last six weeks from intervals.icu are included");
     // the run from the watch gets its own comment when the app checks intervals.icu
     await p.evaluate(() => { coachCheck.at = 0; return coachCheck(); });
     await p.waitForFunction(() => store.get("coach", {})["icu:i777"]?.text, null, { timeout: 15000 });
@@ -658,11 +658,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.match(await p.textContent("#coach-box"), /Good workout/);
     await p.click('[data-view="history"]'); await p.waitForTimeout(400); await p.locator("[data-rep]").first().click(); await p.waitForTimeout(600);
     assert.match(await p.textContent("#rep-coach"), /Good workout/);
-    srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
+    srv.setEnv({ OPENROUTER_API_KEY: null }); await p.context().close();
   });
 
   await test("coach: a question gets an answer, a proposed plan change is applied only after confirming", async () => {
-    srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
+    srv.setEnv({ OPENROUTER_API_KEY: "sk-test" }); srv.setOpenRouter({ reset: true }); srv.openrouter.length = 0;
     const p = await open();
     await p.evaluate(() => { settings.coachMode = "off"; });   // no weekly review in the middle of this test
     const first = await p.evaluate(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
@@ -670,27 +670,28 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.click('[data-view="progress"]'); await p.waitForTimeout(800);
     await p.fill("#coach-q", "I have a cold, what about this week?"); await p.click("#coach-form button");
     await p.waitForFunction(() => coachChat().at(-1)?.a, null, { timeout: 15000 });
-    const sent = srv.claude.at(-1);
-    assert.equal(sent.output_config.format.type, "json_schema");
-    assert.match(sent.messages[0].content, /I have a cold/); assert.match(sent.messages[0].content, /"workout_id":"p-rec"|"id":"p-rec"/);
+    const sent = srv.openrouter.at(-1);
+    assert.equal(sent.response_format, undefined, "the app sends no caps yet");
+    assert.match(sent.messages[0].content, /Return only JSON/, "without a schema the system prompt asks for JSON");
+    assert.match(sent.messages[1].content, /I have a cold/); assert.match(sent.messages[1].content, /"workout_id":"p-rec"|"id":"p-rec"/);
     assert.match(await p.textContent("#coach-thread"), /Rest and do an easy recovery session/);
-    assert.match(await p.textContent("#coach-thread"), /≈ \$0\.0[0-9]{2}/, "what the answer cost"); assert.match(await p.textContent("#coach-month"), /≈ \$0\.0/);
+    assert.match(await p.textContent("#coach-thread"), /≈ \$0\.02/, "the fake's real cost"); assert.match(await p.textContent("#coach-month"), /≈ \$0\.0/);
     assert.equal(await p.locator("#coach-thread li").count(), 1, "a change for a session that does not exist is dropped");
     assert.ok(!(await p.evaluate(() => plan().swap)), "nothing changes before confirming");
     await p.click("#coach-thread [data-apply]");
     assert.deepEqual(await p.evaluate(() => plan().swap), { [first]: "p-rec" });
     assert.equal(await p.evaluate(id => planSessions().find(x => x.id === id).w.name, first), "Active recovery");
     assert.match(await p.textContent("#coach-thread"), /Applied/);
-    // a plain question: this week of the plan, no list of swaps, less effort
-    await p.evaluate(() => coachQuestion("Kako napredujem?")); const plain = srv.claude.at(-1);
-    assert.doesNotMatch(plain.messages[0].content, /Available replacement sessions/); assert.match(plain.messages[0].content, /This week's plan/);
-    assert.equal(plain.output_config.effort, "low");
-    assert.ok((plain.messages[0].content.match(/"id":"w\d+-/g) || []).length <= 14, "one or two weeks of the plan");
-    srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
+    // a plain question: this week of the plan, no list of swaps, the conservative body
+    await p.evaluate(() => coachQuestion("Kako napredujem?")); const plain = srv.openrouter.at(-1);
+    assert.doesNotMatch(plain.messages[1].content, /Available replacement sessions/); assert.match(plain.messages[1].content, /This week's plan/);
+    assert.equal(plain.max_tokens, 4000); assert.equal(plain.reasoning, undefined); assert.equal(plain.reasoning_effort, undefined);
+    assert.ok((plain.messages[1].content.match(/"id":"w\d+-/g) || []).length <= 14, "one or two weeks of the plan");
+    srv.setEnv({ OPENROUTER_API_KEY: null }); await p.context().close();
   });
 
   await test("plan: swims and runs are in the plan and tick off from intervals.icu, the coach sees the day's target", async () => {
-    srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
+    srv.setEnv({ OPENROUTER_API_KEY: "sk-test" }); srv.setOpenRouter({ reset: true }); srv.openrouter.length = 0;
     const p = await open();
     await p.evaluate(() => { settings.icuKey = "goodkey"; settings.coachMode = "each"; store.set("settings", settings);
       const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - 4);   // today is the Friday of week 1
@@ -708,29 +709,29 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.deepEqual(await p.evaluate(() => ["Run", "TrailRun", "Swim", "OpenWaterSwim", "Ride"].map(icuSport)), ["run", "run", "swim", "swim", null]);
     await p.evaluate(() => { store.set("coach", {}); coachCheck.at = 0; return coachCheck(); });   // comments synced from the earlier coach test
     await p.waitForFunction(() => store.get("coach", {})["icu:i777"]?.text, null, { timeout: 15000 });
-    assert.match(srv.claude.find(b => b.messages[0].content.includes("Jutarnje trčanje") && b.messages[0].content.includes("Session to comment on (intervals.icu)")).messages[0].content, /What the plan called for that day[\s\S]*1 km easy/);
+    assert.match(srv.openrouter.find(b => b.messages[1].content.includes("Jutarnje trčanje") && b.messages[1].content.includes("Session to comment on (intervals.icu)")).messages[1].content, /What the plan called for that day[\s\S]*1 km easy/);
     // swims and runs added to a running plan count only from the day they were added
     assert.equal(await p.evaluate(() => { const q = { ...plan(), extraFrom: ymd(new Date()) }; return planSessions(q).filter(x => !x.w.segs && x.d < q.extraFrom).length; }), 0);
     await p.evaluate(() => planUpdate(q => { q.extra = false; }));
     assert.equal(await p.evaluate(() => planSessions().length), 42, "swims and runs can be switched off");
-    srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
+    srv.setEnv({ OPENROUTER_API_KEY: null }); await p.context().close();
   });
 
   await test("coach: a weekly review instead of a comment after every session", async () => {
-    srv.setEnv({ ANTHROPIC_API_KEY: "sk-test" }); srv.claude.length = 0;
+    srv.setEnv({ OPENROUTER_API_KEY: "sk-test" }); srv.setOpenRouter({ reset: true }); srv.openrouter.length = 0;
     const p = await open(); await p.waitForTimeout(600);
     await p.evaluate(() => { settings.coachMode = "week"; store.set("settings", settings); });   // settings synced from earlier tests say "each"
     await p.evaluate(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
       store.set("plan", { id: PLAN.id, start: ymd(d), done: {}, skipped: {}, extra: true, extraFrom: ymd(d) }); });
     await p.click("#chip-trainer"); await p.click("#c-sim"); await p.click("#btn-start"); await p.waitForTimeout(3000); await p.click("#btn-end"); await p.waitForTimeout(400); await p.click("#sum-save"); await p.waitForTimeout(800);
-    assert.ok(!srv.claude.some(b => b.messages[0].content.includes("Pedala, indoor trainer")), "no comment after the ride");
+    assert.ok(!srv.openrouter.some(b => b.messages[1].content.includes("Pedala, indoor trainer")), "no comment after the ride");
     await p.evaluate(() => coachWeek(true));
     const key = await p.evaluate(() => "week:" + ymd(lastSaturday()));
     assert.match(await p.evaluate(k => store.get("coach", {})[k]?.text, key), /Good workout/);
-    const sent = srv.claude.find(b => b.system.includes("Every Saturday"));
-    assert.ok(sent, "the weekly review prompt was used"); assert.match(sent.messages[0].content, /Plan: past 7 days/); assert.match(sent.messages[0].content, /Pedala rides from the past 7 days/);
+    const sent = srv.openrouter.find(b => b.messages[0].content.includes("Every Saturday"));
+    assert.ok(sent, "the weekly review prompt was used"); assert.match(sent.messages[1].content, /Plan: past 7 days/); assert.match(sent.messages[1].content, /Pedala rides from the past 7 days/);
     assert.equal(await p.evaluate(() => coachWeek()), null, "only once a week");
-    srv.setEnv({ ANTHROPIC_API_KEY: null }); await p.context().close();
+    srv.setEnv({ OPENROUTER_API_KEY: null }); await p.context().close();
   });
 
   await test("strength at home: a 12-week plan of three circuits, a guided session ticks itself off", async () => {
