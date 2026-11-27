@@ -626,6 +626,11 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
         <input id="coach-key" type="text" autocomplete="off" spellcheck="false" placeholder="sk-or-v1-…" style="display:block;width:100%;margin-top:5px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit">
       </label>
       <div class="dlg-acts" style="justify-content:flex-start;margin:8px 0"><button class="btn small" id="btn-coach-key" type="button">Save and check</button></div>
+      <label class="note" style="display:block;max-width:520px">Model
+        <input id="coach-search" type="search" placeholder="Search models" autocomplete="off" style="display:block;width:100%;margin-top:5px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;color:var(--text);font:inherit">
+        <select id="coach-model" style="display:block;width:100%;margin-top:5px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit"></select>
+      </label>
+      <p class="note" id="coach-model-note"></p>
       <p class="note" id="coach-status"></p>
       <label class="note" style="display:block;max-width:520px">The coach writes on its own<select id="coach-mode" style="display:block;margin-top:5px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit">
         <option value="week">A weekly review on Saturdays (recommended)</option><option value="each">A comment after every session</option><option value="off">Nothing, only when I ask</option></select></label>
@@ -2151,11 +2156,74 @@ document.addEventListener("visibilitychange", () => { if(document.visibilityStat
    other activity that reaches intervals.icu (runs and swims from a watch…) when the app opens. Comments are kept in
    store "coach" (shared between devices) as { "ride:<id>" | "icu:<id>": { text | error | pending, at, title, date } }. */
 let coachServer = false;                                   // OPENROUTER_API_KEY is set on Vercel
+let coachModels = [], coachModelsLoaded = false, coachModelsNote = "", coachModelsBusy = false;
 const coachKey = () => (settings.orKey || "").trim();      // the key pasted in Settings, kept on this device only
-const coachEnabled = () => coachServer || !!coachKey();
-const coachAuth = () => (coachKey() ? { orKey: coachKey() } : {});
+const coachModel = () => settings.coachModel || "";
+const coachCaps = () => coachModels.find(m => m.id === coachModel())?.caps || null;
+const coachEnabled = () => {
+  if(!coachServer && !coachKey()) return false;
+  if(coachModelsLoaded && (!coachModel() || !coachModels.some(m => m.id === coachModel()))) return false;   // a loaded list says what this key may use
+  return true;
+};
+const coachAuth = () => ({ ...(coachKey() ? { orKey: coachKey() } : {}), ...(coachModel() ? { model: coachModel() } : {}), ...(coachCaps() ? { caps: coachCaps() } : {}) });
 const coachMode = () => settings.coachMode || "week";   // week: a review on Saturdays; each: a comment after every session; off
 const coachOn = () => coachEnabled() && coachMode() === "each" && Date.now() > store.get("coachPause", 0);   // paused for 12 h when the credit runs out
+
+/* the model list belongs to one key: a small djb2 fingerprint keeps each key's list apart without storing the key */
+const coachFp = key => { let h = 5381; for(let i = 0; i < key.length; i++) h = ((h * 33) ^ key.charCodeAt(i)) >>> 0; return h.toString(36); };
+const coachAttr = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const coachPrice = p => p == null ? "?" : "$" + numFixed(p, 2);
+const coachModelLabel = m => `${m.name || m.id} — ${coachPrice(m.priceIn)} / ${coachPrice(m.priceOut)} per M`;
+/* fetch (or reuse for an hour) the models this key may use; never stores the key itself */
+async function loadCoachModels(force = false){
+  const key = coachKey(), fp = coachFp(key || "server"), cached = store.get("coachList", null);
+  if(!force && cached && cached.fp === fp && Date.now() - cached.at < 36e5){
+    coachModels = cached.list || []; coachModelsLoaded = true; coachModelsNote = "";
+    resolveCoachModel(cached.default); renderCoachModels(); return;
+  }
+  if(coachModelsBusy) return;
+  coachModelsBusy = true; coachModelsNote = PedalaI18n.t("Models are loading…"); renderCoachModels();
+  try{
+    const r = await fetch("/api/models", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ orKey: key || undefined }) });
+    const j = await r.json().catch(() => ({}));
+    if(r.status === 409) coachModelsNote = PedalaI18n.t("Add an OpenRouter API key to see the models.");
+    else if(r.status === 401) coachModelsNote = PedalaI18n.t("The key was rejected by OpenRouter.");
+    else if(!r.ok) coachModelsNote = PedalaI18n.t("The models could not be loaded.");
+    else{
+      coachModels = Array.isArray(j.models) ? j.models : []; coachModelsLoaded = true; coachModelsNote = "";
+      store.set("coachList", { fp, at: Date.now(), list: coachModels, default: j.default || null });
+      resolveCoachModel(j.default || null);
+    }
+  }catch{ coachModelsNote = PedalaI18n.t("The models could not be loaded."); }
+  finally{ coachModelsBusy = false; renderCoachModels(); }
+}
+/* saved if the key still allows it, else the list's default, else let the athlete choose; never switches away silently */
+function resolveCoachModel(def){
+  const saved = coachModel();
+  if(saved) return;   // a saved model stays, even when the list says it is unavailable (the note explains it)
+  const next = def && coachModels.some(m => m.id === def) ? def : coachModels.length === 1 ? coachModels[0].id : "";
+  if(next){ settings.coachModel = next; store.set("settings", settings); }
+}
+function renderCoachModels(){
+  const sel = $("#coach-model"); if(!sel) return;
+  const q = ($("#coach-search")?.value || "").trim().toLowerCase(), saved = coachModel();
+  const shown = coachModels.filter(m => !q || String(m.id).toLowerCase().includes(q) || String(m.name || "").toLowerCase().includes(q));
+  const missing = !!saved && !coachModels.some(m => m.id === saved);
+  const groups = new Map();
+  for(const m of shown){ const a = String(m.id).split("/")[0]; if(!groups.has(a)) groups.set(a, []); groups.get(a).push(m); }
+  let html = `<option value="">${PedalaI18n.t("Choose a model")}</option>`;
+  if(missing) html = `<option value="${coachAttr(saved)}" selected>${coachAttr(saved)} (${PedalaI18n.t("not available with this key")})</option>` + html;
+  for(const [a, list] of groups) html += `<optgroup label="${coachAttr(a)}">` + list.map(m =>
+    `<option value="${coachAttr(m.id)}"${m.id === saved ? " selected" : ""}>${coachAttr(coachModelLabel(m))}</option>`).join("") + `</optgroup>`;
+  sel.innerHTML = html;
+  const note = $("#coach-model-note");
+  if(note){
+    let msg = coachModelsNote;
+    if(!msg && coachModelsLoaded && !coachModels.length) msg = PedalaI18n.t("No models for this key.");
+    if(!msg && missing) msg = PedalaI18n.t("This model is not available with this key. Choose another model.");
+    note.textContent = msg;
+  }
+}
 const coachNotes = () => store.get("coach", {});
 function saveCoachNote(key, note){
   const all = { ...coachNotes(), [key]: note };
@@ -2343,23 +2411,32 @@ async function renderCoachViews(){
 }
 function fillCoach(){
   const st = $("#coach-status"); if(!st) return;
-  st.innerHTML = coachKey() ? PedalaI18n.tHtml("The coach is on (key on this device). Other activities also need an intervals.icu key.")
+  const base = coachKey() ? PedalaI18n.tHtml("The coach is on (key on this device). Other activities also need an intervals.icu key.")
     : coachServer ? PedalaI18n.tHtml("The coach is on (OPENROUTER_API_KEY is set on Vercel). Other activities also need an intervals.icu key.")
     : PedalaI18n.tHtml("The coach is off. Add an OpenRouter API key in Settings (or OPENROUTER_API_KEY on Vercel).");
+  st.innerHTML = base + (coachModel() && coachEnabled() ? `<br>` + PedalaI18n.tHtml("Model: {model}", { model: coachModel() }) : "");
   $("#coach-mode").value = coachMode();
   if(document.activeElement !== $("#coach-key")) $("#coach-key").value = settings.orKey || "";
   if(document.activeElement !== $("#coach-about")) $("#coach-about").value = settings.coachAbout || "";
+  renderCoachModels();
 }
 /* the key stays on this device: localStorage, not in the sync and not in a backup */
 function coachSaveKey(){
   settings.orKey = $("#coach-key").value.trim(); store.set("settings", settings);
   store.set("coachPause", 0); store.set("coachPauseWhy", null);
-  fillCoach(); renderCoachViews();
+  fillCoach(); loadCoachModels(true).catch(() => {}); renderCoachViews();
 }
 $("#coach-mode").onchange = e => { settings.coachMode = e.target.value; store.set("settings", settings); };
 $("#coach-about").addEventListener("change", e => { settings.coachAbout = e.target.value.trim(); store.set("settings", settings); });
 $("#btn-coach-key").onclick = coachSaveKey;
 $("#coach-key").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); coachSaveKey(); } });
+$("#coach-search").addEventListener("input", renderCoachModels);
+$("#coach-model").onchange = e => {
+  settings.coachModel = e.target.value; store.set("settings", settings);
+  store.set("coachPause", 0); store.set("coachPauseWhy", null);
+  renderCoachModels(); fillCoach(); renderCoachViews();
+};
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible" && $("#view-settings")?.classList.contains("active")) loadCoachModels().catch(() => {}); });
 
 /* ============ training plan ============
    "Sustainable 14 weeks", adapted: the Tuesday threshold and Thursday VO2max sessions last 30 minutes at most
@@ -2985,7 +3062,7 @@ $("#settings-form").addEventListener("input", e => { const f = e.currentTarget;
 function showView(v){
   document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.view === v));
   document.querySelectorAll(".view").forEach(el => el.classList.toggle("active", el.id === "view-" + v));
-  if(v === "plan") renderPlan(); if(v === "workouts") renderWorkouts(); if(v === "history") renderHistory(); if(v === "progress") renderProgress(); if(v === "settings"){ fillSettings(); renderIcu(); setSyncStatus(); renderBtState(); } if(v === "ride") render();
+  if(v === "plan") renderPlan(); if(v === "workouts") renderWorkouts(); if(v === "history") renderHistory(); if(v === "progress") renderProgress(); if(v === "settings"){ fillSettings(); renderIcu(); setSyncStatus(); renderBtState(); loadCoachModels().catch(() => {}); } if(v === "ride") render();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showView(b.dataset.view));
 

@@ -14,10 +14,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
   const srv = await start(), B = srv.url, browser = await chromium.launch(), pageErrors = [];
   /* a fresh browser profile; fake YouTube player that answers volume questions and records commands */
-  async function open({ viewport = { width: 1280, height: 860 }, speed = 100, voices = [], settings, mobile = false, locale = "en-US", cookies = [], keys = false } = {}){
+  async function open({ viewport = { width: 1280, height: 860 }, speed = 100, voices = [], settings, mobile = false, locale = "en-US", cookies = [], keys = false, sync = true } = {}){
     const ctx = await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile, acceptDownloads: true, locale });
     if(cookies.length) await ctx.addCookies(cookies.map(([name, value]) => ({ name, value, url: B })));
     const p = await ctx.newPage(); p.on("pageerror", e => pageErrors.push(e.message)); p.on("dialog", d => d.accept());
+    if(!sync) await p.route("**/api/sync*", r => r.abort());   // a test that pins local settings, away from the shared test server
     await p.route("https://www.youtube.com/embed/**", r => r.fulfill({ contentType: "text/html", body: `<body><script>
       let vol = 70; addEventListener("message", e => { const d = JSON.parse(e.data);
         if(d.event === "listening") parent.postMessage(JSON.stringify({ event: "infoDelivery", info: { volume: vol } }), "*");
@@ -716,6 +717,43 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.match(await p.textContent("#coach-status"), /add an OpenRouter API key/i);
     await p.click('[data-view="progress"]'); await p.waitForSelector("#coach-box");
     assert.equal(await p.locator("#coach-form").isHidden(), true);
+    await p.context().close();
+  });
+
+  await test("coach: the picker lists only the key's models, filters, and the pick travels with the next call", async () => {
+    srv.setEnv({ OPENROUTER_API_KEY: "sk-test" }); srv.setOpenRouter({ reset: true }); srv.openrouter.length = 0;
+    const p = await open({ settings: { coachMode: "off" }, sync: false });
+    await p.click('[data-view="settings"]'); await p.waitForTimeout(700);
+    const ids = await p.evaluate(() => [...document.querySelectorAll("#coach-model option")].map(o => o.value).filter(Boolean));
+    assert.deepEqual(ids, ["deepseek/deepseek-v4.1-flash-1017", "acme/plain-model"]);
+    assert.equal(await p.evaluate(() => coachModel()), "deepseek/deepseek-v4.1-flash-1017", "the default is adopted");
+    assert.match(await p.textContent("#coach-model"), /\$0\.04 \/ \$0\.1/);
+    await p.fill("#coach-search", "acme"); await p.waitForTimeout(200);
+    assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll("#coach-model option")].map(o => o.value).filter(Boolean)), ["acme/plain-model"]);
+    await p.selectOption("#coach-model", "acme/plain-model"); await p.waitForTimeout(400);
+    assert.equal(await p.evaluate(() => settings.coachModel), "acme/plain-model");
+    await p.evaluate(() => coachAsk("ride:r-model", { ride: { id: "r-model", name: "M", start: new Date().toISOString(), m: { duration: 900 } } }, "M", Date.now()));
+    const sent = srv.openrouter.at(-1);
+    assert.equal(sent.model, "acme/plain-model");
+    assert.equal(sent.max_tokens, 4000); assert.equal(sent.reasoning, undefined); assert.equal(sent.reasoning_effort, undefined);
+    await p.context().close();
+  });
+  await test("coach: a saved model the key no longer allows turns the coach off", async () => {
+    srv.setEnv({ OPENROUTER_API_KEY: "sk-test" }); srv.setOpenRouter({ reset: true });
+    const p = await open({ settings: { coachMode: "each", coachModel: "gone/model" }, sync: false });
+    await p.click('[data-view="settings"]'); await p.waitForTimeout(700);
+    assert.match(await p.textContent("#coach-model-note"), /not available with this key/i);
+    assert.equal(await p.evaluate(() => coachModel()), "gone/model", "no silent switch");
+    await p.click('[data-view="progress"]'); await p.waitForSelector("#coach-box");
+    assert.equal(await p.locator("#coach-form").isHidden(), true);
+    await p.context().close();
+  });
+  await test("coach: a key whose list is empty shows it and keeps the coach off", async () => {
+    srv.setEnv({ OPENROUTER_API_KEY: "sk-empty" }); srv.setOpenRouter({ reset: true, models: [] });
+    const p = await open({ settings: { coachMode: "each" }, sync: false });
+    await p.click('[data-view="settings"]'); await p.waitForTimeout(700);
+    assert.match(await p.textContent("#coach-model-note"), /No models for this key/i);
+    assert.equal(await p.evaluate(() => coachOn()), false);
     await p.context().close();
   });
 
