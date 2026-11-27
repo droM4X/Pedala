@@ -15,7 +15,7 @@
     "url": "https://github.com/jspisi88/Pedala"
   },
   "scripts": {
-    "test": "node --no-warnings tests/unit.js && node tests/e2e.js",
+    "test": "node --no-warnings tests/i18n.js && node --no-warnings tests/unit.js && node tests/e2e.js",
     "test:unit": "node --no-warnings tests/unit.js",
     "dev": "node tests/support/server.js"
   }
