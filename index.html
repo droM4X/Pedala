@@ -582,6 +582,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <p class="lead">Saved on this device.</p>
       <form class="form" id="settings-form">
         <h2 class="section-title full">Basic</h2>
+        <label class="full">Language<select name="lang"></select></label>
         <label>FTP (W)<input name="ftp" type="number" min="80" max="600" step="1"></label>
         <label>Weight (kg)<input name="weight" type="number" min="30" max="200" step="0.5"></label>
         <label>Chainring (teeth)<input name="chainring" type="number" min="20" max="60" step="1"></label>
@@ -2874,9 +2875,31 @@ $("#sum-discard").onclick = () => { if(confirm("Discard the ride without saving?
 $("#sum-resume").onclick = () => { $("#dlg-summary").close(); start(); };
 
 /* ============ settings ============ */
-function fillSettings(){ const f = $("#settings-form"); f.ftp.value = settings.ftp; f.weight.value = settings.weight; f.beep.checked = settings.beep; f.lapKm.value = lapKm(); f.pauseVideo.checked = settings.pauseVideo; f.pauseOn.value = pauseMode(); f.ytKey.value = settings.ytKey || ""; f.chainring.value = settings.chainring; f.cog.value = settings.cog; f.maxHr.value = settings.maxHr; f.voice.checked = settings.voice; fillVoices(); fillCoach(); }
+function fillLanguages(){
+  const sel = $("#settings-form").lang;
+  const active = PedalaI18n.active;
+  const opts = [{ value: "", label: `Automatic (${active?.name || "English"})` }, { value: "en", label: "English" }];
+  for(const l of PedalaI18n.available()){
+    if(l.code === "en" || opts.some(o => o.value === l.code)) continue;
+    opts.push({ value: l.code, label: l.name });
+  }
+  const saved = settings.lang || "";
+  if(saved && !opts.some(o => o.value === saved)){
+    const l = PedalaI18n.languages.get(saved);
+    opts.push({ value: saved, label: l ? l.name : saved });   // a stale code still shows, not a blank select
+  }
+  sel.replaceChildren(...opts.map(o => new Option(o.label, o.value)));
+  sel.value = saved;
+}
+function fillSettings(){ const f = $("#settings-form"); f.ftp.value = settings.ftp; f.weight.value = settings.weight; f.beep.checked = settings.beep; f.lapKm.value = lapKm(); f.pauseVideo.checked = settings.pauseVideo; f.pauseOn.value = pauseMode(); f.ytKey.value = settings.ytKey || ""; f.chainring.value = settings.chainring; f.cog.value = settings.cog; f.maxHr.value = settings.maxHr; f.voice.checked = settings.voice; fillLanguages(); fillVoices(); fillCoach(); }
 $("#app-version").textContent = APP_VERSION;
 $("#settings-form").addEventListener("input", e => { const f = e.currentTarget;
+  if(e.target.name === "lang"){
+    const prev = settings.lang || "", next = f.lang.value;
+    if(next === prev) return;
+    if(S.started){ toast(PedalaI18n.t("Finish the ride before changing the language.")); f.lang.value = prev; return; }
+    settings.lang = next; store.set("settings", settings); location.reload(); return;
+  }
   const ftp = +f.ftp.value, wt = +f.weight.value; if(ftp >= 80 && ftp <= 600) settings.ftp = ftp; if(wt >= 30 && wt <= 200) settings.weight = wt;
   settings.beep = f.beep.checked; const lk = +f.lapKm.value; if(lk >= 1 && lk <= 50) settings.lapKm = lk; settings.pauseVideo = f.pauseVideo.checked; settings.pauseOn = f.pauseOn.value; settings.ytKey = f.ytKey.value.trim();
   const cr = +f.chainring.value, cg = +f.cog.value; if(cr >= 20 && cr <= 60) settings.chainring = cr; if(cg >= 10 && cg <= 30) settings.cog = cg;

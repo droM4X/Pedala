@@ -57,6 +57,30 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.context().close();
   });
 
+  await test("i18n: Settings lists the dropped-in language and switching reloads", async () => {
+    const p = await open({ settings: { lang: "zz" } });
+    await p.click('[data-view="settings"]');
+    assert.equal(await p.locator('[name="lang"] option[value="zz"]').textContent(), "Testish");
+    await Promise.all([p.waitForNavigation(), p.selectOption('[name="lang"]', "en")]);
+    await p.waitForFunction(() => document.documentElement.dataset.i18n === "ready" && document.documentElement.lang === "en");
+    assert.equal(await p.textContent('[data-view="ride"]'), "Ride");
+    await p.context().close();
+  });
+
+  await test("i18n: a running ride blocks the language change", async () => {
+    const p = await open({ settings: { lang: "zz" } });
+    await p.click("#chip-trainer"); await p.click("#c-sim"); await p.click("#btn-start"); await p.waitForTimeout(300);
+    await p.click('[data-view="settings"]');
+    await p.evaluate(() => { window.__stillHere = true; });
+    await p.selectOption('[name="lang"]', "en");
+    await p.waitForTimeout(200);
+    assert.equal(await p.evaluate(() => window.__stillHere), true, "the page did not reload");
+    assert.equal(await p.evaluate(() => store.get("settings", {}).lang), "zz", "the language is not saved");
+    assert.match(await p.textContent("#toast"), /Finish the ride before changing the language/);
+    assert.equal(await p.evaluate(() => document.querySelector('[name="lang"]').value), "zz", "the select is restored");
+    await p.context().close();
+  });
+
   await test("soft start: flat road before the start and in pause, ERG ramps up from 40% FTP", async () => {
     const p = await open({ speed: 10 });
     await p.click("#chip-trainer"); await p.click("#c-sim");
