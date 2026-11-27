@@ -41,7 +41,7 @@ const useful = k => /\p{L}/u.test(k) && !/^https?:\/\//i.test(k) && !NOISE.has(k
 
 (async () => {
   const srv = await start(), B = srv.url;
-  srv.setEnv({ YOUTUBE_API_KEY: "AIzaSERVER", ANTHROPIC_API_KEY: "sk-test" });
+  srv.setEnv({ YOUTUBE_API_KEY: "AIzaSERVER", OPENROUTER_API_KEY: "sk-test" });
   const browser = await chromium.launch(), pageErrors = [];
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, locale: "en-US" });
   /* a saved English voice, and remembered devices so the Settings status has text to show */
