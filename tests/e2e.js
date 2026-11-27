@@ -42,6 +42,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.match(await p.textContent("h1"), /^zz:/);
     assert.equal(await p.evaluate(() => document.documentElement.lang), "zz");
     assert.equal(await p.evaluate(() => PedalaI18n.languages.has("zz")), true);
+    await p.click('[data-view="settings"]');
+    assert.match(await p.textContent("#view-settings h2"), /zz:/);
+    assert.match(await p.textContent("#btn-start"), /zz:Start/);
     await p.context().close();
   });
 

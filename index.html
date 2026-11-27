@@ -601,7 +601,7 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
         <p class="full note" style="margin:-4px 0 4px">The ride and the video stop when you have stopped. On the speed setting the bike coasts first, so it takes a while before the video pauses — quick uphill, never on a descent. A start or a resume gives you a moment to get going. Your own pause and Finish are not affected.</p>
         <label class="full check"><input name="pauseVideo" type="checkbox"> Pause the video when I pause the workout</label>
         <label class="full">YouTube API key (only if it is not set on Vercel)<input name="ytKey" type="text" autocomplete="off" spellcheck="false" placeholder="AIza…"></label>
-        <p class="full note" style="margin:-4px 0 4px">It's free: at console.cloud.google.com create a project, enable <b>YouTube Data API v3</b> and create an API key under Credentials. The daily quota covers about 100 searches. Without a key you can still paste a link.</p>
+        <p class="full note" style="margin:-4px 0 4px" data-i18n="It's free: at console.cloud.google.com create a project, enable <b>YouTube Data API v3</b> and create an API key under Credentials. The daily quota covers about 100 searches. Without a key you can still paste a link.">It's free: at console.cloud.google.com create a project, enable <b>YouTube Data API v3</b> and create an API key under Credentials. The daily quota covers about 100 searches. Without a key you can still paste a link.</p>
       </form>
       <h2 class="section-title">Heart Rate Strap (HR)</h2>
       <p class="note">A heart rate strap is a wristband or chest belt that sends your pulse wirelessly. If you enable it, the HR button in the top right connects it, and Pedala shows your live pulse and offers heart-rate workouts.</p>
@@ -610,12 +610,12 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <p class="note">The Zwift Click is a small Bluetooth shifter: every press shifts one of the 24 virtual gears up or down, like the shifter on your bike. When enabled, the Click + and Click − buttons appear in the top right to connect it and change gears while riding.</p>
       <label class="check note" style="display:flex"><input type="checkbox" id="click-on"> Enable</label>
       <div id="click-details" hidden>
-        <p class="note">Click v2 has two pods, each connected on its own: the harder-gear pod with the <b>Click +</b> button at the top right, the easier-gear pod with the <b>Click −</b> button. Before connecting, wake only that pod (press one of its buttons) so it is the only one in the list. Every button on the + pod shifts up, every button on the − pod shifts down. If they are swapped, click <b>Set the + and − pod</b>. If the − pod sends no presses (a known problem with the left Click v2 pod), put both directions on the right pod: in <b>Set the + and − pod</b> press a button for +, then another button on the same pod for −. Disconnect it from Zwift first. The older Click (v1), with both buttons on one device, connects with either button.</p>
+        <p class="note" data-i18n="Click v2 has two pods, each connected on its own: the harder-gear pod with the <b>Click +</b> button at the top right, the easier-gear pod with the <b>Click −</b> button. Before connecting, wake only that pod (press one of its buttons) so it is the only one in the list. Every button on the + pod shifts up, every button on the − pod shifts down. If they are swapped, click <b>Set the + and − pod</b>. If the − pod sends no presses (a known problem with the left Click v2 pod), put both directions on the right pod: in <b>Set the + and − pod</b> press a button for +, then another button on the same pod for −. Disconnect it from Zwift first. The older Click (v1), with both buttons on one device, connects with either button.">Click v2 has two pods, each connected on its own: the harder-gear pod with the <b>Click +</b> button at the top right, the easier-gear pod with the <b>Click −</b> button. Before connecting, wake only that pod (press one of its buttons) so it is the only one in the list. Every button on the + pod shifts up, every button on the − pod shifts down. If they are swapped, click <b>Set the + and − pod</b>. If the − pod sends no presses (a known problem with the left Click v2 pod), put both directions on the right pod: in <b>Set the + and − pod</b> press a button for +, then another button on the same pod for −. Disconnect it from Zwift first. The older Click (v1), with both buttons on one device, connects with either button.</p>
         <div class="dlg-acts" style="justify-content:flex-start;margin:10px 0"><button class="btn small" id="btn-click-cal" type="button">Set the + and − pod</button><button class="btn small" id="btn-click-yb" type="button">All on the right pod: Y +, B −</button></div>
         <details class="note"><summary>Last packets from the Click</summary><pre id="click-log" style="white-space:pre-wrap;font-size:12px;margin:8px 0 0">Nothing yet.</pre></details>
       </div>
       <h2 class="section-title">intervals.icu</h2>
-      <p class="note">A free training analysis service. On intervals.icu open <b>Settings → Developer Settings</b>, create an <b>API key</b> and paste it here.</p>
+      <p class="note" data-i18n="A free training analysis service. On intervals.icu open <b>Settings → Developer Settings</b>, create an <b>API key</b> and paste it here.">A free training analysis service. On intervals.icu open <b>Settings → Developer Settings</b>, create an <b>API key</b> and paste it here.</p>
       <div class="field" style="max-width:520px;margin:10px 0"><input id="icu-key" type="text" autocomplete="off" spellcheck="false" placeholder="API key" aria-label="intervals.icu API key"><button class="btn small" id="btn-icu" type="button">Save and check</button></div>
       <p class="note" id="icu-status"></p>
       <label class="check note" style="display:flex"><input type="checkbox" id="icu-auto"> Send every saved ride to intervals.icu automatically</label>
@@ -715,6 +715,28 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
 <div class="toast" id="toast" role="status"></div>
 
 <script src="/qr.js"></script>
+<script src="/i18n.js"></script>
+<script>
+/* If i18n.js itself fails to load, stay in English and never leave the app waiting. */
+if(!window.PedalaI18n){
+  (function(){
+    const fill = (s, vars) => String(s).replace(/\{(\w+)\}/g, (_, k) => vars?.[k] ?? `{${k}}`);
+    const t = (key, vars) => fill(key, vars);
+    const noop = () => {};
+    window.PedalaI18n = {
+      t, tHtml: t,
+      tn(n, one, other, vars){ return fill(n === 1 ? one : other, { ...(vars || {}), n }); },
+      td: value => String(value), tnum: n => String(n),
+      speech: { watts: () => "", duration: () => "", cadence: () => "", segment: () => "", lap: () => "", finish: () => "", strength: () => "", start: () => "", soon: () => "" },
+      init(){ document.documentElement.lang = "en"; document.documentElement.dir = "ltr"; return Promise.resolve(); },
+      load: () => Promise.resolve(null), available: () => [{ code: "en", name: "English" }],
+      use: () => true, localizeDom: noop, setSpeechLang: noop,
+      languages: new Map([["en", { code: "en", name: "English" }]]),
+      code: "en", locale: "en-GB", active: null, seen: new Set(), record: false
+    };
+  })();
+}
+</script>
 <script>
 "use strict";
 /* ============ utilities ============ */
@@ -741,9 +763,8 @@ const store = {
     }catch{ return false; }
   }
 };
-const settings = Object.assign({ ftp: 230, weight: 80, chainring: 34, cog: 14, clickMap: {}, beep: true, lapKm: 5, pauseVideo: true, pauseOn: "speed", maxHr: 185, voice: true, clickOn: false, hrOn: false }, store.get("settings", {}));
+const settings = Object.assign({ lang: "", ftp: 230, weight: 80, chainring: 34, cog: 14, clickMap: {}, beep: true, lapKm: 5, pauseVideo: true, pauseOn: "speed", maxHr: 185, voice: true, clickOn: false, hrOn: false }, store.get("settings", {}));
 migratePauseOn();
-document.documentElement.lang = "en";
 /* heart-rate zones as fractions of max HR: [upper bound, colour, name] */
 const HR_ZONES = [[.6, "--z1", "Z1"], [.7, "--z2", "Z2"], [.8, "--z3", "Z3"], [.9, "--z4", "Z4"], [99, "--z6", "Z5"]];
 const hrZone = (hr, max = settings.maxHr) => hr ? HR_ZONES.findIndex(z => hr / max < z[0]) : -1;
@@ -1690,7 +1711,7 @@ function render(){
   } else { ib.hidden = true; $("#wo-left").textContent = ""; }
 
   const sb = $("#btn-start");
-  sb.textContent = !S.started ? "Start" : S.running ? "Pause" : "Resume";
+  sb.textContent = PedalaI18n.t(!S.started ? "Start" : S.running ? "Pause" : "Resume");
   sb.classList.toggle("primary", !S.running);
   $("#btn-end").disabled = !S.started;
   drawProfile();
@@ -2666,7 +2687,7 @@ function planToday(){
    Settings, the plan, imported workouts and routes go up as time-stamped sections; the newest wins and plan
    progress from both devices is merged. Rides go up and down one by one; deleted rides travel as tombstones.
    API keys and device-only settings stay on the device. */
-const SYNC_SKIP = ["ytKey", "icuKey", "clickMap", "voiceName", "clickOn", "hrOn"];
+const SYNC_SKIP = ["ytKey", "icuKey", "clickMap", "voiceName", "clickOn", "hrOn", "lang"];
 var syncBusy = false, syncTimer = null, syncOff = false;   // var: store.set may call syncSoon before this line runs
 function syncSoon(){ clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(), 3000); }
 const publicSettings = () => Object.fromEntries(Object.entries(settings).filter(([k]) => !SYNC_SKIP.includes(k)));
@@ -3208,7 +3229,7 @@ window.addEventListener("resize", () => { drawProfile(); drawProgress(); if(over
 window.addEventListener("beforeunload", e => { if(S.started){ e.preventDefault(); e.returnValue = ""; } });
 
 /* init */
-(() => {
+function runInit(){
   { const pl = plan(); if(pl && pl.extra !== false && !pl.extraFrom){ pl.extraFrom = ymd(new Date()); store.set("plan", pl); } }   // swims and runs were added to a running plan today
   const lw = store.get("lastWorkout", null); const w = findWorkout(lw); if(w){ S.workout = w; $("#wo-name").textContent = w.name; $("#wo-meta").textContent = w.test ? "" : `· ${fmtTime(totalDur(w))}`; }
   const lr = store.get("lastRoute", null); const rt = allRoutes().find(x => x.id === lr);
@@ -3225,7 +3246,9 @@ window.addEventListener("beforeunload", e => { if(S.started){ e.preventDefault()
     .finally(() => { fillCoach(); if($("#view-progress").classList.contains("active")) renderCoachBox(); setTimeout(() => { coachCheck(); coachWeek().catch(() => {}); }, 4000); });
   fetch("/api/intervals").then(r => r.ok ? r.json() : {}).then(j => { icuServer = !!j.serverKey; }).catch(() => {})
     .finally(() => { syncIcu(); renderHistoryIfOpen(); if($("#view-settings").classList.contains("active")) renderIcu(); planIcuTick(); });
-})();
+  document.documentElement.dataset.i18n = "ready";
+}
+PedalaI18n.init(settings.lang).then(runInit, runInit);
 window.__pedala = { S, parseZwo, parseGpx, setRoute, routes, gradeAt, trainerGrade, clickKeys, onClickPress, encodeFit, metrics, allWorkouts, setWorkout, GEARS, remote, openRemote };
 </script>
 </body>
