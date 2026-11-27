@@ -411,7 +411,7 @@ Convert `renderPlan`, `openSession`, the calendar/reminder prose, the strength p
 
 ### Audit 2026-11-27
 
-Final audit on `feat/language-modules`: `npm test` 28 unit + 48 e2e green (five full runs; one unrelated 30 s `page.goto` timeout, not reproduced in the following two runs; the "reading 'length'" flake did not appear). `node scripts/langs.js --check` and `node scripts/i18n-check.js --strict` pass with 660 keys, 0 missing. Corrected the built-in climb name `Alps d'Huez` -> `Alpe d'Huez` (source, `lang/hu.js`, regenerated `lang/keys.json`/`index.json`) and pinned it plus a real Hungarian ride in the e2e. `middleware.js`, `gear.html`, `api/coach.js` and the FIT/ICS metadata are untouched and English.
+Final audit on `feat/language-modules`: `npm test` 28 unit + 48 e2e green (seven full runs; one unrelated 30 s `page.goto` timeout in one run, not reproduced in the following four; the "reading 'length'" flake did not appear). `node scripts/langs.js --check` and `node scripts/i18n-check.js --strict` pass with 660 keys, 0 missing. Corrected the built-in climb name `Alps d'Huez` -> `Alpe d'Huez` (source, `lang/hu.js`, regenerated `lang/keys.json`/`index.json`), translated built-in drill cues in saved ride reports (imported cues stay raw), and pinned both plus a real Hungarian ride in the e2e. `middleware.js`, `gear.html`, `api/coach.js` and the FIT/ICS metadata are untouched and English.
 
 - Every spec section maps to a task: files (1–4), loader/boot (1, 4), selector (5), static pass (1, 4), dynamic text (8–10), generated labels (6), grammar (7), speech (1, 11), Hungarian (12), docs/audit (13).
 - The English output stays test-pinned; plural fixes are the only deliberate text changes.

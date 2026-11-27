@@ -2833,7 +2833,9 @@ async function openReport(r){
 async function renderReport(box, r){
   const m = r.m, n = r.samples.length, hasHr = m.avgHr > 0, maxHr = r.maxHr || settings.maxHr;
   const laps = (r.laps || []).filter(l => l.dur >= 5), scored = laps.filter(l => l.score != null && l.dur >= 30);
-  const lapRows = laps.map(l => `<tr><td>${l.name}${l.note ? ` <small style="color:var(--muted)">${l.note}</small>` : ""}</td><td>${fmtTime(l.dur)}</td><td>${numFixed(l.km, 1)} km</td><td>${l.avgP} W</td><td>${l.avgHr || "–"}</td>`
+  const lapW = r.workoutId ? findWorkout(r.workoutId) : null;
+  const lapNote = l => l.note && lapW?.builtin ? PedalaI18n.t(l.note) : l.note;   // built-in cue: translate; imported note: as written
+  const lapRows = laps.map(l => `<tr><td>${l.name}${l.note ? ` <small style="color:var(--muted)">${lapNote(l)}</small>` : ""}</td><td>${fmtTime(l.dur)}</td><td>${numFixed(l.km, 1)} km</td><td>${l.avgP} W</td><td>${l.avgHr || "–"}</td>`
     + `<td class="${l.cadTgt ? (l.cadHit ? "hit" : "miss") : ""}">${l.avgCad ?? "–"}${l.cadTgt ? ` <small style="color:var(--muted)">/ ${cadTxt(l.cadTgt)}</small>` : ""}</td>`
     + (scored.length ? `<td>${l.tgt != null ? l.tgt + (l.kind === "hr" ? " bpm" : " W") : "–"}</td><td class="${l.score == null ? "" : l.hit ? "hit" : "miss"}">${l.score != null ? l.score + "%" : ""}</td>` : "") + "</tr>").join("");
   box.className = "rep";

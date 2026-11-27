@@ -155,12 +155,16 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.ok((await z.$$eval("#wo-list .item h3", els => els.map(e => e.textContent))).includes("Endurance 60"), "an imported workout name stays");
 
     await z.evaluate(async () => {
-      await dbPut({ id: "r-zz", start: Date.now() - 3600e3, workoutId: null, name: "Imported ride", route: false, ftp: 230, maxHr: 190,
-        samples: Array.from({ length: 120 }, (_, i) => [i, 180 + (i % 40), 90, 150, 0, 60 * (i + 1), 0]),
-        m: { duration: 120, avgP: 200, maxP: 260, np: 210, tss: 20, IF: .87, kj: 24, distance: 2000, avgHr: 150, maxHr: 175, avgCad: 90, best: { s5: 600, m1: 450, m5: 330, m20: 260 } }, laps: [] });
+      const samples = Array.from({ length: 120 }, (_, i) => [i, 180 + (i % 40), 90, 150, 0, 60 * (i + 1), 0]);
+      const m = { duration: 120, avgP: 200, maxP: 260, np: 210, tss: 20, IF: .87, kj: 24, distance: 2000, avgHr: 150, maxHr: 175, avgCad: 90, best: { s5: 600, m1: 450, m5: 330, m20: 260 } };
+      const lap = note => ({ name: "Interval 1", kind: "power", t0: 0, dur: 60, km: .5, avgP: 200, avgHr: 150, avgCad: 90, tgt: 210, score: 95, hit: true, note });
+      await dbPut({ id: "r-zz", start: Date.now() - 3600e3, workoutId: "z-end", name: "Imported ride", route: false, ftp: 230, maxHr: 190,
+        samples, m, laps: [lap("Imported cue")] });
+      await dbPut({ id: "r-drill", start: Date.now() - 7200e3, workoutId: "d-hilo", name: "Drill ride", route: false, ftp: 230, maxHr: 190,
+        samples, m, laps: [lap("High cadence, stay seated")] });
     });
     await z.click('[data-view="history"]');
-    await z.waitForFunction(() => document.querySelectorAll("#ride-list [data-rep]").length === 1);
+    await z.waitForFunction(() => document.querySelectorAll("#ride-list [data-rep]").length === 2);
     assert.match(await z.textContent("#weekbar"), /zz:Last 7 days/);
     assert.match(await z.textContent("#weekbar"), /zz:ride/);
     assert.ok((await z.$$eval("#ride-list .item h3", els => els.map(e => e.textContent)))[0].startsWith("Imported ride "), "the ride name stays");
@@ -169,12 +173,19 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.match(await z.textContent("#ride-list"), /zz:Best: 5 s 600 W/);
     await z.click("#ride-list [data-rep]");
     await z.waitForFunction(() => /zz:Ride timeline/.test(document.querySelector("#rep-body").textContent));
-    const report = await z.textContent("#rep-body");
+    let report = await z.textContent("#rep-body");
     assert.match(report, /zz:Power distribution/);
     assert.match(report, /zz:Power curve/);
     assert.match(report, /zz:Best of the last 90 days/);
     assert.match(await z.textContent("#rep-grid"), /zz:Time/);
     assert.match(await z.textContent("#rep-grid"), /zz:Cadence/);
+    assert.match(report, /Imported cue/, "an imported lap note stays as written");
+    assert.doesNotMatch(report, /zz:Imported cue/);
+    await z.evaluate(() => document.querySelector("#dlg-report").close());
+    await z.locator("#ride-list [data-rep]").nth(1).click();
+    await z.waitForFunction(() => /zz:Ride timeline/.test(document.querySelector("#rep-body").textContent));
+    report = await z.textContent("#rep-body");
+    assert.match(report, /zz:High cadence, stay seated/, "a built-in drill cue is translated");
     await z.evaluate(() => document.querySelector("#dlg-report").close());
 
     await z.evaluate(() => {
