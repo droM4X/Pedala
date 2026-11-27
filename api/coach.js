@@ -88,7 +88,7 @@ module.exports = async (req, res) => {
     if(!["comment", "ask", "week"].includes(b.action)) return res.status(400).json({ error: "Unknown action" });
     const key = keyOf(b);
     if(!key) return res.status(501).json({ error: "Coach is not enabled: add an OpenRouter API key in Settings, or OPENROUTER_API_KEY on Vercel." });
-    const ctx = { key, model: b.model, caps: b.caps, host: req.headers?.host };
+    const ctx = { key, model: b.model, caps: b.caps };
     if(b.action === "ask") return await ask(b, icuKey, res, ctx);
     if(b.action === "week") return await week(b, icuKey, res, ctx);
     if(!b.ride && !b.icuId) return res.status(400).json({ error: "No session to comment on" });
@@ -164,7 +164,7 @@ async function week(b, icuKey, res, ctx){
 }
 
 /* one OpenAI-compatible call to OpenRouter; caps shape the body, and a stale hint is retried once conservatively */
-async function orChat({ key, model, caps, system, content, schema, host }){
+async function orChat({ key, model, caps, system, content, schema }){
   const c = caps && typeof caps === "object" ? caps : {};
   const body = { model: model || DEFAULT_MODEL, messages: [{ role: "system", content: system }, { role: "user", content }], max_tokens: 4000 };
   if(c.mc === true){ delete body.max_tokens; body.max_completion_tokens = 4000; }
@@ -175,7 +175,7 @@ async function orChat({ key, model, caps, system, content, schema, host }){
   const send = async payload => {
     const r = await fetch(`${OR}/chat/completions`, { method: "POST", headers: {
       Authorization: `Bearer ${key}`, "content-type": "application/json",
-      "HTTP-Referer": `https://${host || "pedala.vercel.app"}`, "X-Title": "Pedala" },
+      "HTTP-Referer": "https://github.com/droM4X/Pedala", "X-Title": "Pedala App" },
       body: JSON.stringify(payload) });
     const j = await r.json().catch(() => ({}));
     if(!r.ok){
