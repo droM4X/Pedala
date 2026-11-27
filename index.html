@@ -1509,7 +1509,7 @@ async function renderFeed(){
   for(const c of chans){
     const b = document.createElement("button"); b.type = "button"; b.className = "ch"; b.title = PedalaI18n.t("Remove channel");
     b.innerHTML = `${c.thumb ? `<img alt="" src="${c.thumb}">` : ""}<span></span> ✕`; b.querySelector("span").textContent = c.title;
-    b.onclick = () => { if(confirm(`Remove channel ${c.title}?`)){ store.set("ytChannels", ytChannels().filter(x => x.id !== c.id)); renderFeed(); } };
+    b.onclick = () => { if(confirm(PedalaI18n.t("Remove channel {name}?", { name: c.title }))){ store.set("ytChannels", ytChannels().filter(x => x.id !== c.id)); renderFeed(); } };
     $("#feed-ch-list").append(b);
   }
   $("#feed-ch-form").onsubmit = async e => { e.preventDefault(); const t = $("#feed-ch").value.trim(); if(!t) return;
@@ -1527,7 +1527,7 @@ async function renderFeed(){
     const sec = document.createElement("div"), gid = "feed-pl-" + pl.id.replace(/[^\w-]/g, "");
     sec.innerHTML = `<div class="vsect" style="font-size:17px;margin-top:12px"><span></span> <button class="more" type="button">${PedalaI18n.tHtml("remove")}</button></div><div class="vgrid" id="${gid}"></div>`;
     sec.querySelector("span").textContent = pl.title;
-    sec.querySelector("button").onclick = () => { if(confirm(`Remove playlist ${pl.title}?`)){ store.set("ytPlaylists", ytPlaylists().filter(x => x.id !== pl.id)); renderFeed(); } };
+    sec.querySelector("button").onclick = () => { if(confirm(PedalaI18n.t("Remove playlist {name}?", { name: pl.title }))){ store.set("ytPlaylists", ytPlaylists().filter(x => x.id !== pl.id)); renderFeed(); } };
     $("#feed-pls").append(sec);
     cached("pl:" + pl.id, 3 * 36e5, () => ytApi({ playlist: pl.id })).then(r => fillGrid(gid, r.items.slice(0, 12), PedalaI18n.t("The playlist is empty.")), err => fillGrid(gid, [], feedErr(err)));
   }
@@ -1832,7 +1832,7 @@ function drawProfile(cv = $("#profile")){
 }
 
 function setWorkout(w){
-  if(S.started && !confirm("The current ride will carry on with the new workout. Continue?")) return;
+  if(S.started && !confirm(PedalaI18n.t("The current ride will carry on with the new workout. Continue?"))) return;
   S.workout = w; S.route = null; S.woT = 0; S.lastSeg = -1; S.bias = 1; S.hrOff = 0; S.hrP = null; S.lap = null; store.set("lastRoute", null);
   $("#wo-name").textContent = w ? workoutLabel(w) : PedalaI18n.t("Free ride");
   $("#wo-meta").textContent = w && !w.test ? `· ${fmtTime(totalDur(w))}` : "";
@@ -1841,7 +1841,7 @@ function setWorkout(w){
 }
 
 function setRoute(r){
-  if(S.started && !confirm("The current ride will carry on along the new route from its start. Continue?")) return;
+  if(S.started && !confirm(PedalaI18n.t("The current ride will carry on along the new route from its start. Continue?"))) return;
   S.workout = null; S.route = r; S.dist = 0; S.v = 0; S.bias = 1;
   $("#wo-name").textContent = r.name;
   $("#wo-meta").textContent = `· ${numFixed(r.len / 1000, 1)} km · ↑${r.gain} m`;
@@ -1857,7 +1857,7 @@ function renderRoutes(){
     el.querySelector("h3").textContent = workoutLabel(r);
     el.querySelector("p").textContent = PedalaI18n.t("{km} km · ↑{gain} m · average {avg} % · from {min} to {max} m", { km: numFixed(r.len / 1000, 1), gain: r.gain, avg: numFixed(avg, 1), min: Math.round(r.minEle), max: Math.round(r.maxEle) }) + (r.desc ? " · " + sessionDesc(r) : "");
     el.querySelector("[data-pick]").onclick = () => setRoute(r);
-    el.querySelector("[data-del]")?.addEventListener("click", () => { if(confirm("Remove this route?")){ store.set("routes", routes().filter(x => x.id !== r.id)); renderRoutes(); } });
+    el.querySelector("[data-del]")?.addEventListener("click", () => { if(confirm(PedalaI18n.t("Remove this route?"))){ store.set("routes", routes().filter(x => x.id !== r.id)); renderRoutes(); } });
     list.append(el);
     requestAnimationFrame(() => { const cv = el.querySelector("canvas"); const [g, W, H] = sizeCanvas(cv); const span = (r.maxEle - r.minEle) || 1;
       for(let x = 0; x < W; x++){ const d0 = x / W * r.len, d1 = (x + 1) / W * r.len, gr = colGrade(r, d0, d1);
@@ -1914,14 +1914,14 @@ async function renderHistory(){
   for(const r of rides){
     const el = document.createElement("div"); el.className = "item"; const m = r.m;
     el.innerHTML = `<div><h3></h3><div class="metrics"><span><b>${fmtTime(m.duration)}</b></span><span><b>${m.avgP}</b>${PedalaI18n.t("W avg")}</span><span><b>${m.np}</b>NP</span><span><b>${m.tss}</b>TSS</span><span><b>${m.IF}</b>IF</span>${m.avgHr ? `<span><b>${m.avgHr}</b>bpm</span>` : ""}<span><b>${numFixed(m.distance/1000, 1)}</b>km</span></div>
-      ${r.icu?.status === "error" ? `<p style="color:var(--z5)">intervals.icu: ${String(r.icu.error).replace(/[<>&]/g, "")}</p>` : ""}
+      ${r.icu?.status === "error" ? `<p style="color:var(--z5)">${PedalaI18n.t("intervals.icu: {error}", { error: String(r.icu.error).replace(/[<>&]/g, "") })}</p>` : ""}
       <p>${PedalaI18n.t("Best: 5 s {s5} W · 1 min {m1} W · 5 min {m5} W · 20 min {m20} W", { s5: m.best.s5, m1: m.best.m1, m5: m.best.m5 || "–", m20: m.best.m20 || "–" })}</p></div>
       <div class="acts"><button class="btn small primary" data-rep>${PedalaI18n.t("Report")}</button>${icuButton(r)}<button class="btn small" data-fit>.FIT</button><button class="btn small danger" data-del>${PedalaI18n.t("Delete")}</button></div><canvas></canvas>`;
     el.querySelector("h3").textContent = `${rideLabel(r)} · ${PedalaI18n.td(r.start, { weekday: "short", day: "numeric", month: "numeric" })} ${PedalaI18n.td(r.start, { hour: "2-digit", minute: "2-digit" })}`;
     el.querySelector("[data-fit]").onclick = () => downloadFit(r);
     el.querySelector("[data-rep]").onclick = () => openReport(r);
     el.querySelector("[data-icu]")?.addEventListener("click", () => queueIcu(r));
-    el.querySelector("[data-del]").onclick = async () => { if(confirm("Delete this ride? It will be deleted on your other devices too.")){
+    el.querySelector("[data-del]").onclick = async () => { if(confirm(PedalaI18n.t("Delete this ride? It will be deleted on your other devices too."))){
       await dbDel(r.id); store.set("syncDeleted", [...store.get("syncDeleted", []), r.id]); syncSoon(); renderHistory(); } };
     list.append(el);
     requestAnimationFrame(() => { const cv = el.querySelector("canvas"); const [g, W, H] = sizeCanvas(cv); const n = r.samples.length;
@@ -2042,7 +2042,7 @@ async function importBackup(file){
   const merge = (key, list) => { const cur = store.get(key, []), ids = new Set(cur.map(x => x.id)); return store.set(key, cur.concat((list || []).filter(x => x?.id && !ids.has(x.id)))); };
   merge("workouts", data.workouts);
   if(!merge("routes", data.routes)) toast(PedalaI18n.t("The routes did not fit in the browser"));
-  if(data.settings && confirm("Also take the settings from the backup (FTP, weight, gears)?")){ Object.assign(settings, data.settings); migratePauseOn(); store.set("settings", settings); fillSettings(); }
+  if(data.settings && confirm(PedalaI18n.t("Also take the settings from the backup (FTP, weight, gears)?"))){ Object.assign(settings, data.settings); migratePauseOn(); store.set("settings", settings); fillSettings(); }
   toast(PedalaI18n.t("New rides imported: {n}", { n })); renderHistory();
 }
 $("#btn-backup").onclick = () => exportBackup().catch(e => toast(PedalaI18n.t("Export failed: {error}", { error: e.message })));
@@ -2058,7 +2058,7 @@ const icuOn = () => !!icuKey() || icuServer;
 async function icuCall(body){
   const r = await fetch("/api/intervals", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, key: icuKey() }) });
   const j = await r.json().catch(() => ({}));
-  if(!r.ok){ const e = new Error(j.error || (r.status === 404 ? "Uploading only works on a Vercel deploy (it needs api/intervals.js)" : "intervals.icu error " + r.status)); e.status = r.status; throw e; }
+  if(!r.ok){ const e = new Error(j.error || (r.status === 404 ? PedalaI18n.t("Uploading only works on a Vercel deploy (it needs api/intervals.js)") : PedalaI18n.t("intervals.icu error {status}", { status: r.status }))); e.status = r.status; throw e; }
   return j;
 }
 const icuAuthError = e => e.status === 401 || e.status === 403;
@@ -2066,10 +2066,10 @@ function b64(bytes){ let s = ""; for(let i = 0; i < bytes.length; i += 0x8000) s
 
 async function icuSaveKey(){
   settings.icuKey = $("#icu-key").value.trim(); store.set("settings", settings); store.set("icuAthlete", null);
-  if(!icuOn()){ renderIcu(); toast("intervals.icu disconnected"); return; }
-  $("#icu-status").textContent = "Checking…";
-  try{ const j = await icuCall({ action: "athlete" }); store.set("icuAthlete", j.name || String(j.id || "")); toast("intervals.icu connected"); syncIcu(); }
-  catch(e){ toast(icuAuthError(e) ? "intervals.icu does not accept this API key" : e.message); }
+  if(!icuOn()){ renderIcu(); toast(PedalaI18n.t("intervals.icu disconnected")); return; }
+  $("#icu-status").textContent = PedalaI18n.t("Checking…");
+  try{ const j = await icuCall({ action: "athlete" }); store.set("icuAthlete", j.name || String(j.id || "")); toast(PedalaI18n.t("intervals.icu connected")); syncIcu(); }
+  catch(e){ toast(icuAuthError(e) ? PedalaI18n.t("intervals.icu does not accept this API key") : e.message); }
   renderIcu();
 }
 
@@ -2080,7 +2080,7 @@ async function icuUpload(r){
       description: `Pedala · ${fmtTime(r.m.duration)} · ${r.m.avgP} W avg · NP ${r.m.np} W · TSS ${r.m.tss}` });
     r.icu = { status: "done", activityId: j.id != null ? String(j.id) : null }; await dbPut(r); return true;
   }catch(e){
-    if(icuAuthError(e)){ toast("intervals.icu does not accept the API key. Check it in Settings."); return false; }   // ride stays queued
+    if(icuAuthError(e)){ toast(PedalaI18n.t("intervals.icu does not accept the API key. Check it in Settings.")); return false; }   // ride stays queued
     if(e.status >= 400 && e.status < 500 && e.status !== 404 && e.status !== 429){ r.icu = { status: "error", error: e.message }; await dbPut(r); return true; }
     console.warn("intervals.icu upload", e); return false;     // offline, rate limit or service down: retry later
   }
@@ -2091,7 +2091,7 @@ async function syncIcu(){
   icuBusy = true; let sent = 0;
   try{
     const queue = (await dbAll()).filter(r => r.icu?.status === "pending").sort((a, b) => a.start - b.start);
-    for(const r of queue){ if(!await icuUpload(r)) break; if(r.icu.status === "done") sent++; else toast("intervals.icu: " + r.icu.error); renderHistoryIfOpen(); }
+    for(const r of queue){ if(!await icuUpload(r)) break; if(r.icu.status === "done") sent++; else toast(PedalaI18n.t("intervals.icu: {error}", { error: r.icu.error })); renderHistoryIfOpen(); }
   }catch(e){ console.warn("intervals.icu sync", e); }
   finally{ icuBusy = false; renderHistoryIfOpen(); }
   if(sent) toast(PedalaI18n.tn(sent, "The ride is on intervals.icu", "Rides sent to intervals.icu: {n}", { n: sent }));
@@ -2101,17 +2101,17 @@ function icuButton(r){
   const s = r.icu?.status;
   if(s === "done") return `<a class="btn small" href="https://intervals.icu/${r.icu.activityId ? "activities/" + encodeURIComponent(r.icu.activityId) : "calendar"}" target="_blank" rel="noopener">intervals.icu ↗</a>`;
   if(!icuOn()) return "";
-  if(s === "pending") return `<button class="btn small" disabled>Sending…</button>`;
-  if(s === "error") return `<button class="btn small danger" data-icu title="${String(r.icu.error).replace(/[<>&"]/g, "")}">Retry upload</button>`;
-  return `<button class="btn small" data-icu>To intervals.icu</button>`;
+  if(s === "pending") return `<button class="btn small" disabled>${PedalaI18n.t("Sending…")}</button>`;
+  if(s === "error") return `<button class="btn small danger" data-icu title="${String(r.icu.error).replace(/[<>&"]/g, "")}">${PedalaI18n.t("Retry upload")}</button>`;
+  return `<button class="btn small" data-icu>${PedalaI18n.t("To intervals.icu")}</button>`;
 }
 const renderHistoryIfOpen = () => { if($("#view-history").classList.contains("active")) renderHistory(); };
 function renderIcu(){
   const k = icuKey(), who = store.get("icuAthlete", null);
   $("#icu-key").value = k;
-  $("#icu-status").textContent = !k && icuServer && who == null ? "The key is set on Vercel (INTERVALS_API_KEY). Click Save and check to test it."
-    : !k && !icuServer ? "Not connected." : who != null ? `Connected${who ? ": " + who : ""}. When the tablet is offline, rides wait and are sent once it is back online.`
-    : "The key is entered but not checked yet.";
+  $("#icu-status").textContent = !k && icuServer && who == null ? PedalaI18n.t("The key is set on Vercel (INTERVALS_API_KEY). Click Save and check to test it.")
+    : !k && !icuServer ? PedalaI18n.t("Not connected.") : who != null ? PedalaI18n.t("Connected{who}. When the tablet is offline, rides wait and are sent once it is back online.", { who: who ? ": " + who : "" })
+    : PedalaI18n.t("The key is entered but not checked yet.");
   $("#icu-auto").checked = settings.icuAuto !== false;
   $("#hr-on").checked = !!settings.hrOn;
   $("#click-on").checked = !!settings.clickOn;
@@ -2166,14 +2166,14 @@ async function coachAsk(key, payload, title, date){
       notes: settings.coachAbout || "", athlete: { ftp: settings.ftp, maxHr: settings.maxHr, weight: settings.weight }, ...payload }) });
     const j = await r.json().catch(() => ({}));
     if(r.status === 402) store.set("coachPause", Date.now() + 12 * 36e5);
-    if(!r.ok) throw new Error(j.error || "error " + r.status);
+    if(!r.ok) throw new Error(j.error || PedalaI18n.t("error {status}", { status: r.status }));
     saveCoachNote(key, { text: j.text, at: Date.now(), title, date, usd: j.usage?.usd }); renderCoachViews(); return j.text;
   }catch(e){ saveCoachNote(key, { error: e.message, at: Date.now(), title, date }); renderCoachViews(); throw e; }
 }
 const coachRide = r => coachAsk("ride:" + r.id, { ride: coachRidePayload(r) }, r.name, r.start);
 function coachAfterSave(r){
   if(!coachOn() || r.m.duration < 300) return;
-  coachRide(r).then(t => t && notify("The coach commented on your ride (Progress → Coach)")).catch(() => {});
+  coachRide(r).then(t => t && notify(PedalaI18n.t("The coach commented on your ride (Progress → Coach)"))).catch(() => {});
 }
 /* the weekly review: on Saturday (or the first time the app opens up to Monday) a look back at the last seven days */
 const lastSaturday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 1) % 7)); return d; };
@@ -2224,30 +2224,30 @@ function coachMonthUsd(){
 }
 function coachNoteHtml(n){
   return n.text ? `<p style="white-space:pre-line;color:var(--text);margin:6px 0 0">${n.text.replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c])}</p>${usdTag(n.usd)}`
-    : n.pending ? `<p>The coach is writing…</p>` : `<p style="color:var(--z5)">Comment failed: ${String(n.error).replace(/[<>&]/g, "")}</p>`;
+    : n.pending ? `<p>${PedalaI18n.t("The coach is writing…")}</p>` : `<p style="color:var(--z5)">${PedalaI18n.t("Comment failed: {error}", { error: String(n.error).replace(/[<>&]/g, "") })}</p>`;
 }
 function renderCoachBox(){
   const box = $("#coach-box"); if(!box) return;
   if(!box.dataset.ready){   // built once, so a refresh never wipes a question being typed
     box.dataset.ready = 1;
-    box.innerHTML = `<h2 class="section-title" style="margin-top:6px">Coach</h2>
-      <form class="field" id="coach-form" style="align-items:flex-end;margin-bottom:12px"><textarea id="coach-q" rows="3" placeholder="Ask the coach or ask for a plan change, e.g. I have a cold, what about this week?"
-        style="flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit;resize:vertical"></textarea><button class="btn" type="submit">Send</button></form>
-      <div class="dlg-acts" id="coach-week-row" style="justify-content:flex-start;margin:-4px 0 10px"><button class="btn small" type="button" id="coach-week-go">Weekly review now</button></div>
-      <p class="note" id="coach-month" style="margin:-4px 0 10px"></p><div id="coach-thread" class="list" style="margin-bottom:16px"></div><h3 class="vsect">Session comments</h3><div id="coach-list"></div>`;
+    box.innerHTML = `<h2 class="section-title" style="margin-top:6px">${PedalaI18n.t("Coach")}</h2>
+      <form class="field" id="coach-form" style="align-items:flex-end;margin-bottom:12px"><textarea id="coach-q" rows="3" placeholder="${PedalaI18n.t("Ask the coach or ask for a plan change, e.g. I have a cold, what about this week?")}"
+        style="flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit;resize:vertical"></textarea><button class="btn" type="submit">${PedalaI18n.t("Send")}</button></form>
+      <div class="dlg-acts" id="coach-week-row" style="justify-content:flex-start;margin:-4px 0 10px"><button class="btn small" type="button" id="coach-week-go">${PedalaI18n.t("Weekly review now")}</button></div>
+      <p class="note" id="coach-month" style="margin:-4px 0 10px"></p><div id="coach-thread" class="list" style="margin-bottom:16px"></div><h3 class="vsect">${PedalaI18n.t("Session comments")}</h3><div id="coach-list"></div>`;
     $("#coach-week-go").onclick = () => coachWeek(true).catch(e => toast(e.message));
     $("#coach-form").onsubmit = e => { e.preventDefault(); const q = $("#coach-q").value.trim(); if(!q) return; $("#coach-q").value = ""; coachQuestion(q).catch(() => {}); };
     $("#coach-q").addEventListener("keydown", e => { if(e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#coach-form").requestSubmit(); });
   }
   $("#coach-form").hidden = $("#coach-week-row").hidden = !coachServer;
-  const month = coachMonthUsd(); $("#coach-month").textContent = month ? `Coach this month: ≈ $${numFixed(month, 2)}` : "";
+  const month = coachMonthUsd(); $("#coach-month").textContent = month ? PedalaI18n.t("Coach this month: ≈ ${amount}", { amount: numFixed(month, 2) }) : "";
   const list = Object.entries(coachNotes()).sort((a, b) => (b[1].date || b[1].at) - (a[1].date || a[1].at)).slice(0, 10), el = $("#coach-list");
-  if(!coachServer && !list.length) el.innerHTML = `<p class="note">The coach is off. See Settings → Virtual coach.</p>`;
-  else if(!list.length) el.innerHTML = `<p class="note">Comments will show up after your next session.</p>`;
-  else el.innerHTML = `<div class="list">` + list.map(([k, n]) => `<div class="item" data-k="${k}"><div><h3></h3>${coachNoteHtml(n)}</div>${n.error && coachServer ? `<div class="acts"><button class="btn small" data-retry>Try again</button></div>` : ""}</div>`).join("") + `</div>`;
+  if(!coachServer && !list.length) el.innerHTML = `<p class="note">${PedalaI18n.t("The coach is off. See Settings → Virtual coach.")}</p>`;
+  else if(!list.length) el.innerHTML = `<p class="note">${PedalaI18n.t("Comments will show up after your next session.")}</p>`;
+  else el.innerHTML = `<div class="list">` + list.map(([k, n]) => `<div class="item" data-k="${k}"><div><h3></h3>${coachNoteHtml(n)}</div>${n.error && coachServer ? `<div class="acts"><button class="btn small" data-retry>${PedalaI18n.t("Try again")}</button></div>` : ""}</div>`).join("") + `</div>`;
   el.querySelectorAll("[data-k]").forEach(item => {
     const k = item.dataset.k, n = coachNotes()[k];
-    item.querySelector("h3").textContent = `${n.title || "Workout"} · ${coachDate(n.date || n.at)}`;
+    item.querySelector("h3").textContent = `${n.title || PedalaI18n.t("Workout")} · ${coachDate(n.date || n.at)}`;
     item.querySelector("[data-retry]")?.addEventListener("click", async () => {
       if(k.startsWith("icu:")) coachAsk(k, { icuId: k.slice(4) }, n.title, n.date).catch(() => {});
       else { const r = (await dbAll()).find(x => "ride:" + x.id === k); if(r) coachRide(r).catch(() => {}); }
@@ -2280,15 +2280,15 @@ async function coachQuestion(q){
     const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "ask", question: q, icuKey: icuKey() || undefined,
       notes: settings.coachAbout || "", athlete: { ftp: settings.ftp, maxHr: settings.maxHr, weight: settings.weight }, plan: p ? { sessions, options } : null, rides, comments, chat }) });
     const j = await r.json().catch(() => ({}));
-    if(!r.ok) throw new Error(j.error || "error " + r.status);
+    if(!r.ok) throw new Error(j.error || PedalaI18n.t("error {status}", { status: r.status }));
     saveChat(c => { const x = c.find(y => y.at === at); if(x){ delete x.pending; x.a = j.answer; x.changes = j.changes || []; x.usd = j.usage?.usd; } });
   }catch(e){ saveChat(c => { const x = c.find(y => y.at === at); if(x){ delete x.pending; x.error = e.message; } }); }
   renderCoachThread();
 }
 function changeText(c){
   const x = planSessions().find(s => s.id === c.session_id), w = c.workout_id && findWorkout(c.workout_id);
-  const where = x ? `${PedalaI18n.t(x.label)} ${shortDate(x.date)} · ${x.w.name}` : c.session_id;
-  const what = c.action === "replace" ? `swap for “${w?.name || c.workout_id}”` : c.action === "skip" ? "skip" : "restore the original session";
+  const where = x ? `${PedalaI18n.t(x.label)} ${shortDate(x.date)} · ${sessionLabel(x.w)}` : c.session_id;
+  const what = c.action === "replace" ? PedalaI18n.t("swap for “{name}”", { name: w ? sessionLabel(w) : c.workout_id }) : c.action === "skip" ? PedalaI18n.t("skip") : PedalaI18n.t("restore the original session");
   return `<b>${esc(where)}</b>: ${esc(what)}${c.reason ? ` <span>(${esc(c.reason)})</span>` : ""}`;
 }
 function applyChanges(at){
@@ -2299,24 +2299,24 @@ function applyChanges(at){
     else { if(p.swap) delete p.swap[c.session_id]; if(p.skipped) delete p.skipped[c.session_id]; }
   } });
   saveChat(c => { const y = c.find(z => z.at === at); if(y) y.applied = Date.now(); });
-  toast("Plan changed"); renderCoachThread();
+  toast(PedalaI18n.t("Plan changed")); renderCoachThread();
 }
 function renderCoachThread(){
   const el = $("#coach-thread"); if(!el) return;
   const items = coachChat().slice(-5).reverse();
   el.innerHTML = items.map(x => `<div class="item" data-at="${x.at}"><div>
-      <p style="white-space:pre-line;margin:0"><b style="color:var(--text)">You:</b> ${esc(x.q)}</p>
-      ${x.pending ? `<p>The coach is writing…</p>` : x.error ? `<p style="color:var(--z5)">No answer: ${esc(x.error)}</p>`
-        : `<p style="white-space:pre-line;color:var(--text);margin:6px 0 0"><b>Coach:</b> ${esc(x.a)}</p>${usdTag(x.usd)}`}
-      ${x.changes?.length ? `<p style="margin-top:8px">Proposed plan change:</p><ul style="margin:4px 0 0;padding-left:18px;color:var(--muted);font-size:14px">${x.changes.map(c => `<li>${changeText(c)}</li>`).join("")}</ul>` : ""}
-    </div>${x.changes?.length ? `<div class="acts">${x.applied ? `<span class="note">Applied ✓</span>` : `<button class="btn small primary" data-apply>Apply</button>`}</div>` : ""}</div>`).join("");
+      <p style="white-space:pre-line;margin:0"><b style="color:var(--text)">${PedalaI18n.t("You:")}</b> ${esc(x.q)}</p>
+      ${x.pending ? `<p>${PedalaI18n.t("The coach is writing…")}</p>` : x.error ? `<p style="color:var(--z5)">${PedalaI18n.t("No answer: {error}", { error: esc(x.error) })}</p>`
+        : `<p style="white-space:pre-line;color:var(--text);margin:6px 0 0"><b>${PedalaI18n.t("Coach:")}</b> ${esc(x.a)}</p>${usdTag(x.usd)}`}
+      ${x.changes?.length ? `<p style="margin-top:8px">${PedalaI18n.t("Proposed plan change:")}</p><ul style="margin:4px 0 0;padding-left:18px;color:var(--muted);font-size:14px">${x.changes.map(c => `<li>${changeText(c)}</li>`).join("")}</ul>` : ""}
+    </div>${x.changes?.length ? `<div class="acts">${x.applied ? `<span class="note">${PedalaI18n.t("Applied ✓")}</span>` : `<button class="btn small primary" data-apply>${PedalaI18n.t("Apply")}</button>`}</div>` : ""}</div>`).join("");
   el.querySelectorAll("[data-apply]").forEach(b => b.onclick = () => applyChanges(+b.closest("[data-at]").dataset.at));
 }
 function renderRepCoach(r){
   const box = $("#rep-coach"); if(!box) return; box.dataset.ride = r.id;
   const n = coachNotes()["ride:" + r.id];
-  box.innerHTML = n ? `<div class="rep"><h3>Coach</h3>${coachNoteHtml(n)}</div>`
-    : coachServer ? `<div class="dlg-acts" style="justify-content:flex-start;margin:4px 0 0"><button class="btn small" id="rep-coach-go">Coach's comment</button></div>` : "";
+  box.innerHTML = n ? `<div class="rep"><h3>${PedalaI18n.t("Coach")}</h3>${coachNoteHtml(n)}</div>`
+    : coachServer ? `<div class="dlg-acts" style="justify-content:flex-start;margin:4px 0 0"><button class="btn small" id="rep-coach-go">${PedalaI18n.t("Coach's comment")}</button></div>` : "";
   $("#rep-coach-go")?.addEventListener("click", () => coachRide(r).catch(e => toast(e.message)));
 }
 async function renderCoachViews(){
@@ -2325,8 +2325,8 @@ async function renderCoachViews(){
 }
 function fillCoach(){
   const st = $("#coach-status"); if(!st) return;
-  st.innerHTML = coachServer ? "The coach is on (ANTHROPIC_API_KEY is set on Vercel). Other activities also need an intervals.icu key."
-    : "The coach is off. On <b>console.anthropic.com</b> create an API key, add it on Vercel as <b>ANTHROPIC_API_KEY</b> and <b>Redeploy</b>. One comment costs about 6 cents; set a monthly spend limit in the Console.";
+  st.innerHTML = coachServer ? PedalaI18n.tHtml("The coach is on (ANTHROPIC_API_KEY is set on Vercel). Other activities also need an intervals.icu key.")
+    : PedalaI18n.tHtml("The coach is off. On <b>console.anthropic.com</b> create an API key, add it on Vercel as <b>ANTHROPIC_API_KEY</b> and <b>Redeploy</b>. One comment costs about 6 cents; set a monthly spend limit in the Console.");
   $("#coach-mode").value = coachMode();
   if(document.activeElement !== $("#coach-about")) $("#coach-about").value = settings.coachAbout || "";
 }
@@ -2453,19 +2453,19 @@ function renderPlan(){
     const tw = PLAN.weeks.map(w => w.map(k => PLAN_WO[k.startsWith("b-") ? k : "p-" + k]));
     const sw = [0, 4, 8].map(i => strengthWorkout("A", i));
     box.innerHTML = `<div class="plan-card"><h3>${PedalaI18n.t("Strength at home · 12 weeks")}</h3>
-      <p>Three bodyweight circuits a week (Monday legs and glutes, Wednesday upper body and core, Friday full body). All you need is a mat and a chair. Work grows from 30 s with 30 s rest to 45 s with 15 s rest, and weeks 4, 8 and 12 are easier. The app guides every session: it counts down, announces the exercises and ticks it off in the plan.</p>
-      <p>Length: ${sw.map(w => w.min).join(" → ")} ${PedalaI18n.t("min")}</p>
-      <div class="row"><label>Start (Monday) <input type="date" id="plan-start-s" value="${ymd(nextMonday())}"></label><button class="btn primary" id="plan-go-s">Start plan</button></div></div>
+      <p>${PedalaI18n.t("Three bodyweight circuits a week (Monday legs and glutes, Wednesday upper body and core, Friday full body). All you need is a mat and a chair. Work grows from 30 s with 30 s rest to 45 s with 15 s rest, and weeks 4, 8 and 12 are easier. The app guides every session: it counts down, announces the exercises and ticks it off in the plan.")}</p>
+      <p>${PedalaI18n.t("Length: {length} {unit}", { length: sw.map(w => w.min).join(" → "), unit: PedalaI18n.t("min") })}</p>
+      <div class="row"><label>${PedalaI18n.t("Start (Monday)")} <input type="date" id="plan-start-s" value="${ymd(nextMonday())}"></label><button class="btn primary" id="plan-go-s">${PedalaI18n.t("Start plan")}</button></div></div>
       <div class="plan-card"><h3>${PedalaI18n.t(PLAN.name)}</h3>
-      <p>Threshold on Tuesdays, VO2max on Thursdays, both 30 minutes at most: they get harder through denser intervals, not longer sessions. The Sunday Zone 2 ride grows from 50 minutes to 3 hours. Weeks 4, 8 and 12 are easier, and week 14 ends with a ramp test.</p>
-      <p>Plus swims on Monday (technique) and Wednesday (easy, optional), a short brick run after Tuesday's ride and an easy run on Friday that grows from 1 to 6 km. The last week is tests: a 400 m swim, a 5 km run and the ramp test, as the starting point for the next block. Swims and runs happen outside Pedala and tick off by themselves when they reach intervals.icu.</p>
-      <p>Longest weekday session: ${Math.max(...tw.flatMap(w => w.slice(0, 2)).map(woMin))} ${PedalaI18n.t("min")} · longest Sunday: ${Math.max(...tw.map(w => woMin(w[2])))} ${PedalaI18n.t("min")} · total ${tw.length * 3} rides.</p>
-      <div class="row"><label>Start (Monday) <input type="date" id="plan-start" value="${ymd(nextMonday())}"></label><button class="btn primary" id="plan-go">Start plan</button></div></div>`;
+      <p>${PedalaI18n.t("Threshold on Tuesdays, VO2max on Thursdays, both 30 minutes at most: they get harder through denser intervals, not longer sessions. The Sunday Zone 2 ride grows from 50 minutes to 3 hours. Weeks 4, 8 and 12 are easier, and week 14 ends with a ramp test.")}</p>
+      <p>${PedalaI18n.t("Plus swims on Monday (technique) and Wednesday (easy, optional), a short brick run after Tuesday's ride and an easy run on Friday that grows from 1 to 6 km. The last week is tests: a 400 m swim, a 5 km run and the ramp test, as the starting point for the next block. Swims and runs happen outside Pedala and tick off by themselves when they reach intervals.icu.")}</p>
+      <p>${PedalaI18n.t("Longest weekday session: {weekday} {unit} · longest Sunday: {sunday} {unit2} · total {n} rides.", { weekday: Math.max(...tw.flatMap(w => w.slice(0, 2)).map(woMin)), unit: PedalaI18n.t("min"), sunday: Math.max(...tw.map(w => woMin(w[2]))), unit2: PedalaI18n.t("min"), n: tw.length * 3 })}</p>
+      <div class="row"><label>${PedalaI18n.t("Start (Monday)")} <input type="date" id="plan-start" value="${ymd(nextMonday())}"></label><button class="btn primary" id="plan-go">${PedalaI18n.t("Start plan")}</button></div></div>`;
     $("#plan-go-s").onclick = () => { const v = $("#plan-start-s").value; if(!v) return;
-      const d = fromYmd(v); if(d.getDay() !== 1 && !confirm("The plan is built to start on a Monday. Start on " + shortDay(d) + " anyway?")) return;
+      const d = fromYmd(v); if(d.getDay() !== 1 && !confirm(PedalaI18n.t("The plan is built to start on a Monday. Start on {day} anyway?", { day: shortDay(d) }))) return;
       store.set("plan", { id: STRENGTH.id, start: v, done: {}, skipped: {}, times: { wk: "18:00", sun: "09:00" }, remind: 120 }); renderPlan(); };
     $("#plan-go").onclick = () => { const v = $("#plan-start").value; if(!v) return;
-      const d = fromYmd(v); if(d.getDay() !== 1 && !confirm("The plan is built to start on a Monday. Start on " + shortDay(d) + " anyway?")) return;
+      const d = fromYmd(v); if(d.getDay() !== 1 && !confirm(PedalaI18n.t("The plan is built to start on a Monday. Start on {day} anyway?", { day: shortDay(d) }))) return;
       store.set("plan", { id: PLAN.id, start: v, done: {}, skipped: {}, extra: true, extraFrom: v, times: { wk: "18:00", sun: "09:00" }, remind: 120 }); renderPlan(); };
     return;
   }
@@ -2476,28 +2476,28 @@ function renderPlan(){
   const next = ss.find(x => !x.done && !x.skipped && !x.past), hours = done.filter(isRide).reduce((a, x) => a + totalDur(x.w), 0) / 3600;
   const started = new Date() >= fromYmd(p.start), end = plusDays(fromYmd(p.start), NW * 7 - 1);
   box.innerHTML = `<div class="plan-card"><h3>${pname}</h3>
-      <p>${started ? `Week ${week} of ${NW}` : `Starts ${shortDay(fromYmd(p.start))}`} · ${shortDay(fromYmd(p.start))} – ${shortDay(end)}</p>
+      <p>${started ? PedalaI18n.t("Week {week} of {total}", { week, total: NW }) : PedalaI18n.t("Starts {date}", { date: shortDay(fromYmd(p.start)) })} · ${shortDay(fromYmd(p.start))} – ${shortDay(end)}</p>
       <div class="pbar"><i style="width:${Math.round(done.length / total * 100)}%"></i></div>
-      <div class="pstats"><span><b>${done.length}</b> of ${total} done</span><span><b>${missed.length}</b> missed</span>${strong ? "" : `<span><b>${numFixed(hours, 1)}</b>${PedalaI18n.t("h")} ridden</span>`}${done.length + missed.length ? `<span><b>${Math.round(done.length / (done.length + missed.length) * 100)}%</b> consistency</span>` : ""}</div></div>
-    ${next ? `<div class="plan-card"><p>${next.today ? "Today" : shortDay(next.date)} · ${next.w.sport === "strength" ? "strength" : next.w.sport === "swim" ? "swim" : next.day === "tue2" ? "brick" : next.w.sport === "run" ? "run" : next.day === "sun" ? "long ride" : next.day === "tue" ? "threshold" : "VO2max"}</p>
+      <div class="pstats"><span>${PedalaI18n.tHtml("<b>{done}</b> of {total} done", { done: done.length, total })}</span><span>${PedalaI18n.tHtml("<b>{n}</b> missed", { n: missed.length })}</span>${strong ? "" : `<span>${PedalaI18n.tHtml("<b>{hours}</b>{unit} ridden", { hours: numFixed(hours, 1), unit: PedalaI18n.t("h") })}</span>`}${done.length + missed.length ? `<span>${PedalaI18n.tHtml("<b>{pct}%</b> consistency", { pct: Math.round(done.length / (done.length + missed.length) * 100) })}</span>` : ""}</div></div>
+    ${next ? `<div class="plan-card"><p>${next.today ? PedalaI18n.t("Today") : shortDay(next.date)} · ${next.w.sport === "strength" ? PedalaI18n.t("strength") : next.w.sport === "swim" ? PedalaI18n.t("swim") : next.day === "tue2" ? PedalaI18n.t("brick") : next.w.sport === "run" ? PedalaI18n.t("run") : next.day === "sun" ? PedalaI18n.t("long ride") : next.day === "tue" ? PedalaI18n.t("threshold") : PedalaI18n.t("VO2max")}</p>
       <h3>${sessionLabel(next.w)}${/\d (min|h)$/.test(next.w.name) ? "" : ` · ${woMin(next.w)} ${PedalaI18n.t("min")}`}</h3><p>${sessionDesc(next.w)}</p>
-      <div class="row">${isRide(next) ? `<button class="btn primary" id="plan-ride">Ride now</button>` : next.w.steps ? `<button class="btn primary" id="plan-go-next">Start</button>` : `<button class="btn primary" id="plan-done-next">Mark done</button>`}<button class="btn small" id="plan-next-more">More</button></div></div>` : `<div class="plan-card"><h3>Plan complete 🎉</h3><p>${strong ? "Well done! Ask the coach what's next." : "Do the ramp test if you haven't yet, and set your new FTP."}</p></div>`}
+      <div class="row">${isRide(next) ? `<button class="btn primary" id="plan-ride">${PedalaI18n.t("Ride now")}</button>` : next.w.steps ? `<button class="btn primary" id="plan-go-next">${PedalaI18n.t("Start")}</button>` : `<button class="btn primary" id="plan-done-next">${PedalaI18n.t("Mark done")}</button>`}<button class="btn small" id="plan-next-more">${PedalaI18n.t("More")}</button></div></div>` : `<div class="plan-card"><h3>${PedalaI18n.t("Plan complete 🎉")}</h3><p>${strong ? PedalaI18n.t("Well done! Ask the coach what's next.") : PedalaI18n.t("Do the ramp test if you haven't yet, and set your new FTP.")}</p></div>`}
     <div class="weeks" id="plan-weeks"></div>
-    <div class="plan-card" style="margin-top:12px"><h3>Calendar and reminder</h3>
-      <p>Download the plan as a calendar (.ics) and import it into Google Calendar. Every session gets a reminder before it starts.</p>
+    <div class="plan-card" style="margin-top:12px"><h3>${PedalaI18n.t("Calendar and reminder")}</h3>
+      <p>${PedalaI18n.t("Download the plan as a calendar (.ics) and import it into Google Calendar. Every session gets a reminder before it starts.")}</p>
       <div class="row">
-        <label>${strong ? "Sessions at" : "Tue and Thu at"} <input type="time" id="plan-twk" value="${p.times?.wk || "18:00"}"></label>
-        <label${strong ? " hidden" : ""}>Sundays at <input type="time" id="plan-tsun" value="${p.times?.sun || "09:00"}"></label>
-        <label>Reminder <select id="plan-remind">${[[30, `30 ${PedalaI18n.t("min")}`], [60, `1 ${PedalaI18n.t("h")}`], [120, `2 ${PedalaI18n.t("h")}`], [240, `4 ${PedalaI18n.t("h")}`], [720, `12 ${PedalaI18n.t("h")}`]].map(([v, t]) => `<option value="${v}"${v === (p.remind || 120) ? " selected" : ""}>${t}</option>`).join("")}</select> before</label>
+        <label>${strong ? PedalaI18n.t("Sessions at") : PedalaI18n.t("Tue and Thu at")} <input type="time" id="plan-twk" value="${p.times?.wk || "18:00"}"></label>
+        <label${strong ? " hidden" : ""}>${PedalaI18n.t("Sundays at")} <input type="time" id="plan-tsun" value="${p.times?.sun || "09:00"}"></label>
+        <label>${PedalaI18n.t("Reminder")} <select id="plan-remind">${[[30, `30 ${PedalaI18n.t("min")}`], [60, `1 ${PedalaI18n.t("h")}`], [120, `2 ${PedalaI18n.t("h")}`], [240, `4 ${PedalaI18n.t("h")}`], [720, `12 ${PedalaI18n.t("h")}`]].map(([v, t]) => `<option value="${v}"${v === (p.remind || 120) ? " selected" : ""}>${t}</option>`).join("")}</select> ${PedalaI18n.t("before")}</label>
       </div>
-      <div class="row"><button class="btn" id="plan-ics">Download calendar (.ics)</button></div>
-      <p style="margin-top:10px">Google Calendar ignores the reminders in an imported file, so set it up like this: on a computer, create a new calendar in Google Calendar called <b>Pedala</b>, in its settings under <b>Event notifications</b> add a notification (e.g. 2 hours before), then in <b>Settings → Import & export</b> import the file into the Pedala calendar. Samsung Calendar and Outlook read the reminder from the file itself.</p></div>
-    <div class="plan-card"><div class="row" style="margin-top:0"><label class="check note" style="display:flex;margin-right:auto"${strong ? " hidden" : ""}><input type="checkbox" id="plan-extra"${p.extra !== false ? " checked" : ""}> Swims and runs in the plan</label><button class="btn small" id="plan-ask">Ask the coach</button><button class="btn small" id="plan-restart">Change start</button><button class="btn small danger" id="plan-stop">End plan</button></div></div>`;
+      <div class="row"><button class="btn" id="plan-ics">${PedalaI18n.t("Download calendar (.ics)")}</button></div>
+      <p style="margin-top:10px">${PedalaI18n.tHtml("Google Calendar ignores the reminders in an imported file, so set it up like this: on a computer, create a new calendar in Google Calendar called <b>Pedala</b>, in its settings under <b>Event notifications</b> add a notification (e.g. 2 hours before), then in <b>Settings → Import & export</b> import the file into the Pedala calendar. Samsung Calendar and Outlook read the reminder from the file itself.")}</p></div>
+    <div class="plan-card"><div class="row" style="margin-top:0"><label class="check note" style="display:flex;margin-right:auto"${strong ? " hidden" : ""}><input type="checkbox" id="plan-extra"${p.extra !== false ? " checked" : ""}> ${PedalaI18n.t("Swims and runs in the plan")}</label><button class="btn small" id="plan-ask">${PedalaI18n.t("Ask the coach")}</button><button class="btn small" id="plan-restart">${PedalaI18n.t("Change start")}</button><button class="btn small danger" id="plan-stop">${PedalaI18n.t("End plan")}</button></div></div>`;
   const weeks = $("#plan-weeks");
   for(let i = 0; i < NW; i++){
     const wk = ss.filter(x => x.week === i + 1), el = document.createElement("div");
     el.className = "week" + (started && i + 1 === week ? " now" : "");
-    el.innerHTML = `<h4><span>Week ${i + 1}${(strong ? STRENGTH.deload : PLAN.deload).includes(i + 1) ? (!strong && i === 13 ? " · test" : " · easier") : ""}</span><small>${shortDay(wk[0].date)} – ${shortDay(wk.at(-1).date)}</small></h4><div class="sess"></div>`;
+    el.innerHTML = `<h4><span>${PedalaI18n.t("Week {n}", { n: i + 1 })}${(strong ? STRENGTH.deload : PLAN.deload).includes(i + 1) ? (!strong && i === 13 ? PedalaI18n.t(" · test") : PedalaI18n.t(" · easier")) : ""}</span><small>${shortDay(wk[0].date)} – ${shortDay(wk.at(-1).date)}</small></h4><div class="sess"></div>`;
     for(const x of wk){
       const b = document.createElement("button"); b.type = "button";
       b.className = [x.w.sport, x.done && "done", x.skipped && "skipped", !x.done && !x.skipped && !x.optional && x.past && "missed", x.optional && "opt", x.today && "today"].filter(Boolean).join(" ");
@@ -2516,21 +2516,21 @@ function renderPlan(){
   ["#plan-twk", "#plan-tsun", "#plan-remind"].forEach(id => $(id).onchange = saveTimes);
   $("#plan-ics").onclick = () => downloadIcs();
   $("#plan-ask").onclick = () => { showView("progress"); setTimeout(() => { $("#coach-q")?.focus(); $("#coach-box")?.scrollIntoView({ block: "start" }); }, 50); };
-  $("#plan-restart").onclick = () => { const v = prompt("New plan start (YYYY-MM-DD, a Monday):", p.start); if(v && /^\d{4}-\d{2}-\d{2}$/.test(v)) planUpdate(q => { q.start = v; }); };
-  $("#plan-stop").onclick = () => { if(confirm(strong ? "End the plan?" : "End the plan? Your rides stay in History.")){ store.set("plan", null); renderPlan(); } };
+  $("#plan-restart").onclick = () => { const v = prompt(PedalaI18n.t("New plan start (YYYY-MM-DD, a Monday):"), p.start); if(v && /^\d{4}-\d{2}-\d{2}$/.test(v)) planUpdate(q => { q.start = v; }); };
+  $("#plan-stop").onclick = () => { if(confirm(strong ? PedalaI18n.t("End the plan?") : PedalaI18n.t("End the plan? Your rides stay in History."))){ store.set("plan", null); renderPlan(); } };
 }
 function openSession(x){
   $("#sess-title").textContent = sessionLabel(x.w);
-  $("#sess-sub").textContent = `${shortDay(x.date)} · week ${x.week} · ${woMin(x.w)} ${PedalaI18n.t("min")}${x.swapped ? " · swapped" : ""}${x.done ? " · done" : x.skipped ? " · skipped" : ""}${x.w.segs ? " — " : "\n\n"}${sessionDesc(x.w)}`;
+  $("#sess-sub").textContent = `${shortDay(x.date)} · ${PedalaI18n.t("week {week}", { week: x.week })} · ${woMin(x.w)} ${PedalaI18n.t("min")}${x.swapped ? " · " + PedalaI18n.t("swapped") : ""}${x.done ? " · " + PedalaI18n.t("done") : x.skipped ? " · " + PedalaI18n.t("skipped") : ""}${x.w.segs ? " — " : "\n\n"}${sessionDesc(x.w)}`;
   const acts = $("#sess-acts"); acts.innerHTML = "";
   const add = (label, cls, fn) => { const b = document.createElement("button"); b.className = "btn " + cls; b.textContent = label; b.onclick = () => { fn(); $("#dlg-sess").close(); }; acts.append(b); };
-  add("Close", "", () => {});
-  if(x.swapped && !x.done) add("Restore original", "", () => planUpdate(p => { delete p.swap[x.id]; }));
-  if(x.done || x.skipped) add("Undo", "", () => planUpdate(p => { delete p.done[x.id]; delete p.skipped[x.id]; }));
-  else { add("Skip", "", () => planUpdate(p => { p.skipped = { ...p.skipped, [x.id]: true }; })); add("Mark done", "", () => planUpdate(p => { p.done = { ...p.done, [x.id]: true }; })); }
-  if(isRide(x)) add("Ride", "primary", () => rideSession(x));
-  else if(x.w.steps && !x.skipped) add("Start", "primary", () => startStrength(x.w, x.id));
-  if(!isRide(x) && !x.done && !x.skipped && x.date <= Date.now()) add("Look on intervals.icu", "primary", () => planIcuTick(true));
+  add(PedalaI18n.t("Close"), "", () => {});
+  if(x.swapped && !x.done) add(PedalaI18n.t("Restore original"), "", () => planUpdate(p => { delete p.swap[x.id]; }));
+  if(x.done || x.skipped) add(PedalaI18n.t("Undo"), "", () => planUpdate(p => { delete p.done[x.id]; delete p.skipped[x.id]; }));
+  else { add(PedalaI18n.t("Skip"), "", () => planUpdate(p => { p.skipped = { ...p.skipped, [x.id]: true }; })); add(PedalaI18n.t("Mark done"), "", () => planUpdate(p => { p.done = { ...p.done, [x.id]: true }; })); }
+  if(isRide(x)) add(PedalaI18n.t("Ride"), "primary", () => rideSession(x));
+  else if(x.w.steps && !x.skipped) add(PedalaI18n.t("Start"), "primary", () => startStrength(x.w, x.id));
+  if(!isRide(x) && !x.done && !x.skipped && x.date <= Date.now()) add(PedalaI18n.t("Look on intervals.icu"), "primary", () => planIcuTick(true));
   $("#sess-prof").hidden = !isRide(x);
   $("#dlg-sess").showModal();
   if(isRide(x)) requestAnimationFrame(() => { const [g, W, H] = sizeCanvas($("#sess-prof")); g.clearRect(0, 0, W, H);
@@ -2620,7 +2620,7 @@ const planWeeks = p => isStrengthPlan(p) ? STRENGTH.weeks : PLAN.weeks.length;
 const WK = { steps: [], i: -1, left: 0, done: 0, total: 0, paused: false, timer: null, last: 0, sess: null, w: null };
 function startStrength(w, sess = null){
   Object.assign(WK, { steps: w.steps, i: -1, done: 0, total: w.steps.reduce((a, x) => a + x.s, 0), paused: false, sess, w, last: performance.now() });
-  $("#wk-title").textContent = sessionLabel(w); $("#wk-pause").textContent = "Pause";
+  $("#wk-title").textContent = sessionLabel(w); $("#wk-pause").textContent = PedalaI18n.t("Pause");
   $("#dlg-sess").open && $("#dlg-sess").close();
   $("#dlg-strength").showModal(); wakeLock(); wkNext();
   clearInterval(WK.timer); WK.timer = setInterval(wkTick, 200);
@@ -2633,11 +2633,11 @@ function wkNext(){
   WK.left = st.s; WK.beeped = 4;
   const nx = WK.steps.slice(WK.i + 1).find(x => x.kind !== "rest");
   const name = x => x.n || "", spoken = x => x.n || "";
-  $("#wk-phase").textContent = st.kind === "warm" ? "Warm-up" : st.kind === "cool" ? "Stretching" : st.kind === "rest" ? "Rest"
-    : `Round ${st.r}/${st.rounds} · exercise ${st.j}/${st.of}`;
+  $("#wk-phase").textContent = st.kind === "warm" ? PedalaI18n.t("Warm-up") : st.kind === "cool" ? PedalaI18n.t("Stretching") : st.kind === "rest" ? PedalaI18n.t("Rest")
+    : PedalaI18n.t("Round {r}/{rounds} · exercise {j}/{of}", { r: st.r, rounds: st.rounds, j: st.j, of: st.of });
   $("#wk-name").textContent = stepName(st);
-  $("#wk-cue").textContent = st.c || "";
-  $("#wk-next").textContent = nx ? `Next: ${exerciseName(nx)}` : "Last exercise";
+  $("#wk-cue").textContent = st.c ? PedalaI18n.t(st.c) : "";
+  $("#wk-next").textContent = nx ? PedalaI18n.t("Next: {name}", { name: exerciseName(nx) }) : PedalaI18n.t("Last exercise");
   $("#dlg-strength").dataset.kind = st.kind;
   if(st.kind === "rest") say(() => `Rest. Next: ${spoken(nx)}.`);
   else say(() => st.kind === "work" ? `${spoken(st)}, ${PedalaI18n.tn(st.s, "{n} second", "{n} seconds", { n: st.s })}.` : spoken(st));
@@ -2662,13 +2662,13 @@ function wkFinish(complete){
   if(complete || share >= .5){
     if(complete) say(() => "Workout complete. Well done.");
     if(WK.sess && plan()) planUpdate(p => { p.done = { ...p.done, [WK.sess]: "app:" + Date.now() }; if(p.skipped) delete p.skipped[WK.sess]; });
-    toast("Strength session done");
+    toast(PedalaI18n.t("Strength session done"));
   }
   WK.i = -1;
 }
-$("#wk-pause").onclick = () => { WK.paused = !WK.paused; $("#wk-pause").textContent = WK.paused ? "Resume" : "Pause"; };
+$("#wk-pause").onclick = () => { WK.paused = !WK.paused; $("#wk-pause").textContent = WK.paused ? PedalaI18n.t("Resume") : PedalaI18n.t("Pause"); };
 $("#wk-skip").onclick = () => { WK.left = 0; wkTick(); };
-$("#wk-end").onclick = () => { if(confirm("End the session? It counts as done if at least half of it is.")) wkFinish(false); };
+$("#wk-end").onclick = () => { if(confirm(PedalaI18n.t("End the session? It counts as done if at least half of it is."))) wkFinish(false); };
 $("#dlg-strength").addEventListener("cancel", e => { e.preventDefault(); $("#wk-end").click(); });
 
 /* swims and runs from a watch tick off their session when they reach intervals.icu (same day, same sport) */
@@ -2677,23 +2677,23 @@ const icuSport = type => /swim/i.test(type || "") ? "swim" : /run/i.test(type ||
 /* manual: from the session dialog, says what it found; otherwise at most every 2 minutes, quietly */
 async function planIcuTick(manual = false){
   const p = plan(); if(!p || p.extra === false && !isStrengthPlan(p) || planIcuTick.busy) return;
-  if(!icuOn()){ if(manual) toast("intervals.icu is not connected on this device (Settings → intervals.icu)"); return; }
+  if(!icuOn()){ if(manual) toast(PedalaI18n.t("intervals.icu is not connected on this device (Settings → intervals.icu)")); return; }
   if(!manual && Date.now() - (planIcuTick.at || 0) < 2 * 60000) return;
   const open = planSessions(p).filter(x => !isRide(x) && !x.done && !x.skipped && x.date <= Date.now() && x.date > Date.now() - 10 * 864e5);
   if(!open.length) return;
   planIcuTick.busy = true; planIcuTick.at = Date.now();
   try{
     const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "list", icuKey: icuKey() || undefined }) });
-    if(!r.ok){ if(manual) toast("intervals.icu is not answering" + " (" + r.status + ")"); return; }
+    if(!r.ok){ if(manual) toast(PedalaI18n.t("intervals.icu is not answering ({status})", { status: r.status })); return; }
     const { activities = [] } = await r.json(), used = new Set(Object.values(p.done || {})), hits = {};
     for(const x of open){
       const a = activities.find(a => icuSport(a.type) === x.w.sport && String(a.start).slice(0, 10) === x.d && !used.has("icu:" + a.id));
       if(a){ hits[x.id] = "icu:" + a.id; used.add("icu:" + a.id); }
     }
-    if(Object.keys(hits).length){ planUpdate(q => { q.done = { ...q.done, ...hits }; }); toast("Plan: a session from your watch was ticked off"); }
+    if(Object.keys(hits).length){ planUpdate(q => { q.done = { ...q.done, ...hits }; }); toast(PedalaI18n.t("Plan: a session from your watch was ticked off")); }
     else if(manual){
       const today = activities.filter(a => open.some(x => String(a.start).slice(0, 10) === x.d)).map(a => `${a.type} ${String(a.start).slice(5, 10)}`);
-      toast(today.length ? "On intervals.icu those days only have" + ": " + today.join(", ") : "intervals.icu has no activity for that day yet. Polar Flow is sometimes late; try again later.");
+      toast(today.length ? PedalaI18n.t("On intervals.icu those days only have: {list}", { list: today.join(", ") }) : PedalaI18n.t("intervals.icu has no activity for that day yet. Polar Flow is sometimes late; try again later."));
     }
   }catch(e){ console.warn("plan icu", e); if(manual) toast(e.message); }
   finally{ planIcuTick.busy = false; }
@@ -2726,8 +2726,8 @@ function downloadIcs(){
 /* once a day: what the plan says for today */
 function planToday(){
   const x = planSessions().find(s => s.today && !s.done && !s.skipped);
-  if(x && store.get("planToldOn", "") !== x.d){ store.set("planToldOn", x.d); notify(isRide(x) ? `Today's plan: ${sessionLabel(x.w)} · ${woMin(x.w)} ${PedalaI18n.t("min")}. Open Plan → Ride now.`
-    : `Today's plan: ${sessionLabel(x.w)} · about ${woMin(x.w)} ${PedalaI18n.t("min")}.`); }
+  if(x && store.get("planToldOn", "") !== x.d){ store.set("planToldOn", x.d); notify(isRide(x) ? PedalaI18n.t("Today's plan: {name} · {min} {unit}. Open Plan → Ride now.", { name: sessionLabel(x.w), min: woMin(x.w), unit: PedalaI18n.t("min") })
+    : PedalaI18n.t("Today's plan: {name} · about {min} {unit}.", { name: sessionLabel(x.w), min: woMin(x.w), unit: PedalaI18n.t("min") })); }
 }
 
 /* ============ sync (api/sync.js, Vercel Blob) ============
@@ -2747,7 +2747,7 @@ function applySection(k, data){
 }
 async function syncNow(){
   if(syncBusy || syncOff || !navigator.onLine) return;
-  syncBusy = true; setSyncStatus("Syncing…");
+  syncBusy = true; setSyncStatus(PedalaI18n.t("Syncing…"));
   try{
     const at = store.get("syncAt", {}), sections = {};
     for(const k of SYNCED){ const v = store.get(k, null); if(v == null) continue; at[k] ||= 1;   // data from before sync existed counts as oldest
@@ -2755,7 +2755,7 @@ async function syncNow(){
     const deleted = store.get("syncDeleted", []);
     const r = await fetch("/api/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "state", sections, deleted }) });
     if(r.status === 501 || r.status === 404){ syncOff = true; setSyncStatus(); return; }
-    const j = await r.json().catch(() => ({})); if(!r.ok) throw new Error(j.error || "error " + r.status);
+    const j = await r.json().catch(() => ({})); if(!r.ok) throw new Error(j.error || PedalaI18n.t("error {status}", { status: r.status }));
     let changed = false;
     for(const [k, sec] of Object.entries(j.sections || {})){
       if(!SYNCED.includes(k) || sec.at < (at[k] || 0)) continue;
@@ -2771,7 +2771,7 @@ async function syncNow(){
     for(const x of local) if(!server.has(x.id) && !dead.has(x.id)){
       const { icu, ...ride } = x;   // intervals.icu status belongs to the device that sent it
       const u = await fetch("/api/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "ride", ride }) });
-      if(!u.ok) throw new Error("a ride was not saved (" + u.status + ")"); up++;
+      if(!u.ok) throw new Error(PedalaI18n.t("a ride was not saved ({status})", { status: u.status })); up++;
     }
     for(const id of server) if(!have.has(id)){
       const g = await fetch("/api/sync?ride=" + encodeURIComponent(id)); if(g.ok){ await dbPut(await g.json()); down++; changed = true; }
@@ -2779,16 +2779,16 @@ async function syncNow(){
     store.set("syncLast", { at: Date.now(), rides: server.size + up, up, down });
     setSyncStatus();
     if(changed) refreshView();
-  }catch(e){ setSyncStatus("Sync failed: " + e.message); }
+  }catch(e){ setSyncStatus(PedalaI18n.t("Sync failed: {error}", { error: e.message })); }
   finally{ syncBusy = false; }
 }
 function setSyncStatus(msg){
   const el = $("#sync-status"); if(!el) return;
   const last = store.get("syncLast", null);
   el.innerHTML = msg ? msg.replace(/</g, "&lt;")
-    : syncOff ? "Sync is not set up. On Vercel open your project → <b>Storage → Create → Blob</b> and connect it to the project (this adds <b>BLOB_READ_WRITE_TOKEN</b>), then <b>Redeploy</b>. After that your phone and tablet share rides, plan and settings."
-    : last ? `Last sync ${PedalaI18n.td(last.at, { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })} · ${PedalaI18n.tn(last.rides, "{n} ride", "{n} rides", { n: last.rides })} in the cloud${last.up || last.down ? ` (${last.up} sent, ${last.down} received)` : ""}. Rides, plan, workouts, routes and settings are shared between devices; API keys stay on each device.`
-    : "Not synced yet.";
+    : syncOff ? PedalaI18n.tHtml("Sync is not set up. On Vercel open your project → <b>Storage → Create → Blob</b> and connect it to the project (this adds <b>BLOB_READ_WRITE_TOKEN</b>), then <b>Redeploy</b>. After that your phone and tablet share rides, plan and settings.")
+    : last ? PedalaI18n.t("Last sync {date} · {rides} in the cloud{extra}. Rides, plan, workouts, routes and settings are shared between devices; API keys stay on each device.", { date: PedalaI18n.td(last.at, { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }), rides: PedalaI18n.tn(last.rides, "{n} ride", "{n} rides", { n: last.rides }), extra: last.up || last.down ? " " + PedalaI18n.t("({up} sent, {down} received)", { up: last.up, down: last.down }) : "" })
+    : PedalaI18n.t("Not synced yet.");
 }
 function refreshView(){
   const v = document.querySelector(".view.active")?.id.replace("view-", "");
@@ -2916,8 +2916,8 @@ $("#sum-save").onclick = async () => {
   const r = pendingRide; $("#dlg-summary").close(); resetRide();
   const sess = planMarkRide(r); if(sess) toast(PedalaI18n.t("Plan: {name} done", { name: sessionLabel(sess.w) }));
   syncNow(); coachAfterSave(r);
-  if(toIcu) syncIcu(); else if(confirm("Download the .FIT file now?")) downloadFit(r); };
-$("#sum-discard").onclick = () => { if(confirm("Discard the ride without saving?")){ $("#dlg-summary").close(); resetRide(); } };
+  if(toIcu) syncIcu(); else if(confirm(PedalaI18n.t("Download the .FIT file now?"))) downloadFit(r); };
+$("#sum-discard").onclick = () => { if(confirm(PedalaI18n.t("Discard the ride without saving?"))){ $("#dlg-summary").close(); resetRide(); } };
 $("#sum-resume").onclick = () => { $("#dlg-summary").close(); start(); };
 
 /* ============ settings ============ */
@@ -3175,12 +3175,12 @@ async function watchDevice(role, dev, make, already, onOk){
 }
 function renderBtState(){
   const el = $("#bt-auto-note"); if(!el) return;
-  const k = store.get("devices", {}), names = [k.trainer && "trainer", k.hr && "heart rate strap", (k.clicks || []).length && "Click"].filter(Boolean);
+  const k = store.get("devices", {}), names = [k.trainer && PedalaI18n.t("trainer"), k.hr && PedalaI18n.t("heart rate strap"), (k.clicks || []).length && "Click"].filter(Boolean);
   let html;
-  if(btState.api === false) html = `<b>This Chrome does not remember Bluetooth devices.</b> Open <b>chrome://flags</b>, search for <b>Use the new permissions backend for Web Bluetooth</b>, set it to <b>Enabled</b> and restart Chrome. Then connect the trainer, heart rate strap and Click by hand once.`;
-  else if(!names.length) html = "No device remembered yet. Connect one by hand with the buttons at the top right.";
-  else if(btState.permitted === 0) html = `Remembered: ${names.join(", ")}, but Chrome did not keep the permission. Connect them by hand once; if they still don't connect after reopening, enable` + " <b>chrome://flags → Use the new permissions backend for Web Bluetooth</b>.";
-  else html = `Remembered: ${names.join(", ")}. ` + Object.entries(btState.roles).map(([r, t]) => `${BT_ROLES[r]}: ${t}`).join(" · ");
+  if(btState.api === false) html = PedalaI18n.tHtml("<b>This Chrome does not remember Bluetooth devices.</b> Open <b>chrome://flags</b>, search for <b>Use the new permissions backend for Web Bluetooth</b>, set it to <b>Enabled</b> and restart Chrome. Then connect the trainer, heart rate strap and Click by hand once.");
+  else if(!names.length) html = PedalaI18n.t("No device remembered yet. Connect one by hand with the buttons at the top right.");
+  else if(btState.permitted === 0) html = PedalaI18n.tHtml("Remembered: {names}, but Chrome did not keep the permission. Connect them by hand once; if they still don't connect after reopening, enable <b>chrome://flags → Use the new permissions backend for Web Bluetooth</b>.", { names: names.join(", ") });
+  else html = PedalaI18n.t("Remembered: {names}.", { names: names.join(", ") }) + " " + Object.entries(btState.roles).map(([r, state]) => `${PedalaI18n.t(BT_ROLES[r])}: ${PedalaI18n.t(state)}`).join(" · ");
   el.innerHTML = html; el.hidden = false;
 }
 $("#btn-bt-auto").onclick = () => { btHint.shown = false; autoConnect(); };

@@ -205,6 +205,68 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await z.context().close();
   });
 
+  await test("i18n: plan, strength player, settings status and confirms translate; coach text stays raw", async () => {
+    const z = await open({ settings: { lang: "zz" } });
+    await z.click('[data-view="plan"]');
+    await z.waitForFunction(() => /zz:Start plan/.test(document.querySelector("#plan-body").textContent));
+    const start = await z.textContent("#plan-body");
+    assert.match(start, /zz:Start plan/, "the plan start button is translated");
+    assert.match(start, /zz:Length:/, "the generated plan length line is translated");
+
+    await z.evaluate(() => {
+      const d = new Date(); d.setHours(0, 0, 0, 0);
+      store.set("plan", { id: PLAN.id, start: ymd(d), done: {}, skipped: {}, times: { wk: "18:00", sun: "09:00" }, remind: 120 });
+      renderPlan();
+    });
+    await z.waitForFunction(() => /zz:Calendar and reminder/.test(document.querySelector("#plan-body").textContent));
+    const plan = await z.textContent("#plan-body");
+    assert.match(plan, /zz:Calendar and reminder/, "the calendar heading is translated");
+    assert.match(plan, /zz:Download calendar \(\.ics\)/, "the calendar button is translated");
+    assert.match(plan, /zz:Reminder/, "the reminder label is translated");
+
+    const wk = await z.evaluate(() => {
+      startStrength(strengthWorkout("A", 0));
+      const warm = { phase: document.querySelector("#wk-phase").textContent, next: document.querySelector("#wk-next").textContent,
+        pause: document.querySelector("#wk-pause").textContent };
+      while(WK.steps[WK.i]?.kind !== "work") wkNext();
+      const work = { phase: document.querySelector("#wk-phase").textContent, cue: document.querySelector("#wk-cue").textContent };
+      clearInterval(WK.timer);
+      return { warm, work };
+    });
+    assert.equal(wk.warm.phase, "zz:Warm-up", "the strength phase is translated");
+    assert.match(wk.warm.next, /^zz:Next: zz:/, "the next exercise label is translated");
+    assert.equal(wk.warm.pause, "zz:Pause", "the pause button is translated");
+    assert.equal(wk.work.phase, "zz:Round 1/3 · exercise 1/6", "the strength round line is translated");
+    assert.match(wk.work.cue, /^zz:/, "the exercise cue is translated");
+    await z.evaluate(() => document.querySelector("#dlg-strength").close());
+
+    await z.click('[data-view="settings"]');
+    assert.equal(await z.textContent("#icu-status"), "zz:Not connected.", "the intervals.icu status is translated");
+
+    await z.click('[data-view="plan"]');
+    let confirmMsg = "";
+    z.removeAllListeners("dialog");
+    z.once("dialog", d => { confirmMsg = d.message(); d.accept(); });
+    await z.click("#plan-stop");
+    await z.waitForTimeout(100);
+    assert.equal(confirmMsg, "zz:End the plan? Your rides stay in History.", "the confirm text is translated");
+    await z.context().close();
+  });
+
+  await test("i18n: coach comments and titles stay raw in a translated UI", async () => {
+    const z = await open({ settings: { lang: "zz" } });
+    await z.evaluate(() => {
+      store.set("coach", { "ride:raw": { text: "Coach text stays raw.", at: Date.now(), title: "Imported ride" } });
+      showView("progress");
+    });
+    await z.waitForFunction(() => /Coach text stays raw\./.test(document.querySelector("#coach-list").textContent));
+    const list = await z.textContent("#coach-list");
+    assert.match(list, /Coach text stays raw\./);
+    assert.doesNotMatch(list, /zz:Coach text/);
+    assert.match(list, /Imported ride/, "a coaching note title is left as it was saved");
+    await z.context().close();
+  });
+
   await test("soft start: flat road before the start and in pause, ERG ramps up from 40% FTP", async () => {
     const p = await open({ speed: 10 });
     await p.click("#chip-trainer"); await p.click("#c-sim");
