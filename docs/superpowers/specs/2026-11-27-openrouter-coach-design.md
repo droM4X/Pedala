@@ -208,6 +208,9 @@ chose to leave the paid key out.
 Old notes keep the `usd` they were saved with (estimated Opus prices). New notes carry the real
 cost. Nothing is migrated.
 
+Coach output follows the interface language as of 2026-11-27: the app sends the resolved UI
+language, and comments, weekly reviews and answers are written in it.
+
 ### Files touched
 
 - `api/coach.js` (provider call, model, usage, errors).

@@ -25,7 +25,7 @@
 - **Progress:** fitness/fatigue/form (CTL/ATL/TSB), weekly volume, best powers, FTP over time.
 - **14-week training plan** (short weekday sessions, long Sunday Zone 2 ride; optionally two swims with technique drills, a brick run and an easy Friday run from 1 to 6 km, ticked off from intervals.icu) with progress tracking and a calendar file with reminders.
 - **intervals.icu upload** of every ride, `.FIT` export for Strava, GoldenCheetah and others.
-- **Virtual coach:** a weekly review every Saturday, or a short comment after every session (in English), on your Pedala rides and on everything else that reaches intervals.icu, such as runs and swims from a watch. You can also ask it questions or for a plan change ("I have a cold, what about this week?"); proposed changes are applied when you confirm them. It runs through OpenRouter and works with any model the key may use; the model is chosen in Settings, where the list shows only what the key's own guardrail allows.
+- **Virtual coach:** a weekly review every Saturday, or a short comment after every session (in your interface language), on your Pedala rides and on everything else that reaches intervals.icu, such as runs and swims from a watch. You can also ask it questions or for a plan change ("I have a cold, what about this week?"); proposed changes are applied when you confirm them. It runs through OpenRouter and works with any model the key may use; the model is chosen in Settings, where the list shows only what the key's own guardrail allows.
 - **Strength at home:** a 12-week bodyweight plan (three circuits a week) with a guided player: countdown, voice cues, next exercise.
 - **Profiles:** more people on one deploy, each with their own data.
 - **Sync between phone and tablet** through Vercel Blob; backup and restore as a single `.json` file.
@@ -72,7 +72,7 @@ Announcements use the selected voice's language, not the interface language. *Se
 
 ## Languages
 
-The interface is in English by default. *Settings → Language* can follow the browser or switch to another language, and the choice is saved on that device. Hungarian translates the whole interface text. A language is one file in `lang/`: copy `lang/_template.js` to `lang/<code>.js`, set its code, name and locale, fill in the strings, then run `npm run langs` to add it to `lang/index.json`. English text is the key, so missing strings fall back to English. The login page, the phone remote (`gear.html`), the virtual coach's comments and FIT/ICS metadata stay English.
+The interface is in English by default. *Settings → Language* can follow the browser or switch to another language, and the choice is saved on that device. Hungarian translates the whole interface text. A language is one file in `lang/`: copy `lang/_template.js` to `lang/<code>.js`, set its code, name and locale, fill in the strings, then run `npm run langs` to add it to `lang/index.json`. English text is the key, so missing strings fall back to English. The login page, the phone remote (`gear.html`) and FIT/ICS metadata stay English; the virtual coach answers in the selected interface language.
 
 ## Development
 

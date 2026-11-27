@@ -2166,6 +2166,7 @@ const coachEnabled = () => {
   return true;
 };
 const coachAuth = () => ({ ...(coachKey() ? { orKey: coachKey() } : {}), ...(coachModel() ? { model: coachModel() } : {}), ...(coachCaps() ? { caps: coachCaps() } : {}) });
+const coachLang = () => document.documentElement.lang || "en";   // the interface language the athlete reads (i18n sets it)
 const coachMode = () => settings.coachMode || "week";   // week: a review on Saturdays; each: a comment after every session; off
 /* a failure only a Settings change can fix (401, 403, 404) keeps the automatic runs off until the key or model is saved;
    out of credit (402) pauses them for 12 hours as before */
@@ -2265,7 +2266,7 @@ async function coachAsk(key, payload, title, date){
   const old = coachNotes()[key]; if(old?.pending && Date.now() - old.at < 3 * 60000) return null;
   saveCoachNote(key, { pending: true, at: Date.now(), title, date }); renderCoachViews();
   try{
-    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "comment", icuKey: icuKey() || undefined, ...coachAuth(),
+    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "comment", icuKey: icuKey() || undefined, ...coachAuth(), lang: coachLang(),
       notes: settings.coachAbout || "", athlete: { ftp: settings.ftp, maxHr: settings.maxHr, weight: settings.weight }, ...payload }) });
     const j = await r.json().catch(() => ({}));
     coachStopped(r.status);
@@ -2380,7 +2381,7 @@ async function coachQuestion(q){
     .map(n => ({ trening: n.title, datum: ymd(new Date(n.date || n.at)), komentar: n.text.slice(0, 600) }));
   const chat = coachChat().filter(x => x.a).slice(-2).flatMap(x => [{ sportas: x.q.slice(0, 400) }, { trener: x.a.slice(0, 600) }]);
   try{
-    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "ask", question: q, icuKey: icuKey() || undefined, ...coachAuth(),
+    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "ask", question: q, icuKey: icuKey() || undefined, ...coachAuth(), lang: coachLang(),
       notes: settings.coachAbout || "", athlete: { ftp: settings.ftp, maxHr: settings.maxHr, weight: settings.weight }, plan: p ? { sessions, options } : null, rides, comments, chat }) });
     const j = await r.json().catch(() => ({}));
     coachStopped(r.status);

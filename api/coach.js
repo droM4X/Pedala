@@ -1,4 +1,4 @@
-// Virtual coach: a short English comment on one training session, written by OpenRouter.
+// Virtual coach: a short comment on one training session, written by OpenRouter in the athlete's interface language.
 // The key comes from the device (Settings, sent as orKey) or OPENROUTER_API_KEY on Vercel; without either the coach is off.
 // Context comes from intervals.icu (INTERVALS_API_KEY on Vercel, or the key the app sends): the last six weeks of
 // activities and wellness.
@@ -28,7 +28,7 @@ Comment on:
 - one or two specific tips for the coming days.
 
 Rules:
-- Write in English, warm and direct, second person singular.
+- Write in the athlete's interface language, stated at the end of the message, warm and direct, second person singular.
 - Do not repeat numbers the athlete can already see unless they are meaningful; avoid generic phrases.
 - Respect the athlete's notes (limitations, goals, and decisions already made) and do not pressure them to go against those notes.
 - If anything suggests a risk of injury, illness, or overtraining, say so clearly; do not diagnose.
@@ -38,7 +38,7 @@ Rules:
 const SYSTEM_ASK = `You are a personal coach (endurance and strength: cycling, running, swimming, and at-home strength training) in the Pedala app. The athlete writes to you outside a workout: with a question, to say how they feel, or to request a plan change. You have their plan for this week, their recent workouts, fitness, your earlier comments, and the conversation so far.
 
 Answer (the answer field):
-- Write in English, warm and direct, second person singular; no more than 150 words, plain text with no markdown.
+- Write in the athlete's interface language, stated at the end of the message, warm and direct, second person singular; no more than 150 words, plain text with no markdown.
 - Be specific to their situation and respect their notes and decisions.
 - If there are signs of illness, injury, or pain, advise rest and, when needed, a doctor; do not diagnose.
 
@@ -58,7 +58,7 @@ Review:
 - fitness and recovery: fitness, fatigue, sleep, resting heart rate, and HRV, when available;
 - what to watch for next week, with one or two specific tips for upcoming workouts.
 
-Rules: Write in English, warm and direct, second person singular; respect the athlete's notes and decisions; if there are signs of injury, illness, or overtraining, say so clearly without diagnosing; do not guess when data is missing. Each session's stanje field uses English status values such as done, skipped, missed, "optional, not done", today, and upcoming. Length: 120 to 220 words, plain text with no heading or markdown, no more than four short paragraphs.`;
+Rules: Write in the athlete's interface language, stated at the end of the message, warm and direct, second person singular; respect the athlete's notes and decisions; if there are signs of injury, illness, or overtraining, say so clearly without diagnosing; do not guess when data is missing. Each session's stanje field uses English status values such as done, skipped, missed, "optional, not done", today, and upcoming. Length: 120 to 220 words, plain text with no heading or markdown, no more than four short paragraphs.`;
 
 const ASK_SCHEMA = { type: "object", additionalProperties: false, required: ["answer", "changes"], properties: {
   answer: { type: "string" },
@@ -109,7 +109,7 @@ module.exports = async (req, res) => {
       parts.push(...icuCtx.parts(a => String(a.id) !== String(b.icuId) && (!exclude || a.external_id !== exclude)));
     } else if(b.icuId) return res.status(401).json({ error: "An intervals.icu key is required for intervals.icu sessions" });
 
-    const j = await orChat({ ...ctx, system: SYSTEM, content: parts.join("\n\n") + "\n\nWrite a comment." });
+    const j = await orChat({ ...ctx, system: SYSTEM, content: parts.join("\n\n") + "\n\nWrite a comment.\n\n" + langLine(b.lang) });
     const cut = cutOff(j); if(cut) return res.status(502).json({ error: cut });
     if(j.choices?.[0]?.finish_reason === "content_filter") return res.status(422).json({ error: "The coach did not write a comment this time" });
     const text = messageText(j).trim();
@@ -135,7 +135,7 @@ async function ask(b, icuKey, res, ctx){
   if(Array.isArray(b.chat) && b.chat.length) parts.push(section("Conversation so far (oldest to newest)", b.chat.slice(-4)));
   // a strict schema only when the key's model supports one; otherwise the prompt asks for JSON and it is parsed tolerantly
   const strict = !!ctx.caps?.schema;
-  const j = await orChat({ ...ctx, system: SYSTEM_ASK + (strict ? "" : JSON_ONLY), content: parts.join("\n\n") + "\n\n## The athlete's message\n" + q,
+  const j = await orChat({ ...ctx, system: SYSTEM_ASK + (strict ? "" : JSON_ONLY), content: parts.join("\n\n") + "\n\n## The athlete's message\n" + q + "\n\n" + langLine(b.lang),
     schema: strict ? ASK_SCHEMA : null });
   const cut = cutOff(j); if(cut) return res.status(502).json({ error: cut });
   if(j.choices?.[0]?.finish_reason === "content_filter") return res.status(422).json({ error: "The coach did not respond this time" });
@@ -155,7 +155,7 @@ async function week(b, icuKey, res, ctx){
   if(b.plan) parts.push(section("Plan: past 7 days and next 8 days, with status", (b.plan.sessions || []).slice(0, 40)));
   if(Array.isArray(b.rides) && b.rides.length) parts.push(section("Pedala rides from the past 7 days", b.rides.slice(0, 15)));
   if(icuKey){ const c = await icuContext(icuKey); parts.push(...c.parts(() => true)); }
-  const j = await orChat({ ...ctx, system: SYSTEM_WEEK, content: parts.join("\n\n") + "\n\nWrite a weekly review." });
+  const j = await orChat({ ...ctx, system: SYSTEM_WEEK, content: parts.join("\n\n") + "\n\nWrite a weekly review.\n\n" + langLine(b.lang) });
   const cut = cutOff(j); if(cut) return res.status(502).json({ error: cut });
   if(j.choices?.[0]?.finish_reason === "content_filter") return res.status(422).json({ error: "The coach did not write a review this time" });
   const text = messageText(j).trim();
@@ -210,6 +210,14 @@ function parseJson(text){
   try{ return JSON.parse(t.slice(a, b + 1)); }catch{ return null; }
 }
 const keyOf = b => String(b.orKey || process.env.OPENROUTER_API_KEY || "").trim();
+/* one short line at the end of the user content: the athlete's interface language, anything else English */
+function langLine(code){
+  const c = String(code || "").trim();
+  const ok = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/i.test(c) ? c : "en";
+  let name = ok;
+  try{ name = new Intl.DisplayNames(["en"], { type: "language" }).of(ok) || ok; }catch{ name = ok; }
+  return `Write your answer in ${name} (${ok}).`;
+}
 /* tokens and the real cost OpenRouter reports, so the app can show what an answer cost (never an estimate) */
 function usage(j){
   const u = j.usage || {};

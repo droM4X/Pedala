@@ -694,6 +694,19 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     srv.setEnv({ OPENROUTER_API_KEY: null }); await p.context().close();
   });
 
+  await test("coach: the question carries the interface language", async () => {
+    srv.setEnv({ OPENROUTER_API_KEY: "sk-test" }); srv.setOpenRouter({ reset: true }); srv.openrouter.length = 0;
+    const p = await open({ settings: { lang: "hu", coachMode: "off" } });
+    assert.equal(await p.evaluate(() => document.documentElement.lang), "hu");
+    await p.click('[data-view="progress"]'); await p.waitForTimeout(800);
+    await p.fill("#coach-q", "Hogy vagyok?"); await p.click("#coach-form button");
+    await p.waitForFunction(() => coachChat().at(-1)?.a, null, { timeout: 15000 });
+    const sent = srv.openrouter.at(-1);
+    assert.match(sent.messages[1].content, /Hungarian \(hu\)/);
+    assert.doesNotMatch(sent.messages[0].content, /Write in English/);
+    srv.setEnv({ OPENROUTER_API_KEY: null }); await p.context().close();
+  });
+
   await test("coach: the key from Settings travels with every request and stays out of the backup", async () => {
     srv.setEnv({ OPENROUTER_API_KEY: null }); srv.setOpenRouter({ reset: true }); srv.openrouter.length = 0;
     const p = await open({ settings: { ftp: 160, maxHr: 185, weight: 100, coachMode: "off" } });
