@@ -5,8 +5,9 @@
 **Owner decisions:** server proxy with the key from Settings (approach A); the model must be
 selectable from a dropdown; the owner's OpenRouter keys are guardrailed, so the picker must show
 only the models that key may use (`/api/v1/models/user`). Measured with the owner's key on
-2026-11-27: it allows exactly one model, `deepseek/deepseek-v4.1-flash-1017`, which is therefore
-the default.
+2026-11-27: it allows `deepseek/deepseek-v4.1-flash-1017` (the design default) and
+`tencent/hy4-flash`, so the default only holds while the list contains it and the picker offers
+both.
 
 ## Intent and why
 
@@ -82,8 +83,8 @@ writing the same comments and the same plan proposals; only the provider and the
   field at all.
 - `anthropic/claude-opus-5.5` costs the same through OpenRouter as directly ($4/$20 per M);
   `deepseek/deepseek-v4.1-flash` is $0.05/$0.20 per M, so a comment is about 0.1 cent. Prices are
-  per key, not global: the owner's key sees `deepseek/deepseek-v4.1-flash-1017` at $0.04/$0.10
-  per M. The picker shows what the list says, never a built-in price table.
+  per key and move: the owner's key showed `deepseek/deepseek-v4.1-flash-1017` at $0.04/$0.10 and
+  later $0.07/$0.30 per M. The picker shows what the list says, never a built-in price table.
 - Errors come as `{ error: { message, code, metadata: { raw, provider_name,
   provider_error_code } } }`; `metadata.raw` names the provider and the real reason and is the
   most useful text to show.

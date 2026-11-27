@@ -534,7 +534,7 @@ const m = require("./api/models.js");
 m({ method: "POST", body: {} }, { setHeader(){}, status(c){ this.c = c; return this; }, json(o){ console.log(this.c, JSON.stringify(o).slice(0, 400)); } });
 '
 ```
-Expected: 200 with one model for the owner's key. Then, on the deployed app (or with `vercel dev`), paste the key in Settings, pick the model, ask the coach a question and read the cost. A `429 Provider returned error` from the upstream model is transient: note it and retry later; it is not a build failure.
+Expected: 200 with the two models the owner's key allows. Then, on the deployed app (or with `vercel dev`), paste the key in Settings, pick the model, ask the coach a question and read the cost. A `429 Provider returned error` from the upstream model is transient: note it and retry later; it is not a build failure.
 
 - [ ] **Step 5: Commit**
 
