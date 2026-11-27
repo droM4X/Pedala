@@ -757,6 +757,23 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.context().close();
   });
 
+  await test("coach: a refusal pauses the automatic comments until the key is saved again, and a tiny cost shows four decimals", async () => {
+    srv.setEnv({ OPENROUTER_API_KEY: "sk-test" }); srv.setOpenRouter({ reset: true, cost: 0.0004 }); srv.openrouter.length = 0;
+    const p = await open({ settings: { coachMode: "each", coachModel: "deepseek/deepseek-v4.1-flash-1017" } });
+    await p.click('[data-view="settings"]'); await p.waitForTimeout(600);
+    srv.setOpenRouter({ fail: 403 });
+    await p.evaluate(() => coachAsk("ride:r-pause", { ride: { id: "r-pause", name: "P", start: new Date().toISOString(), m: { duration: 900 } } }, "P", Date.now()).catch(() => {}));
+    assert.equal(await p.evaluate(() => store.get("coachPauseWhy")), "settings");
+    assert.equal(await p.evaluate(() => coachOn()), false, "automatic comments stop");
+    srv.setOpenRouter({ fail: null, cost: 0.0004 }); srv.openrouter.length = 0;
+    await p.fill("#coach-key", "sk-device"); await p.click("#btn-coach-key"); await p.waitForTimeout(600);
+    assert.equal(await p.evaluate(() => store.get("coachPauseWhy")), null, "saving the key clears the pause");
+    await p.evaluate(() => coachAsk("ride:r-cost", { ride: { id: "r-cost", name: "C", start: new Date().toISOString(), m: { duration: 900 } } }, "C", Date.now()));
+    await p.click('[data-view="progress"]'); await p.waitForTimeout(400);
+    assert.match(await p.textContent("#coach-list"), /≈ \$0\.0004/);
+    await p.context().close();
+  });
+
   await test("plan: swims and runs are in the plan and tick off from intervals.icu, the coach sees the day's target", async () => {
     srv.setEnv({ OPENROUTER_API_KEY: "sk-test" }); srv.setOpenRouter({ reset: true }); srv.openrouter.length = 0;
     const p = await open();

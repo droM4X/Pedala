@@ -2167,7 +2167,15 @@ const coachEnabled = () => {
 };
 const coachAuth = () => ({ ...(coachKey() ? { orKey: coachKey() } : {}), ...(coachModel() ? { model: coachModel() } : {}), ...(coachCaps() ? { caps: coachCaps() } : {}) });
 const coachMode = () => settings.coachMode || "week";   // week: a review on Saturdays; each: a comment after every session; off
-const coachOn = () => coachEnabled() && coachMode() === "each" && Date.now() > store.get("coachPause", 0);   // paused for 12 h when the credit runs out
+/* a failure only a Settings change can fix (401, 403, 404) keeps the automatic runs off until the key or model is saved;
+   out of credit (402) pauses them for 12 hours as before */
+const coachPaused = () => store.get("coachPauseWhy") === "settings" || Date.now() <= store.get("coachPause", 0);
+const coachOn = () => coachEnabled() && coachMode() === "each" && !coachPaused();
+/* a refused request that only Settings can fix stops the automatic runs; 402 keeps the old 12-hour credit pause */
+function coachStopped(status){
+  if(status === 402){ store.set("coachPause", Date.now() + 12 * 36e5); store.set("coachPauseWhy", "credit"); }
+  else if(status === 401 || status === 403 || status === 404){ store.set("coachPause", 0); store.set("coachPauseWhy", "settings"); }
+}
 
 /* the model list belongs to one key: a small djb2 fingerprint keeps each key's list apart without storing the key */
 const coachFp = key => { let h = 5381; for(let i = 0; i < key.length; i++) h = ((h * 33) ^ key.charCodeAt(i)) >>> 0; return h.toString(36); };
@@ -2251,7 +2259,7 @@ async function coachAsk(key, payload, title, date){
     const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "comment", icuKey: icuKey() || undefined, ...coachAuth(),
       notes: settings.coachAbout || "", athlete: { ftp: settings.ftp, maxHr: settings.maxHr, weight: settings.weight }, ...payload }) });
     const j = await r.json().catch(() => ({}));
-    if(r.status === 402) store.set("coachPause", Date.now() + 12 * 36e5);
+    coachStopped(r.status);
     if(!r.ok) throw new Error(j.error || PedalaI18n.t("error {status}", { status: r.status }));
     saveCoachNote(key, { text: j.text, at: Date.now(), title, date, usd: j.usage?.usd }); renderCoachViews(); return j.text;
   }catch(e){ saveCoachNote(key, { error: e.message, at: Date.now(), title, date }); renderCoachViews(); throw e; }
@@ -2271,7 +2279,7 @@ function coachWeekPayload(){
 }
 async function coachWeek(manual = false){
   const sat = lastSaturday(), key = "week:" + ymd(sat), note = coachNotes()[key];
-  if(!manual && (!coachEnabled() || coachMode() !== "week" || Date.now() <= store.get("coachPause", 0) || Date.now() - sat > 3 * 864e5 || note && (note.text || note.pending || Date.now() - note.at < 12 * 36e5))) return null;
+  if(!manual && (!coachEnabled() || coachMode() !== "week" || coachPaused() || Date.now() - sat > 3 * 864e5 || note && (note.text || note.pending || Date.now() - note.at < 12 * 36e5))) return null;
   const { sessions, from } = coachWeekPayload(); let rides = [];
   try{ rides = (await dbAll()).filter(r => r.start >= from.getTime()).sort((a, b) => a.start - b.start).map(r => ({ datum: ymd(new Date(r.start)), naziv: r.name,
     min: Math.round(r.m.duration / 60), tss: r.m.tss, np: r.m.np, puls: r.m.avgHr || undefined,
@@ -2302,7 +2310,7 @@ async function coachCheck(){
 }
 document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") coachCheck(); });
 const coachDate = t => PedalaI18n.td(t, { weekday: "short", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" });
-const usdTag = usd => usd != null ? `<p style="font-size:12px;color:var(--faint);margin:4px 0 0">≈ $${numFixed(usd, 3)}</p>` : "";
+const usdTag = usd => usd != null ? `<p style="font-size:12px;color:var(--faint);margin:4px 0 0">≈ $${numFixed(usd, usd < 0.01 ? 4 : 2)}</p>` : "";
 /* what the coach cost this month (comments and answers saved here; the Anthropic Console has the exact figure) */
 function coachMonthUsd(){
   const m0 = new Date(); m0.setDate(1); m0.setHours(0, 0, 0, 0);
@@ -2366,6 +2374,7 @@ async function coachQuestion(q){
     const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "ask", question: q, icuKey: icuKey() || undefined, ...coachAuth(),
       notes: settings.coachAbout || "", athlete: { ftp: settings.ftp, maxHr: settings.maxHr, weight: settings.weight }, plan: p ? { sessions, options } : null, rides, comments, chat }) });
     const j = await r.json().catch(() => ({}));
+    coachStopped(r.status);
     if(!r.ok) throw new Error(j.error || PedalaI18n.t("error {status}", { status: r.status }));
     saveChat(c => { const x = c.find(y => y.at === at); if(x){ delete x.pending; x.a = j.answer; x.changes = j.changes || []; x.usd = j.usage?.usd; } });
   }catch(e){ saveChat(c => { const x = c.find(y => y.at === at); if(x){ delete x.pending; x.error = e.message; } }); }
@@ -2414,7 +2423,9 @@ function fillCoach(){
   const base = coachKey() ? PedalaI18n.tHtml("The coach is on (key on this device). Other activities also need an intervals.icu key.")
     : coachServer ? PedalaI18n.tHtml("The coach is on (OPENROUTER_API_KEY is set on Vercel). Other activities also need an intervals.icu key.")
     : PedalaI18n.tHtml("The coach is off. Add an OpenRouter API key in Settings (or OPENROUTER_API_KEY on Vercel).");
-  st.innerHTML = base + (coachModel() && coachEnabled() ? `<br>` + PedalaI18n.tHtml("Model: {model}", { model: coachModel() }) : "");
+  const paused = store.get("coachPauseWhy") === "settings" ? PedalaI18n.tHtml("The coach is paused: OpenRouter refused the request. Check the key and the model.")
+    : Date.now() <= store.get("coachPause", 0) ? PedalaI18n.tHtml("The coach is paused: the OpenRouter account has no credit.") : "";
+  st.innerHTML = (paused || base) + (coachModel() && coachEnabled() ? `<br>` + PedalaI18n.tHtml("Model: {model}", { model: coachModel() }) : "");
   $("#coach-mode").value = coachMode();
   if(document.activeElement !== $("#coach-key")) $("#coach-key").value = settings.orKey || "";
   if(document.activeElement !== $("#coach-about")) $("#coach-about").value = settings.coachAbout || "";
