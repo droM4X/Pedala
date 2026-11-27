@@ -17,7 +17,7 @@
 - **YouTube while riding**, full screen with your numbers on top and a Zwift-style workout profile with a heart-rate line behind them.
 - **A video feed of your own:** newest videos from favourite channels, your own playlists and a ride theme of the day (YouTube offers apps no personal recommendations).
 - **Music from YouTube Music** in a small player with ⏮ ⏯ ⏭, or **no video at all:** a large workout profile instead.
-- **Voice announcements** in English ("In 10 seconds: 3 minutes at 265 watts"); YouTube is turned down while the voice speaks.
+- **Voice announcements** in the selected voice's language ("In 10 seconds: 3 minutes at 265 watts"), English when the device has no voice for the interface language; YouTube is turned down while the voice speaks.
 - **Heart-rate zones**, interval scoring and a phone layout that never scrolls while you ride.
 
 **After the ride**
@@ -68,7 +68,11 @@ Use the phone remote when the Zwift Click pods go to sleep during a ride. Open `
 
 ### Voice
 
-Announcements use the device's English text-to-speech voices; pick one under *Settings → Announcement voice*. Android: any installed English voice works (*Text-to-speech → Speech Services by Google → Install voice data → English*).
+Announcements use the selected voice's language, not the interface language. *Settings → Announcement voice* lists the device's voices for the interface language; if there are none, it lists English voices and says that announcements are in English. Android: install the language's voice data under *Text-to-speech → Speech Services by Google → Install voice data*.
+
+## Languages
+
+The interface is in English by default. *Settings → Language* can follow the browser or switch to another language, and the choice is saved on that device. Hungarian translates the whole interface text. Adding a language is one file in `lang/`: see [docs/adding-a-language.md](docs/adding-a-language.md). The login page, the phone remote (`gear.html`), the virtual coach's comments and FIT/ICS metadata stay English.
 
 ## Development
 
