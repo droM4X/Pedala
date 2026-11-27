@@ -36,6 +36,11 @@ assert.match(lapPower, /<200W>/); assert.doesNotMatch(lapPower, /200 watts/);
 const lapDist = sp.lap({ kind: "dist", km: 1, dur: 60, avgP: 200, kmLimit: 5 }, spCtx);
 assert.match(lapDist, /D60/); assert.match(lapDist, /<200W>/);
 I.use("en"); I.setSpeechLang("en");
+const enCtx = { duration: I.speech.duration, watts: I.speech.watts };
+assert.equal(I.speech.lap({ kind: "dist", km: 1, dur: 60, avgP: 200, kmLimit: 5 }, enCtx), "1 kilometer. Last 5 in 1 minute, average 200 watts.");
+assert.equal(I.speech.lap({ kind: "dist", km: 2, dur: 60, avgP: 200, kmLimit: 5 }, enCtx), "2 kilometers. Last 5 in 1 minute, average 200 watts.");
+assert.equal(I.speech.strength({ kind: "work", n: "Squat", s: 1 }, null), "Squat, 1 second.");
+assert.equal(I.speech.strength({ kind: "work", n: "Squat", s: 30 }, null), "Squat, 30 seconds.");
 
 /* language index generator: build writes the manifest, check fails when it is stale */
 const fs = require("node:fs"), os = require("node:os"), path = require("node:path");

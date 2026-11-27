@@ -8,11 +8,12 @@
   "use strict";
 
   /* ---------- English speech defaults, copied from the app's original builders ---------- */
-  const watts = n => `${n} ${n === 1 ? "watt" : "watts"}`;
+  const enPlural = (() => { const pr = new Intl.PluralRules("en-GB"); return (n, one, other) => pr.select(n) === "one" ? one : other; })();
+  const watts = n => `${n} ${enPlural(n, "watt", "watts")}`;
   function duration(sec){
     sec = Math.round(sec); const m = Math.floor(sec / 60), x = sec % 60;
-    const mm = m ? `${m} ${m === 1 ? "minute" : "minutes"}` : "";
-    const ss = x ? `${x} ${x === 1 ? "second" : "seconds"}` : "";
+    const mm = m ? `${m} ${enPlural(m, "minute", "minutes")}` : "";
+    const ss = x ? `${x} ${enPlural(x, "second", "seconds")}` : "";
     return [mm, ss].filter(Boolean).join(" and ");
   }
   function cadence(lo, hi, any = 999){
@@ -40,7 +41,7 @@
       if(lap.cadTgt[0] >= 100 || lap.cadTgt[1] <= 70) return `Average cadence ${lap.avgCad}.`;
       return "";
     }
-    if(lap.kind === "dist") return `${lap.km} kilometers. Last ${lap.kmLimit} in ${dur(lap.dur)}, average ${watt(lap.avgP)}.`;
+    if(lap.kind === "dist") return `${lap.km} ${enPlural(lap.km, "kilometer", "kilometers")}. Last ${lap.kmLimit} in ${dur(lap.dur)}, average ${watt(lap.avgP)}.`;
     if(lap.score != null && lap.dur >= 30) return lap.kind === "hr" ? `Interval done. Average heart rate ${lap.avgHr}.`
       : `Interval done. Average ${watt(lap.avgP)}, ${lap.score} percent.`;
     return "";
@@ -48,7 +49,7 @@
   const finish = route => route ? "You made it to the finish." : "Workout complete. Well done.";
   function strength(step, next){
     if(step.kind === "rest") return `Rest. Next: ${next?.n || ""}.`;
-    if(step.kind === "work") return `${step.n || ""}, ${step.s} seconds.`;
+    if(step.kind === "work") return `${step.n || ""}, ${step.s} ${enPlural(step.s, "second", "seconds")}.`;
     return step.n || "";
   }
   const start = () => "Workout starting.";

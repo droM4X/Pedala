@@ -99,11 +99,34 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.ok(names.includes("zz:Endurance 60"), "a built-in workout label is translated");
     assert.ok(names.includes("Endurance 60"), "the imported name is unchanged");
     assert.equal(await z.evaluate(() => workoutLabel(extraWorkout("brick", 0))), "zz:Brick · 5 min run");
-    assert.equal(await z.evaluate(() => workoutLabel(PLAN_WO["p-z125"])), "zz:Zone 2 · 2.1 h");
+    assert.equal(await z.evaluate(() => workoutLabel(PLAN_WO["p-z125"])), "zz:Zone 2 · 2.1 zz:h");
     assert.match(await z.evaluate(() => sessionDesc(PLAN_WO["p-z50"])), /^zz:Steady Zone 2 ride/);
     assert.match(await z.evaluate(() => workoutLabel(BUILTIN_ROUTES[0])), /^zz:Sljeme/);
     await z.click('[data-view="plan"]');
     assert.match(await z.textContent("#plan-body"), /zz:Sustainable 14 weeks/);
+    await z.context().close();
+  });
+
+  await test("i18n: dates, numbers and plurals follow the active locale", async () => {
+    const p = await open();
+    assert.deepEqual(await p.evaluate(() => ({
+      short: shortDate(new Date(2026, 10, 27).getTime()),
+      day: shortDay(new Date(2026, 10, 27)),
+      coach: coachDate(new Date(2026, 10, 27, 14, 30).getTime()),
+      full: PedalaI18n.td(new Date(2026, 10, 27, 14, 30, 5).getTime(), { dateStyle: "short", timeStyle: "medium" }),
+      dur: fmtDur(300), hour: fmtDur(3600), zone: zoneTime(125),
+      num: numFixed(1234.5, 1),
+      one: PedalaI18n.tn(1, "{n} ride", "{n} rides", { n: 1 }),
+      many: PedalaI18n.tn(2, "{n} ride", "{n} rides", { n: 2 })
+    })), { short: "27/11", day: "Fri 27/11", coach: "Fri 27/11, 14:30", full: "27/11/2026, 14:30:05", dur: "5 min", hour: "1 h", zone: "2.1 h", num: "1234.5", one: "1 ride", many: "2 rides" });
+    await p.context().close();
+
+    const z = await open({ settings: { lang: "zz" } });
+    assert.deepEqual(await z.evaluate(() => ({
+      short: shortDate(new Date(2026, 10, 27).getTime()),
+      dur: fmtDur(300), hour: fmtDur(3600), zone: zoneTime(125),
+      many: PedalaI18n.tn(2, "{n} ride", "{n} rides", { n: 2 })
+    })), { short: "27/11", dur: "5 zz:min", hour: "1 zz:h", zone: "2.1 zz:h", many: "zz:2 rides" });
     await z.context().close();
   });
 
@@ -187,7 +210,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.equal(r.two, 1, "a lap closes at the configured length");
     assert.equal(r.kmLimit, 1, "the lap carries the length it was ridden at");
     await p.waitForTimeout(300);
-    assert.match((await p.evaluate(() => __spoken)).at(-1), /^1 kilometers\. Last 1 in 2 seconds, average 200 watts\.$/);
+    assert.match((await p.evaluate(() => __spoken)).at(-1), /^1 kilometer\. Last 1 in 2 seconds, average 200 watts\.$/);
     await p.context().close();
   });
 
