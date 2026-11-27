@@ -74,7 +74,7 @@
   "Add channels you like to watch, e.g. <b>@channelname</b> or a channel link, and their newest videos will show up here.",
   "Add playlist",
   "Adriatic coast",
-  "After every session the coach writes a short comment in English: on rides from Pedala and on everything else that reaches intervals.icu, such as runs and swims from a watch. Comments are under Progress and in the ride report. It works through OpenRouter with the key you add below (or OPENROUTER_API_KEY on Vercel), and only with the models that key may use.",
+  "After every session the coach writes a short comment in the language you chose for the interface: on rides from Pedala and on everything else that reaches intervals.icu, such as runs and swims from a watch. Comments are under Progress and in the ride report. It works through OpenRouter with the key you add below (or OPENROUTER_API_KEY on Vercel), and only with the models that key may use.",
   "AIza…",
   "All on the right pod: Y +, B −",
   "Alpe d'Huez",
