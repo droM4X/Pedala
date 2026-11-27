@@ -120,6 +120,68 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.context().close();
   });
 
+  await test("i18n: workout lists, history, progress and reports translate, imported names stay", async () => {
+    const z = await open({ settings: { lang: "zz" } });
+    await z.click('[data-view="workouts"]');
+    await z.waitForFunction(() => document.querySelectorAll("#wo-list .vsect").length > 0);
+    const sections = await z.$$eval("#wo-list .vsect", els => els.map(e => e.textContent));
+    assert.ok(sections.includes("zz:Base workouts"), "a workout category is translated");
+    assert.ok(sections.includes("zz:Strength at home"), "the strength category is translated");
+    const picks = await z.$$eval("#wo-list [data-pick]", els => els.map(e => e.textContent));
+    assert.ok(picks.includes("zz:Select"), "the workout action is translated");
+    assert.ok((await z.textContent("#wo-list")).includes("zz:To exhaustion, usually 20–30 min"), "the test workout description is translated");
+    const routes = await z.$$eval("#route-list [data-pick]", els => els.map(e => e.textContent));
+    assert.ok(routes.length && routes.every(x => x === "zz:Ride"), "the route action is translated");
+    await z.evaluate(() => { store.set("workouts", [{ id: "z-end", name: "Endurance 60", desc: "My import.", segs: [{ d: 60, lo: .5, hi: .5 }], imported: true }]); renderWorkouts(); });
+    assert.ok((await z.$$eval("#wo-list .item h3", els => els.map(e => e.textContent))).includes("Endurance 60"), "an imported workout name stays");
+
+    await z.evaluate(async () => {
+      await dbPut({ id: "r-zz", start: Date.now() - 3600e3, workoutId: null, name: "Imported ride", route: false, ftp: 230, maxHr: 190,
+        samples: Array.from({ length: 120 }, (_, i) => [i, 180 + (i % 40), 90, 150, 0, 60 * (i + 1), 0]),
+        m: { duration: 120, avgP: 200, maxP: 260, np: 210, tss: 20, IF: .87, kj: 24, distance: 2000, avgHr: 150, maxHr: 175, avgCad: 90, best: { s5: 600, m1: 450, m5: 330, m20: 260 } }, laps: [] });
+    });
+    await z.click('[data-view="history"]');
+    await z.waitForFunction(() => document.querySelectorAll("#ride-list [data-rep]").length === 1);
+    assert.match(await z.textContent("#weekbar"), /zz:Last 7 days/);
+    assert.match(await z.textContent("#weekbar"), /zz:ride/);
+    assert.ok((await z.$$eval("#ride-list .item h3", els => els.map(e => e.textContent)))[0].startsWith("Imported ride "), "the ride name stays");
+    assert.match(await z.textContent("#ride-list"), /zz:Report/);
+    assert.match(await z.textContent("#ride-list"), /zz:W avg/);
+    assert.match(await z.textContent("#ride-list"), /zz:Best: 5 s 600 W/);
+    await z.click("#ride-list [data-rep]");
+    await z.waitForFunction(() => /zz:Ride timeline/.test(document.querySelector("#rep-body").textContent));
+    const report = await z.textContent("#rep-body");
+    assert.match(report, /zz:Power distribution/);
+    assert.match(report, /zz:Power curve/);
+    assert.match(report, /zz:Best of the last 90 days/);
+    assert.match(await z.textContent("#rep-grid"), /zz:Time/);
+    assert.match(await z.textContent("#rep-grid"), /zz:Cadence/);
+    await z.evaluate(() => document.querySelector("#dlg-report").close());
+
+    await z.evaluate(() => {
+      window.__fills = []; const proto = CanvasRenderingContext2D.prototype;
+      if(!proto.__origFillText) proto.__origFillText = proto.fillText;
+      proto.fillText = function(s, ...a){ window.__fills.push(String(s)); return proto.__origFillText.call(this, s, ...a); };
+    });
+    await z.click('[data-view="progress"]');
+    await z.waitForFunction(() => window.__fills.some(x => x.startsWith("zz:Today: fitness")));
+    assert.match(await z.textContent("#pg-totals"), /zz:Last 30 days/);
+    assert.match(await z.textContent("#pg-totals"), /zz:Distance/);
+    assert.equal(await z.textContent("#pg-best small"), "zz:5 s");
+
+    await z.evaluate(() => {
+      S.workout = null; S.route = null; S.startMs = Date.now() - 120e3; S.laps = []; S.lap = null;
+      S.samples = Array.from({ length: 120 }, (_, i) => [i, 180 + (i % 40), 90, 150, 0, 60 * (i + 1), 0]);
+      openSummary();
+    });
+    await z.waitForFunction(() => document.querySelector("#dlg-summary").open);
+    assert.equal(await z.textContent("#sum-title"), "zz:Free ride", "the summary title is translated");
+    assert.match(await z.textContent("#sum-grid"), /zz:Average/, "the summary grid is translated");
+    assert.match(await z.textContent("#sum-grid"), /zz:Best minute/);
+    await z.evaluate(() => document.querySelector("#dlg-summary").close());
+    await z.context().close();
+  });
+
   await test("i18n: dates, numbers and plurals follow the active locale", async () => {
     const p = await open();
     assert.deepEqual(await p.evaluate(() => ({

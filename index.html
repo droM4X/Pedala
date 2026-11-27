@@ -1853,9 +1853,9 @@ function renderRoutes(){
   for(const r of allRoutes()){
     const el = document.createElement("div"); el.className = "item";
     const avg = r.len ? r.gain / r.len * 100 : 0;
-    el.innerHTML = `<div><h3></h3><p></p></div><div class="acts"><button class="btn small primary" data-pick>Ride</button>${r.builtin ? "" : '<button class="btn small danger" data-del>Remove</button>'}</div><canvas></canvas>`;
+    el.innerHTML = `<div><h3></h3><p></p></div><div class="acts"><button class="btn small primary" data-pick>${PedalaI18n.t("Ride")}</button>${r.builtin ? "" : `<button class="btn small danger" data-del>${PedalaI18n.t("Remove")}</button>`}</div><canvas></canvas>`;
     el.querySelector("h3").textContent = workoutLabel(r);
-    el.querySelector("p").textContent = `${numFixed(r.len / 1000, 1)} km · ↑${r.gain} m · average ${numFixed(avg, 1)} % · from ${Math.round(r.minEle)} to ${Math.round(r.maxEle)} m${r.desc ? " · " + sessionDesc(r) : ""}`;
+    el.querySelector("p").textContent = PedalaI18n.t("{km} km · ↑{gain} m · average {avg} % · from {min} to {max} m", { km: numFixed(r.len / 1000, 1), gain: r.gain, avg: numFixed(avg, 1), min: Math.round(r.minEle), max: Math.round(r.maxEle) }) + (r.desc ? " · " + sessionDesc(r) : "");
     el.querySelector("[data-pick]").onclick = () => setRoute(r);
     el.querySelector("[data-del]")?.addEventListener("click", () => { if(confirm("Remove this route?")){ store.set("routes", routes().filter(x => x.id !== r.id)); renderRoutes(); } });
     list.append(el);
@@ -1872,13 +1872,14 @@ function renderWorkouts(){
   const groups = [["base", "Base workouts"], ["drill", "Pedal drills"], ["hr", "By heart rate"], ["test", "Tests"], ["imported", "Imported"]];
   const all = allWorkouts(), catOf = w => w.imported ? "imported" : w.cat || "base";
   for(const [cat, title] of groups){ if(cat === "hr" && !settings.hrOn) continue; const ws = all.filter(w => catOf(w) === cat); if(!ws.length) continue;
-    const h = document.createElement("h3"); h.className = "vsect"; h.textContent = title; list.append(h);
+    const h = document.createElement("h3"); h.className = "vsect"; h.textContent = PedalaI18n.t(title); list.append(h);
   for(const w of ws){
     const el = document.createElement("div"); el.className = "item";
     const tss = w.test ? 0 : Math.round(estimateTss(w));
-    el.innerHTML = `<div><h3></h3><p></p></div><div class="acts"><button class="btn small primary" data-pick>Select</button>${w.imported ? '<button class="btn small danger" data-del>Remove</button>' : ""}</div><canvas></canvas>`;
+    el.innerHTML = `<div><h3></h3><p></p></div><div class="acts"><button class="btn small primary" data-pick>${PedalaI18n.t("Select")}</button>${w.imported ? `<button class="btn small danger" data-del>${PedalaI18n.t("Remove")}</button>` : ""}</div><canvas></canvas>`;
     el.querySelector("h3").textContent = workoutLabel(w);
-    el.querySelector("p").textContent = `${w.test ? "To exhaustion, usually 20–30 min" : fmtTime(totalDur(w)) + " · ~" + tss + " TSS"}${w.desc ? " · " + sessionDesc(w) : ""}`;
+    const meta = w.test ? PedalaI18n.t("To exhaustion, usually 20–30 min") : PedalaI18n.t("{time} · ~{tss} TSS", { time: fmtTime(totalDur(w)), tss });
+    el.querySelector("p").textContent = meta + (w.desc ? " · " + sessionDesc(w) : "");
     el.querySelector("[data-pick]").onclick = () => setWorkout(w);
     el.querySelector("[data-del]")?.addEventListener("click", () => { store.set("workouts", store.get("workouts", []).filter(x => x.id !== w.id)); renderWorkouts(); });
     list.append(el);
@@ -1886,11 +1887,11 @@ function renderWorkouts(){
       const maxF = Math.max(1.3, ...w.segs.map(s => Math.max(toWatts(w, s.lo), toWatts(w, s.hi)) / settings.ftp)) * 1.05; drawWorkoutBlocks(g, w, W, H, maxF, 1); });
   } }
   const sp = plan(), wi = isStrengthPlan(sp) ? Math.max(0, Math.min(STRENGTH.weeks - 1, Math.floor((Date.now() - fromYmd(sp.start)) / (7 * 864e5)))) : 0;
-  const h = document.createElement("h3"); h.className = "vsect"; h.textContent = "Strength at home"; isStrengthPlan(sp) ? list.prepend(h) : list.append(h);
+  const h = document.createElement("h3"); h.className = "vsect"; h.textContent = PedalaI18n.t("Strength at home"); isStrengthPlan(sp) ? list.prepend(h) : list.append(h);
   let at = h;
   for(const k of ["A", "B", "C"]){
     const w = strengthWorkout(k, wi), el = document.createElement("div"); el.className = "item";
-    el.innerHTML = `<div><h3></h3><p style="white-space:pre-line"></p></div><div class="acts"><button class="btn small primary">Start</button></div>`;
+    el.innerHTML = `<div><h3></h3><p style="white-space:pre-line"></p></div><div class="acts"><button class="btn small primary">${PedalaI18n.t("Start")}</button></div>`;
     el.querySelector("h3").textContent = `${sessionLabel(w)} · ${w.min} ${PedalaI18n.t("min")}`; el.querySelector("p").textContent = sessionDesc(w).split("\n")[0];
     el.querySelector("button").onclick = () => startStrength(w);
     at.after(el); at = el;
@@ -1907,15 +1908,15 @@ async function renderHistory(){
   let rides = []; try{ rides = await dbAll(); }catch(e){ console.warn(e); }
   rides.sort((a, b) => b.start - a.start);
   const now = Date.now(), wk = rides.filter(r => now - r.start < 7 * 864e5);
-  $("#weekbar").innerHTML = `<div><small>Last 7 days</small><b>${wk.length}</b> rides</div><div><small>Time</small><b>${fmtTime(wk.reduce((a,r)=>a+r.m.duration,0))}</b></div><div><small>TSS</small><b>${wk.reduce((a,r)=>a+r.m.tss,0)}</b></div><div><small>FTP</small><b>${settings.ftp}</b> W</div>`;
+  $("#weekbar").innerHTML = `<div><small>${PedalaI18n.t("Last 7 days")}</small><b>${wk.length}</b> ${PedalaI18n.tn(wk.length, "ride", "rides")}</div><div><small>${PedalaI18n.t("Time")}</small><b>${fmtTime(wk.reduce((a,r)=>a+r.m.duration,0))}</b></div><div><small>TSS</small><b>${wk.reduce((a,r)=>a+r.m.tss,0)}</b></div><div><small>FTP</small><b>${settings.ftp}</b> W</div>`;
   const list = $("#ride-list"); list.innerHTML = "";
-  if(!rides.length){ list.innerHTML = `<div class="item"><div><h3>No rides yet</h3><p>Ride your first workout and save it at the end. It will show up here.</p></div></div>`; return; }
+  if(!rides.length){ list.innerHTML = `<div class="item"><div><h3>${PedalaI18n.t("No rides yet")}</h3><p>${PedalaI18n.t("Ride your first workout and save it at the end. It will show up here.")}</p></div></div>`; return; }
   for(const r of rides){
     const el = document.createElement("div"); el.className = "item"; const m = r.m;
-    el.innerHTML = `<div><h3></h3><div class="metrics"><span><b>${fmtTime(m.duration)}</b></span><span><b>${m.avgP}</b>W avg</span><span><b>${m.np}</b>NP</span><span><b>${m.tss}</b>TSS</span><span><b>${m.IF}</b>IF</span>${m.avgHr ? `<span><b>${m.avgHr}</b>bpm</span>` : ""}<span><b>${numFixed(m.distance/1000, 1)}</b>km</span></div>
+    el.innerHTML = `<div><h3></h3><div class="metrics"><span><b>${fmtTime(m.duration)}</b></span><span><b>${m.avgP}</b>${PedalaI18n.t("W avg")}</span><span><b>${m.np}</b>NP</span><span><b>${m.tss}</b>TSS</span><span><b>${m.IF}</b>IF</span>${m.avgHr ? `<span><b>${m.avgHr}</b>bpm</span>` : ""}<span><b>${numFixed(m.distance/1000, 1)}</b>km</span></div>
       ${r.icu?.status === "error" ? `<p style="color:var(--z5)">intervals.icu: ${String(r.icu.error).replace(/[<>&]/g, "")}</p>` : ""}
-      <p>Best: 5 s ${m.best.s5} W · 1 min ${m.best.m1} W · 5 min ${m.best.m5 || "–"} W · 20 min ${m.best.m20 || "–"} W</p></div>
-      <div class="acts"><button class="btn small primary" data-rep>Report</button>${icuButton(r)}<button class="btn small" data-fit>.FIT</button><button class="btn small danger" data-del>Delete</button></div><canvas></canvas>`;
+      <p>${PedalaI18n.t("Best: 5 s {s5} W · 1 min {m1} W · 5 min {m5} W · 20 min {m20} W", { s5: m.best.s5, m1: m.best.m1, m5: m.best.m5 || "–", m20: m.best.m20 || "–" })}</p></div>
+      <div class="acts"><button class="btn small primary" data-rep>${PedalaI18n.t("Report")}</button>${icuButton(r)}<button class="btn small" data-fit>.FIT</button><button class="btn small danger" data-del>${PedalaI18n.t("Delete")}</button></div><canvas></canvas>`;
     el.querySelector("h3").textContent = `${rideLabel(r)} · ${PedalaI18n.td(r.start, { weekday: "short", day: "numeric", month: "numeric" })} ${PedalaI18n.td(r.start, { hour: "2-digit", minute: "2-digit" })}`;
     el.querySelector("[data-fit]").onclick = () => downloadFit(r);
     el.querySelector("[data-rep]").onclick = () => openReport(r);
@@ -1979,8 +1980,8 @@ function drawProgress(){
     return { n: rs.length, time: rs.reduce((x, r) => x + r.m.duration, 0), km: rs.reduce((x, r) => x + r.m.distance, 0) / 1000, tss: rs.reduce((x, r) => x + r.m.tss, 0), kj: rs.reduce((x, r) => x + r.m.kj, 0) }; };
   const cur = sumOf(0, 30), prev = sumOf(30, 60);
   const delta = k => { if(!prev[k]) return ""; const d = Math.round((cur[k] - prev[k]) / prev[k] * 100); return d ? `<span class="${d > 0 ? "up" : "down"}">${d > 0 ? "+" : ""}${d}%</span>` : ""; };
-  $("#pg-totals").innerHTML = `<div><small>Last 30 days</small><b>${cur.n}</b> rides${delta("n")}</div><div><small>Time</small><b>${fmtTime(cur.time)}</b>${delta("time")}</div>`
-    + `<div><small>Distance</small><b>${numFixed(cur.km, 0)}</b> km${delta("km")}</div><div><small>TSS</small><b>${cur.tss}</b>${delta("tss")}</div><div><small>Work</small><b>${cur.kj}</b> kJ${delta("kj")}</div>`;
+  $("#pg-totals").innerHTML = `<div><small>${PedalaI18n.t("Last 30 days")}</small><b>${cur.n}</b> ${PedalaI18n.tn(cur.n, "ride", "rides")}${delta("n")}</div><div><small>${PedalaI18n.t("Time")}</small><b>${fmtTime(cur.time)}</b>${delta("time")}</div>`
+    + `<div><small>${PedalaI18n.t("Distance")}</small><b>${numFixed(cur.km, 0)}</b> km${delta("km")}</div><div><small>TSS</small><b>${cur.tss}</b>${delta("tss")}</div><div><small>${PedalaI18n.t("Work")}</small><b>${cur.kj}</b> kJ${delta("kj")}</div>`;
 
   // fitness / fatigue / form, last 120 days
   const days = pmc(rides).slice(-120), n = days.length;
@@ -1993,7 +1994,7 @@ function drawProgress(){
   days.forEach((d, i) => { if(new Date(d.t).getDate() === 1 || (n < 40 && i % 7 === 0)) c1.xLabel(X1(i), shortDate(d.t)); });
   const last = days[n - 1];
   c1.g.textAlign = "left"; c1.g.textBaseline = "top"; c1.g.fillStyle = cssVar("--text"); c1.g.font = "600 12px Barlow, system-ui";
-  c1.g.fillText(`Today: fitness ${Math.round(last.ctl)} · fatigue ${Math.round(last.atl)} · form ${Math.round(last.tsb)}`, c1.L + 6, c1.T + 2);
+  c1.g.fillText(PedalaI18n.t("Today: fitness {ctl} · fatigue {atl} · form {tsb}", { ctl: Math.round(last.ctl), atl: Math.round(last.atl), tsb: Math.round(last.tsb) }), c1.L + 6, c1.T + 2);
 
   // weekly volume, last 12 weeks
   const w0 = weekStart(now), weeks = [];
@@ -2010,7 +2011,7 @@ function drawProgress(){
   const recent = rides.filter(r => r.start >= now - 42 * DAY);
   const top = (rs, k) => rs.reduce((b, r) => (r.m.best?.[k] || 0) > (b?.m.best[k] || 0) ? r : b, null);
   $("#pg-best").innerHTML = BEST.map(([k, lbl]) => { const a = top(rides, k), r = top(recent, k);
-    return `<div><small>${lbl}</small><b>${a ? a.m.best[k] : "–"}</b> W<p>${a ? shortDate(a.start) : "None yet"}${r ? ` · 6 wk: ${r.m.best[k]} W` : ""}</p></div>`; }).join("");
+    return `<div><small>${PedalaI18n.t(lbl)}</small><b>${a ? a.m.best[k] : "–"}</b> W<p>${a ? shortDate(a.start) : PedalaI18n.t("None yet")}${r ? ` · ${PedalaI18n.t("6 wk: {w} W", { w: r.m.best[k] })}` : ""}</p></div>`; }).join("");
 
   // FTP setting vs 20-minute estimate
   const year = rides.filter(r => r.start >= now - 365 * DAY); if(!year.length){ year.push(rides.at(-1)); }
@@ -2031,20 +2032,20 @@ async function exportBackup(){
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: "application/json" }));
   a.download = `pedala-kopija-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  toast(`Rides exported: ${data.rides.length}`);
+  toast(PedalaI18n.t("Rides exported: {n}", { n: data.rides.length }));
 }
 async function importBackup(file){
-  let data; try{ data = JSON.parse(await file.text()); }catch{ toast("The file is not a valid backup"); return; }
-  if(data?.app !== "pedala" || !Array.isArray(data.rides)){ toast("This is not a Pedala backup"); return; }
+  let data; try{ data = JSON.parse(await file.text()); }catch{ toast(PedalaI18n.t("The file is not a valid backup")); return; }
+  if(data?.app !== "pedala" || !Array.isArray(data.rides)){ toast(PedalaI18n.t("This is not a Pedala backup")); return; }
   const have = new Set((await dbAll()).map(r => r.id)); let n = 0;
   for(const r of data.rides) if(r?.id && r.m && !have.has(r.id)){ await dbPut(r); n++; }
   const merge = (key, list) => { const cur = store.get(key, []), ids = new Set(cur.map(x => x.id)); return store.set(key, cur.concat((list || []).filter(x => x?.id && !ids.has(x.id)))); };
   merge("workouts", data.workouts);
-  if(!merge("routes", data.routes)) toast("The routes did not fit in the browser");
+  if(!merge("routes", data.routes)) toast(PedalaI18n.t("The routes did not fit in the browser"));
   if(data.settings && confirm("Also take the settings from the backup (FTP, weight, gears)?")){ Object.assign(settings, data.settings); migratePauseOn(); store.set("settings", settings); fillSettings(); }
-  toast(`New rides imported: ${n}`); renderHistory();
+  toast(PedalaI18n.t("New rides imported: {n}", { n })); renderHistory();
 }
-$("#btn-backup").onclick = () => exportBackup().catch(e => toast("Export failed: " + e.message));
+$("#btn-backup").onclick = () => exportBackup().catch(e => toast(PedalaI18n.t("Export failed: {error}", { error: e.message })));
 $("#backup-file").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if(f) await importBackup(f); };
 
 /* ============ intervals.icu ============
@@ -2809,8 +2810,8 @@ const fmtDur = d => d < 60 ? d + " s" : d < 3600 ? d / 60 + " " + PedalaI18n.t("
 
 function reportHeader(r){
   const m = r.m;
-  return [["Time", fmtTime(m.duration)], ["Average", m.avgP + " W"], ["NP", m.np + " W"], ["TSS", m.tss], ["IF", m.IF], ["kJ", m.kj],
-    ["Best minute", m.best.m1 + " W"], ["HR", m.avgHr ? `${m.avgHr} / ${m.maxHr} bpm` : "–"], ["Cadence", m.avgCad ? m.avgCad + " rpm" : "–"], ["Distance", numFixed(m.distance / 1000, 1) + " km"]]
+  return [[PedalaI18n.t("Time"), fmtTime(m.duration)], [PedalaI18n.t("Average"), m.avgP + " W"], ["NP", m.np + " W"], ["TSS", m.tss], ["IF", m.IF], ["kJ", m.kj],
+    [PedalaI18n.t("Best minute"), m.best.m1 + " W"], [PedalaI18n.t("HR"), m.avgHr ? `${m.avgHr} / ${m.maxHr} bpm` : "–"], [PedalaI18n.t("Cadence"), m.avgCad ? m.avgCad + " rpm" : "–"], [PedalaI18n.t("Distance"), numFixed(m.distance / 1000, 1) + " km"]]
     .map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join("");
 }
 async function openReport(r){
@@ -2827,16 +2828,16 @@ async function renderReport(box, r){
     + `<td class="${l.cadTgt ? (l.cadHit ? "hit" : "miss") : ""}">${l.avgCad ?? "–"}${l.cadTgt ? ` <small style="color:var(--muted)">/ ${cadTxt(l.cadTgt)}</small>` : ""}</td>`
     + (scored.length ? `<td>${l.tgt != null ? l.tgt + (l.kind === "hr" ? " bpm" : " W") : "–"}</td><td class="${l.score == null ? "" : l.hit ? "hit" : "miss"}">${l.score != null ? l.score + "%" : ""}</td>` : "") + "</tr>").join("");
   box.className = "rep";
-  box.innerHTML = `<h3>Ride timeline</h3>
-    <div class="legend"><span><i style="background:var(--z3)"></i>Power (colour = zone)</span>${hasHr ? '<span><i style="background:var(--z6)"></i>HR</span>' : ""}</div>
+  box.innerHTML = `<h3>${PedalaI18n.t("Ride timeline")}</h3>
+    <div class="legend"><span><i style="background:var(--z3)"></i>${PedalaI18n.t("Power (colour = zone)")}</span>${hasHr ? `<span><i style="background:var(--z6)"></i>${PedalaI18n.t("HR")}</span>` : ""}</div>
     <canvas data-c="time"></canvas>
-    ${laps.length ? `<h3>${scored.length ? "Intervals" : "Laps"}</h3>
-      ${scored.length ? `<p class="score">Hit <b>${scored.filter(l => l.hit).length} of ${scored.length}</b> intervals (within ±5% of target).</p>` : ""}
-      <div class="laps-wrap"><table class="laps"><tr><th></th><th>Time</th><th>Distance</th><th>Power</th><th>HR</th><th>Cadence</th>${scored.length ? "<th>Target</th><th>Score</th>" : ""}</tr>${lapRows}</table></div>` : ""}
-    <div class="two"><div><h3>Power distribution</h3><canvas data-c="pdist"></canvas></div>
-      ${hasHr ? `<div><h3>Time in heart-rate zones</h3><canvas data-c="hdist"></canvas></div>` : ""}</div>
-    <h3>Power curve</h3>
-    <div class="legend"><span><i style="background:var(--text)"></i>This ride</span><span><i style="background:var(--faint)"></i>Best of the last 90 days</span></div>
+    ${laps.length ? `<h3>${scored.length ? PedalaI18n.t("Intervals") : PedalaI18n.t("Laps")}</h3>
+      ${scored.length ? `<p class="score">${PedalaI18n.tHtml("Hit <b>{hit} of {total}</b> intervals (within ±5% of target).", { hit: scored.filter(l => l.hit).length, total: scored.length })}</p>` : ""}
+      <div class="laps-wrap"><table class="laps"><tr><th></th><th>${PedalaI18n.t("Time")}</th><th>${PedalaI18n.t("Distance")}</th><th>${PedalaI18n.t("Power")}</th><th>${PedalaI18n.t("HR")}</th><th>${PedalaI18n.t("Cadence")}</th>${scored.length ? `<th>${PedalaI18n.t("Target")}</th><th>${PedalaI18n.t("Score")}</th>` : ""}</tr>${lapRows}</table></div>` : ""}
+    <div class="two"><div><h3>${PedalaI18n.t("Power distribution")}</h3><canvas data-c="pdist"></canvas></div>
+      ${hasHr ? `<div><h3>${PedalaI18n.t("Time in heart-rate zones")}</h3><canvas data-c="hdist"></canvas></div>` : ""}</div>
+    <h3>${PedalaI18n.t("Power curve")}</h3>
+    <div class="legend"><span><i style="background:var(--text)"></i>${PedalaI18n.t("This ride")}</span><span><i style="background:var(--faint)"></i>${PedalaI18n.t("Best of the last 90 days")}</span></div>
     <canvas data-c="curve"></canvas>`;
   await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));   // canvases need a layout to size
   const cv = k => box.querySelector(`[data-c="${k}"]`), P = r.samples.map(s => s[1]);
@@ -2887,8 +2888,8 @@ let pendingRide = null;
 function openSummary(){
   S.running = false; yt("pauseVideo");
   const m = metrics(S.samples, settings.ftp);
-  if(!m || m.duration < 10){ toast("Too short to save"); resetRide(); return; }
-  pendingRide = { id: "r-" + S.startMs, start: S.startMs, workoutId: S.workout?.id || null, name: S.workout ? S.workout.name : S.route ? S.route.name : "Free ride", route: !!S.route, ftp: settings.ftp, maxHr: settings.maxHr,
+  if(!m || m.duration < 10){ toast(PedalaI18n.t("Too short to save")); resetRide(); return; }
+  pendingRide = { id: "r-" + S.startMs, start: S.startMs, workoutId: S.workout?.id || null, name: S.workout ? S.workout.name : S.route ? S.route.name : PedalaI18n.t("Free ride"), route: !!S.route, ftp: settings.ftp, maxHr: settings.maxHr,
     samples: S.samples, m, laps: S.lap?.n ? [...S.laps, lapSummary(S.lap)] : [...S.laps] };
   $("#sum-title").textContent = rideLabel(pendingRide);
   $("#sum-sub").textContent = PedalaI18n.td(S.startMs, { dateStyle: "short", timeStyle: "medium" });
@@ -2896,8 +2897,8 @@ function openSummary(){
   const ftpBox = $("#sum-ftp"); ftpBox.innerHTML = "";
   if(S.workout?.test === "ramp" && m.best.m1){
     const est = Math.round(m.best.m1 * .75);
-    ftpBox.innerHTML = `<p>FTP estimate from the ramp test: <b style="color:var(--text)">${est} W</b> (now ${settings.ftp} W). If workouts feel too hard, lower it by 5%.</p><div class="dlg-acts" style="justify-content:flex-start;margin-bottom:14px"><button class="btn small primary" id="set-ftp">Set ${est} W</button><button class="btn small" id="set-ftp95">Set ${Math.round(est*.95)} W</button></div>`;
-    const setF = v => { settings.ftp = v; store.set("settings", settings); fillSettings(); toast("FTP set to " + v + " W"); };
+    ftpBox.innerHTML = `<p>${PedalaI18n.t("FTP estimate from the ramp test:")} <b style="color:var(--text)">${est} W</b> ${PedalaI18n.t("(now {ftp} W). If workouts feel too hard, lower it by 5%.", { ftp: settings.ftp })}</p><div class="dlg-acts" style="justify-content:flex-start;margin-bottom:14px"><button class="btn small primary" id="set-ftp">${PedalaI18n.t("Set {est} W", { est })}</button><button class="btn small" id="set-ftp95">${PedalaI18n.t("Set {est} W", { est: Math.round(est*.95) })}</button></div>`;
+    const setF = v => { settings.ftp = v; store.set("settings", settings); fillSettings(); toast(PedalaI18n.t("FTP set to {w} W", { w: v })); };
     $("#set-ftp").onclick = () => setF(est); $("#set-ftp95").onclick = () => setF(Math.round(est * .95));
   }
   $("#sum-resume").hidden = !!(S.workout && !currentSeg()) || !!(S.route && S.dist >= S.route.len);
@@ -2911,9 +2912,9 @@ function resetRide(){
 }
 $("#sum-save").onclick = async () => {
   const toIcu = icuOn() && settings.icuAuto !== false; if(toIcu) pendingRide.icu = { status: "pending" };
-  try{ await dbPut(pendingRide); toast(toIcu ? "Ride saved, sending to intervals.icu" : "Ride saved"); navigator.storage?.persist?.().catch(() => {}); }catch(e){ toast("Saving failed: " + e.message); return; }
+  try{ await dbPut(pendingRide); toast(toIcu ? PedalaI18n.t("Ride saved, sending to intervals.icu") : PedalaI18n.t("Ride saved")); navigator.storage?.persist?.().catch(() => {}); }catch(e){ toast(PedalaI18n.t("Saving failed: {error}", { error: e.message })); return; }
   const r = pendingRide; $("#dlg-summary").close(); resetRide();
-  const sess = planMarkRide(r); if(sess) toast(`Plan: ${sess.w.name} done`);
+  const sess = planMarkRide(r); if(sess) toast(PedalaI18n.t("Plan: {name} done", { name: sessionLabel(sess.w) }));
   syncNow(); coachAfterSave(r);
   if(toIcu) syncIcu(); else if(confirm("Download the .FIT file now?")) downloadFit(r); };
 $("#sum-discard").onclick = () => { if(confirm("Discard the ride without saving?")){ $("#dlg-summary").close(); resetRide(); } };
@@ -3284,14 +3285,14 @@ document.addEventListener("fullscreenchange", () => {
 $("#btn-freeride").onclick = () => setWorkout(null);
 $("#zwo-file").onchange = async e => {
   const saved = store.get("workouts", []); let ok = 0;
-  for(const f of e.target.files){ try{ saved.push(parseZwo(await f.text(), f.name)); ok++; }catch(err){ toast(`${f.name}: ${err.message}`); } }
-  store.set("workouts", saved); e.target.value = ""; if(ok) toast(`Workouts imported: ${ok}`); renderWorkouts();
+  for(const f of e.target.files){ try{ saved.push(parseZwo(await f.text(), f.name)); ok++; }catch(err){ toast(`${f.name}: ${PedalaI18n.t(err.message)}`); } }
+  store.set("workouts", saved); e.target.value = ""; if(ok) toast(PedalaI18n.t("Workouts imported: {n}", { n: ok })); renderWorkouts();
 };
 $("#gpx-file").onchange = async e => {
   let saved = routes(), ok = 0;
-  for(const f of e.target.files){ try{ saved.push(parseGpx(await f.text(), f.name)); ok++; }catch(err){ toast(`${f.name}: ${err.message}`); } }
-  if(!store.set("routes", saved)){ toast("No room for more routes. Remove an old one and try again."); ok = 0; }
-  e.target.value = ""; if(ok) toast(`Routes imported: ${ok}`); renderRoutes();
+  for(const f of e.target.files){ try{ saved.push(parseGpx(await f.text(), f.name)); ok++; }catch(err){ toast(`${f.name}: ${PedalaI18n.t(err.message)}`); } }
+  if(!store.set("routes", saved)){ toast(PedalaI18n.t("No room for more routes. Remove an old one and try again.")); ok = 0; }
+  e.target.value = ""; if(ok) toast(PedalaI18n.t("Routes imported: {n}", { n: ok })); renderRoutes();
 };
 window.addEventListener("resize", () => { drawProfile(); drawProgress(); if(overlayOn()) drawProfile($("#o-prof")); });
 window.addEventListener("beforeunload", e => { if(S.started){ e.preventDefault(); e.returnValue = ""; } });
