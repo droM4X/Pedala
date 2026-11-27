@@ -30,10 +30,29 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
       speechSynthesis.speak = u => { __spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 200); };
       if(st && !localStorage.getItem("pedala.settings")) localStorage.setItem("pedala.settings", JSON.stringify(st));
     }, [voices, settings]);
-    await p.goto(`${B}/?simspeed=${speed}`); await p.waitForTimeout(400);
+    await p.goto(`${B}/?simspeed=${speed}`);
+    await p.waitForFunction(() => window.__pedala && document.documentElement.dataset.i18n === "ready", null, { timeout: 5000 });
     return p;
   }
   const ride = async (p, secs) => { await p.click('[data-view="ride"]'); await p.click("#btn-start"); await p.waitForTimeout(secs); await p.click("#btn-end"); await p.waitForTimeout(500); };
+
+  await test("i18n: a dropped-in language file registers itself and translates the static shell", async () => {
+    const p = await open({ settings: { lang: "zz" } });
+    assert.match(await p.textContent('[data-view="ride"]'), /^zz:Ride$/);
+    assert.match(await p.textContent("h1"), /^zz:/);
+    assert.equal(await p.evaluate(() => document.documentElement.lang), "zz");
+    assert.equal(await p.evaluate(() => PedalaI18n.languages.has("zz")), true);
+    await p.context().close();
+  });
+
+  await test("i18n: an unknown language falls back to English with no page error", async () => {
+    const errorsBefore = pageErrors.length;
+    const p = await open({ settings: { lang: "xx" } });
+    assert.equal(await p.textContent('[data-view="ride"]'), "Ride");
+    assert.equal(await p.evaluate(() => document.documentElement.lang), "en");
+    assert.equal(pageErrors.length, errorsBefore);
+    await p.context().close();
+  });
 
   await test("soft start: flat road before the start and in pause, ERG ramps up from 40% FTP", async () => {
     const p = await open({ speed: 10 });

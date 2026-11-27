@@ -86,7 +86,7 @@ blob.del = async urls => { for(const u of [].concat(urls)) blobs.delete(String(u
 process.env.BLOB_READ_WRITE_TOKEN = "test";
 
 const api = { intervals: require("../../api/intervals.js"), youtube: require("../../api/youtube.js"), sync: require("../../api/sync.js"), coach: require("../../api/coach.js") };
-const TYPES = { ".png": "image/png", ".js": "text/javascript", ".webmanifest": "application/manifest+json", ".html": "text/html; charset=utf-8" };
+const TYPES = { ".png": "image/png", ".js": "text/javascript", ".json": "application/json", ".webmanifest": "application/manifest+json", ".html": "text/html; charset=utf-8" };
 
 function start(port = 0){
   const remote = createRemote();
@@ -101,6 +101,18 @@ function start(port = 0){
     }
     if(req.url.startsWith("/api/")){ res.statusCode = 404; return res.end("not found"); }
     if(remote.route(req, res)) return;
+    const pathname = decodeURIComponent(req.url.split("?")[0]);
+    if(pathname.startsWith("/lang/")){
+      const fixture = path.join(ROOT, "tests", "fixtures", "lang", path.posix.basename(pathname));
+      if(fs.existsSync(fixture) && fs.statSync(fixture).isFile()){
+        res.setHeader("content-type", TYPES[path.extname(fixture)] || "text/javascript"); return res.end(fs.readFileSync(fixture));
+      }
+      const real = path.join(ROOT, pathname);
+      if(real.startsWith(ROOT + path.sep) && !real.includes("node_modules") && fs.existsSync(real) && fs.statSync(real).isFile()){
+        res.setHeader("content-type", TYPES[path.extname(real)] || "application/octet-stream"); return res.end(fs.readFileSync(real));
+      }
+      res.statusCode = 404; res.setHeader("content-type", "text/plain"); return res.end("language not found");
+    }
     const file = path.join(ROOT, decodeURIComponent(req.url.split("?")[0]));
     if(req.url !== "/" && file.startsWith(ROOT + path.sep) && !file.includes("node_modules") && fs.existsSync(file) && fs.statSync(file).isFile()){
       res.setHeader("content-type", TYPES[path.extname(file)] || "application/octet-stream"); return res.end(fs.readFileSync(file));
