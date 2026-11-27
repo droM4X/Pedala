@@ -1626,7 +1626,7 @@ function setMusic(m, play = true){
   musicOn = play; $("#mus-play").textContent = play ? "⏸" : "▶"; $("#mus-prev").hidden = $("#mus-next").hidden = !m.list; $("#music-title").textContent = m.title || m.list ? PedalaI18n.t("Playlist") : PedalaI18n.t("Music");
   store.set("music", m);
 }
-const MUS_CHIPS = ["Workout mix", "Workout techno", "Workout rock", "Drum and bass", "Lo-fi", "Croatian hits", "Epic motivation"];
+const MUS_CHIPS = ["Workout mix", "Workout techno", "Workout rock", "Drum and bass", "Lo-fi", "Epic motivation"];
 const recentMusic = () => store.get("recentMusic", []);
 function rememberMusic(m){ const k = x => (x.id || "") + (x.list || ""), r = recentMusic().filter(x => k(x) !== k(m)); r.unshift(m); store.set("recentMusic", r.slice(0, 8)); }
 const pickMusic = m => { rememberMusic(m); setMusic(m); hidePicker(); };
