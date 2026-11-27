@@ -1,5 +1,7 @@
-// Local stand-in for Vercel used by the tests: serves the app and runs the real api/*.js functions,
-// with intervals.icu, the YouTube Data API, the OpenRouter API and Vercel Blob replaced by small in-memory fakes.
+// Local stand-in for Vercel used by the tests: serves the app and runs the real api/*.js functions.
+// It has two modes. The tests call start(), which installs small in-memory fakes for intervals.icu, the
+// YouTube Data API, the OpenRouter API and Vercel Blob, so they need no key and no network. `npm run dev`
+// calls start(port, { fakes: false }), so the app uses the real APIs; the Vercel login is bypassed locally.
 const http = require("http"), fs = require("fs"), path = require("path");
 const ROOT = path.join(__dirname, "..", "..");
 const { createRemote } = require("../../lib/remote.js");
@@ -9,14 +11,6 @@ let uploads = 0; const seenFit = new Map();
 const GOOD_ICU = "Basic " + Buffer.from("API_KEY:goodkey").toString("base64");
 const realFetch = global.fetch;
 const J = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
-
-global.fetch = async (url, opt = {}) => {
-  url = String(url);
-  if(url.startsWith("https://www.googleapis.com")) return fakeYouTube(new URL(url));
-  if(url.startsWith("https://intervals.icu")) return fakeIntervals(new URL(url), opt);
-  if(url.startsWith("https://openrouter.ai")) return fakeOpenRouter(new URL(url), opt);
-  return realFetch(url, opt);
-};
 
 function fakeYouTube(u){
   const P = u.pathname, q = k => u.searchParams.get(k);
@@ -103,18 +97,32 @@ async function fakeOpenRouter(u, opt){
   return J({ error: { message: "not found" } }, 404);
 }
 
-/* Vercel Blob, private store, in memory */
+/* Vercel Blob, private store, in memory: only the tests' store; the real module stays in place for dev */
 const blob = require("@vercel/blob"), blobs = new Map();
-blob.put = async (pathname, body) => { blobs.set(pathname, { url: "mem://" + pathname, pathname, body, uploadedAt: new Date() }); return { url: "mem://" + pathname, pathname }; };
-blob.get = async p => blobs.has(p) ? { statusCode: 200, stream: new Response(blobs.get(p).body).body } : null;
-blob.list = async ({ prefix }) => ({ blobs: [...blobs.values()].filter(b => b.pathname.startsWith(prefix)), hasMore: false });
-blob.del = async urls => { for(const u of [].concat(urls)) blobs.delete(String(u).replace("mem://", "")); };
-process.env.BLOB_READ_WRITE_TOKEN = "test";
+
+/* Install the test fakes. Called from start() only when fakes is true, so the e2e tests and
+   scripts/i18n-keys.js get the same in-memory answers as before, while `npm run dev` leaves global.fetch
+   and @vercel/blob untouched and does not invent a Blob token. */
+function installFakes(){
+  global.fetch = async (url, opt = {}) => {
+    url = String(url);
+    if(url.startsWith("https://www.googleapis.com")) return fakeYouTube(new URL(url));
+    if(url.startsWith("https://intervals.icu")) return fakeIntervals(new URL(url), opt);
+    if(url.startsWith("https://openrouter.ai")) return fakeOpenRouter(new URL(url), opt);
+    return realFetch(url, opt);
+  };
+  blob.put = async (pathname, body) => { blobs.set(pathname, { url: "mem://" + pathname, pathname, body, uploadedAt: new Date() }); return { url: "mem://" + pathname, pathname }; };
+  blob.get = async p => blobs.has(p) ? { statusCode: 200, stream: new Response(blobs.get(p).body).body } : null;
+  blob.list = async ({ prefix }) => ({ blobs: [...blobs.values()].filter(b => b.pathname.startsWith(prefix)), hasMore: false });
+  blob.del = async urls => { for(const u of [].concat(urls)) blobs.delete(String(u).replace("mem://", "")); };
+  process.env.BLOB_READ_WRITE_TOKEN = "test";
+}
 
 const api = { intervals: require("../../api/intervals.js"), youtube: require("../../api/youtube.js"), sync: require("../../api/sync.js"), coach: require("../../api/coach.js"), models: require("../../api/models.js") };
 const TYPES = { ".png": "image/png", ".js": "text/javascript", ".json": "application/json", ".webmanifest": "application/manifest+json", ".html": "text/html; charset=utf-8" };
 
-function start(port = 0){
+function start(port = 0, { fakes = true } = {}){
+  if(fakes) installFakes();
   const remote = createRemote();
   const server = http.createServer(async (req, res) => {
     res.status = c => { res.statusCode = c; return res; };
@@ -153,4 +161,5 @@ function start(port = 0){
   })));
 }
 module.exports = { start };
-if(require.main === module) start(+process.env.PORT || 8765).then(s => console.log("Pedala test server on " + s.url));
+if(require.main === module) start(+process.env.PORT || 8765, { fakes: false }).then(s => console.log(
+  `Pedala dev server on ${s.url}: real APIs, no test fakes (OpenRouter, intervals.icu, YouTube and Vercel Blob need their own keys; the coach can use the device key from Settings); the Vercel login is bypassed locally.`));
