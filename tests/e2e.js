@@ -223,6 +223,34 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await z.context().close();
   });
 
+  await test("i18n: Hungarian translates the UI, dates, numbers and ride plurals", async () => {
+    const errorsBefore = pageErrors.length;
+    const p = await open({ settings: { lang: "hu" } });
+    assert.equal(await p.textContent('[data-view="ride"]'), "Tekerés");
+    assert.equal(await p.textContent('[data-view="settings"] .tl'), "Beállítások");
+    assert.equal(await p.evaluate(() => document.documentElement.lang), "hu");
+    assert.equal(await p.evaluate(() => document.documentElement.dir), "ltr");
+    assert.equal(await p.textContent("#tgt-lbl"), "Szabad tekerés");
+    assert.deepEqual(await p.evaluate(() => ({
+      short: shortDate(new Date(2026, 10, 27).getTime()),
+      day: shortDay(new Date(2026, 10, 27)),
+      full: PedalaI18n.td(new Date(2026, 10, 27, 14, 30, 5).getTime(), { dateStyle: "short", timeStyle: "medium" }),
+      num: numFixed(1234.5, 1),
+      one: PedalaI18n.tn(1, "{n} ride", "{n} rides", { n: 1 }),
+      many: PedalaI18n.tn(2, "{n} ride", "{n} rides", { n: 2 })
+    })), { short: "11. 27.", day: "11. 27., P", full: "2026. 11. 27. 14:30:05", num: "1234,5", one: "1 tekerés", many: "2 tekerés" });
+    await p.evaluate(() => setWorkout(allWorkouts().find(w => w.id === "b-ss")));
+    assert.equal(await p.textContent("#tgt-lbl"), "Cél");
+    assert.match(await p.textContent("#iv-lbl"), /^Intervallum 1 \/ \d+$/);
+    await p.click('[data-view="settings"]');
+    assert.equal(await p.locator('[name="lang"] option[value="hu"]').textContent(), "Magyar");
+    const note = p.locator('p[data-i18n^="A free training analysis service"]');
+    assert.match(await note.textContent(), /^Ingyenes edzésanalízis-szolgáltatás/);
+    assert.match(await note.evaluate(el => el.innerHTML), /<b>API-kulcsot<\/b>/);
+    assert.equal(pageErrors.length, errorsBefore);
+    await p.context().close();
+  });
+
   await test("i18n: plan, strength player, settings status and confirms translate; coach text stays raw", async () => {
     const z = await open({ settings: { lang: "zz" } });
     await z.click('[data-view="plan"]');
