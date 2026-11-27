@@ -928,7 +928,7 @@ const BUILTIN = [
       s.push({d:300,lo:.5,hi:.42}); return s; })()},
   { id:"b-ramp", cat:"test", name:"Ramp test", desc:"+20 W every minute until you can't go on. FTP = 75% of your best minute. When you stop, press Finish.", abs:true, test:"ramp", segs:(() => {
       const s=[{d:300,lo:100,hi:100}]; for(let w=120; w<=700; w+=20) s.push({d:60,lo:w,hi:w}); return s; })()},
-];
+].map(w => ({ ...w, builtin: true }));
 
 const cadOf = v => isNaN(v) || v <= 0 ? undefined : [v - 5, v + 5];   // Zwift gives one number; allow ±5 rpm
 function parseZwo(text, fileName){
@@ -1848,8 +1848,8 @@ function renderRoutes(){
     const el = document.createElement("div"); el.className = "item";
     const avg = r.len ? r.gain / r.len * 100 : 0;
     el.innerHTML = `<div><h3></h3><p></p></div><div class="acts"><button class="btn small primary" data-pick>Ride</button>${r.builtin ? "" : '<button class="btn small danger" data-del>Remove</button>'}</div><canvas></canvas>`;
-    el.querySelector("h3").textContent = r.name;
-    el.querySelector("p").textContent = `${(r.len / 1000).toFixed(1)} km · ↑${r.gain} m · average ${avg.toFixed(1)} % · from ${Math.round(r.minEle)} to ${Math.round(r.maxEle)} m${r.desc ? " · " + r.desc : ""}`;
+    el.querySelector("h3").textContent = workoutLabel(r);
+    el.querySelector("p").textContent = `${(r.len / 1000).toFixed(1)} km · ↑${r.gain} m · average ${avg.toFixed(1)} % · from ${Math.round(r.minEle)} to ${Math.round(r.maxEle)} m${r.desc ? " · " + sessionDesc(r) : ""}`;
     el.querySelector("[data-pick]").onclick = () => setRoute(r);
     el.querySelector("[data-del]")?.addEventListener("click", () => { if(confirm("Remove this route?")){ store.set("routes", routes().filter(x => x.id !== r.id)); renderRoutes(); } });
     list.append(el);
@@ -1871,8 +1871,8 @@ function renderWorkouts(){
     const el = document.createElement("div"); el.className = "item";
     const tss = w.test ? 0 : Math.round(estimateTss(w));
     el.innerHTML = `<div><h3></h3><p></p></div><div class="acts"><button class="btn small primary" data-pick>Select</button>${w.imported ? '<button class="btn small danger" data-del>Remove</button>' : ""}</div><canvas></canvas>`;
-    el.querySelector("h3").textContent = w.name;
-    el.querySelector("p").textContent = `${w.test ? "To exhaustion, usually 20–30 min" : fmtTime(totalDur(w)) + " · ~" + tss + " TSS"}${w.desc ? " · " + w.desc : ""}`;
+    el.querySelector("h3").textContent = workoutLabel(w);
+    el.querySelector("p").textContent = `${w.test ? "To exhaustion, usually 20–30 min" : fmtTime(totalDur(w)) + " · ~" + tss + " TSS"}${w.desc ? " · " + sessionDesc(w) : ""}`;
     el.querySelector("[data-pick]").onclick = () => setWorkout(w);
     el.querySelector("[data-del]")?.addEventListener("click", () => { store.set("workouts", store.get("workouts", []).filter(x => x.id !== w.id)); renderWorkouts(); });
     list.append(el);
@@ -1885,7 +1885,7 @@ function renderWorkouts(){
   for(const k of ["A", "B", "C"]){
     const w = strengthWorkout(k, wi), el = document.createElement("div"); el.className = "item";
     el.innerHTML = `<div><h3></h3><p style="white-space:pre-line"></p></div><div class="acts"><button class="btn small primary">Start</button></div>`;
-    el.querySelector("h3").textContent = `${w.name} · ${w.min} min`; el.querySelector("p").textContent = w.desc.split("\n")[0];
+    el.querySelector("h3").textContent = `${sessionLabel(w)} · ${w.min} min`; el.querySelector("p").textContent = sessionDesc(w).split("\n")[0];
     el.querySelector("button").onclick = () => startStrength(w);
     at.after(el); at = el;
   }
@@ -1910,7 +1910,7 @@ async function renderHistory(){
       ${r.icu?.status === "error" ? `<p style="color:var(--z5)">intervals.icu: ${String(r.icu.error).replace(/[<>&]/g, "")}</p>` : ""}
       <p>Best: 5 s ${m.best.s5} W · 1 min ${m.best.m1} W · 5 min ${m.best.m5 || "–"} W · 20 min ${m.best.m20 || "–"} W</p></div>
       <div class="acts"><button class="btn small primary" data-rep>Report</button>${icuButton(r)}<button class="btn small" data-fit>.FIT</button><button class="btn small danger" data-del>Delete</button></div><canvas></canvas>`;
-    el.querySelector("h3").textContent = `${r.name} · ${new Date(r.start).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "numeric" })} ${new Date(r.start).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+    el.querySelector("h3").textContent = `${rideLabel(r)} · ${new Date(r.start).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "numeric" })} ${new Date(r.start).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
     el.querySelector("[data-fit]").onclick = () => downloadFit(r);
     el.querySelector("[data-rep]").onclick = () => openReport(r);
     el.querySelector("[data-icu]")?.addEventListener("click", () => queueIcu(r));
@@ -2357,8 +2357,8 @@ const PLAN_WO = Object.fromEntries([
   ["rec", "Active recovery", "20 minutes of easy spinning at 52% of FTP.", [PS(1200, .52)]],
   ["op", "Openers", "Easy, with two short 1-minute wake-ups at FTP.", [PS(600, .5, .7), PS(60, 1), PS(120, .5), PS(60, 1), PCD(660)]],
   ...[50, 60, 65, 75, 80, 95, 110, 125, 140, 155, 170, 180].map(m => [`z${m}`, `Zone 2 · ${m >= 120 ? (m / 60).toFixed(m % 60 ? 1 : 0) + " h" : m + " min"}`,
-    "Steady Zone 2 ride (65% of FTP). Conversational pace, cadence 85–95.", [PS(600, .5, .65), PS(m * 60 - 900, .65), PCD(300)]]),
-].map(([k, name, desc, segs]) => ["p-" + k, { id: "p-" + k, cat: "plan", name, desc, segs }]));
+    "Steady Zone 2 ride (65% of FTP). Conversational pace, cadence 85–95.", [PS(600, .5, .65), PS(m * 60 - 900, .65), PCD(300)], m]),
+].map(([k, name, desc, segs, zoneMin]) => ["p-" + k, { id: "p-" + k, cat: "plan", name, desc, segs, builtin: true, ...(zoneMin ? { zoneMin } : {}) }]));
 PLAN_WO["b-ramp"] = BUILTIN.find(w => w.id === "b-ramp");
 const PLAN = { id: "odrzivi14", name: "Sustainable 14 weeks", weeks: [
   ["t1", "v1", "z50"], ["t2", "v2", "z65"], ["t3", "v3", "z80"], ["rec", "op", "z50"],
@@ -2373,26 +2373,31 @@ const RUN_KM = [1, 1.5, 2, 1.5, 2.5, 3, 3.5, 2.5, 4, 4.5, 5, 3.5, 5.5, 6];
 const BRICK_MIN = [5, 5, 7, 5, 8, 10, 10, 7, 12, 12, 15, 10, 15, 15];
 const SWIM_TECH_MIN = [30, 30, 30, 30, 35, 35, 35, 30, 40, 40, 40, 30, 40, 40], SWIM_EASY_MIN = [30, 30, 35, 30, 35, 40, 40, 30, 40, 45, 45, 30, 45, 45];
 const km1 = n => String(n);
+/* Generated names and descriptions are composed from these English templates at display time. */
+const SWIM_TECH_DESC = `Warm up 200 m easy, resting as needed.\nDrills, 4 × 25 m each with 20–30 s rest:\n1) glide on your front: arms stretched forward, face in the water, breathe out slowly through your nose;\n2) kick with a board: loose ankles, kick from the hip, not the knee;\n3) side kick: lower arm stretched forward, 6 kicks, then turn your head to breathe;\n4) front crawl breathing out in the water and in every third stroke (every second if that is too hard).\nMain set: {main} easy, 30 s rest.\nFinish with 100 m relaxed.`;
+const SWIM_EASY_DESC = `Warm up 200 m. Main set: {main} easy, 30 s rest, then swim continuously for as long as it stays relaxed. Finish with 4 × 25 m glide on your front. The aim is an even rhythm and breathing, not speed.`;
+/* fill an English template with already-English data; the saved object must not depend on the active language */
+const fillVars = (s, vars) => String(s).replace(/\{(\w+)\}/g, (_, k) => vars?.[k] ?? `{${k}}`);
 function extraWorkout(kind, wi){
   const deload = PLAN.deload.includes(wi + 1);
-  if(kind === "swimTech" && wi === 13) return { id: "x-swimtest", sport: "swim", min: 30, name: "Test · 400 m swim",
+  if(kind === "swimTech" && wi === 13) return { id: "x-swimtest", sport: "swim", kind: "swimTest", m: 400, min: 30, name: "Test · 400 m swim", builtin: true,
     desc: "Warm up 200 m easy and 4 × 25 m glide. Then 400 m in one go, evenly and without stopping if you can (if not, rest at the wall as needed and note how often you stopped). Note your time: it is the starting point for swimming in the next block. Finish with 100 m relaxed." };
   if(kind === "swimTech"){
     const main = deload ? "6 × 50 m" : wi < 4 ? "8 × 50 m" : wi < 8 ? "10 × 50 m" : "6 × 100 m";
-    return { id: `x-swimtech-${wi + 1}`, sport: "swim", min: SWIM_TECH_MIN[wi], name: "Swim · technique",
-      desc: `Warm up 200 m easy, resting as needed.\nDrills, 4 × 25 m each with 20–30 s rest:\n1) glide on your front: arms stretched forward, face in the water, breathe out slowly through your nose;\n2) kick with a board: loose ankles, kick from the hip, not the knee;\n3) side kick: lower arm stretched forward, 6 kicks, then turn your head to breathe;\n4) front crawl breathing out in the water and in every third stroke (every second if that is too hard).\nMain set: ${main} easy, 30 s rest.\nFinish with 100 m relaxed.` };
+    return { id: `x-swimtech-${wi + 1}`, sport: "swim", kind: "swimTech", mainKey: main, min: SWIM_TECH_MIN[wi], name: "Swim · technique", builtin: true,
+      desc: fillVars(SWIM_TECH_DESC, { main }) };
   }
   if(kind === "swimEasy"){
     const main = deload ? "4 × 50 m" : wi < 4 ? "4 × 100 m (or 8 × 50 m)" : wi < 8 ? "5 × 100 m" : "3 × 200 m with 45 s rest";
-    return { id: `x-swimeasy-${wi + 1}`, sport: "swim", optional: true, min: SWIM_EASY_MIN[wi], name: "Swim · easy (optional)",
-      desc: `Warm up 200 m. Main set: ${main} easy, 30 s rest, then swim continuously for as long as it stays relaxed. Finish with 4 × 25 m glide on your front. The aim is an even rhythm and breathing, not speed.` };
+    return { id: `x-swimeasy-${wi + 1}`, sport: "swim", kind: "swimEasy", mainKey: main, optional: true, min: SWIM_EASY_MIN[wi], name: "Swim · easy (optional)", builtin: true,
+      desc: fillVars(SWIM_EASY_DESC, { main }) };
   }
-  if(kind === "brick") return { id: `x-brick-${wi + 1}`, sport: "run", min: BRICK_MIN[wi], name: `Brick · ${BRICK_MIN[wi]} min run`,
+  if(kind === "brick") return { id: `x-brick-${wi + 1}`, sport: "run", kind: "brick", min: BRICK_MIN[wi], name: `Brick · ${BRICK_MIN[wi]} min run`, builtin: true,
     desc: "Straight after the ride: running shoes on and an easy run. The aim is to get your legs used to switching from the bike, not pace. Heavy legs for the first minutes are normal." };
-  if(wi === 13) return { id: "x-run5k", sport: "run", km: 5, min: 40, name: "Test · 5 km run",
+  if(wi === 13) return { id: "x-run5k", sport: "run", kind: "run5k", km: 5, min: 40, name: "Test · 5 km run", builtin: true,
     desc: "10 min easy with a few short strides, then 5 km as fast as you can hold evenly: hold back on the first kilometre, finish strongest. Don't push through pain; if something starts to hurt, slow down or stop. Finish with 10 min of walking and easy running. Your time and average heart rate are the starting point for the next block." };
   const k = RUN_KM[wi];
-  return { id: `x-run-${wi + 1}`, sport: "run", km: k, min: Math.round(k * 8), name: `Run · ${k} km easy`,
+  return { id: `x-run-${wi + 1}`, sport: "run", kind: "run", km: k, min: Math.round(k * 8), name: `Run · ${k} km easy`, builtin: true,
     desc: "Very easy, at a pace you can talk at (heart rate in zone 2). If your heart rate climbs, walk for a minute and carry on; mixing running and walking is fine. If something still hurts the next day (knee, shin, Achilles), don't increase next week." };
 }
 const PLAN_EXTRA = [["mon", 0, "Mon", "swimTech"], ["tue2", 1.5, "Tue", "brick"], ["wed", 2, "Wed", "swimEasy"], ["fri", 4, "Fri", "run"]];
@@ -2440,11 +2445,11 @@ function renderPlan(){
   if(!p){
     const tw = PLAN.weeks.map(w => w.map(k => PLAN_WO[k.startsWith("b-") ? k : "p-" + k]));
     const sw = [0, 4, 8].map(i => strengthWorkout("A", i));
-    box.innerHTML = `<div class="plan-card"><h3>Strength at home · 12 weeks</h3>
+    box.innerHTML = `<div class="plan-card"><h3>${PedalaI18n.t("Strength at home · 12 weeks")}</h3>
       <p>Three bodyweight circuits a week (Monday legs and glutes, Wednesday upper body and core, Friday full body). All you need is a mat and a chair. Work grows from 30 s with 30 s rest to 45 s with 15 s rest, and weeks 4, 8 and 12 are easier. The app guides every session: it counts down, announces the exercises and ticks it off in the plan.</p>
       <p>Length: ${sw.map(w => w.min).join(" → ")} min</p>
       <div class="row"><label>Start (Monday) <input type="date" id="plan-start-s" value="${ymd(nextMonday())}"></label><button class="btn primary" id="plan-go-s">Start plan</button></div></div>
-      <div class="plan-card"><h3>${PLAN.name}</h3>
+      <div class="plan-card"><h3>${PedalaI18n.t(PLAN.name)}</h3>
       <p>Threshold on Tuesdays, VO2max on Thursdays, both 30 minutes at most: they get harder through denser intervals, not longer sessions. The Sunday Zone 2 ride grows from 50 minutes to 3 hours. Weeks 4, 8 and 12 are easier, and week 14 ends with a ramp test.</p>
       <p>Plus swims on Monday (technique) and Wednesday (easy, optional), a short brick run after Tuesday's ride and an easy run on Friday that grows from 1 to 6 km. The last week is tests: a 400 m swim, a 5 km run and the ramp test, as the starting point for the next block. Swims and runs happen outside Pedala and tick off by themselves when they reach intervals.icu.</p>
       <p>Longest weekday session: ${Math.max(...tw.flatMap(w => w.slice(0, 2)).map(woMin))} min · longest Sunday: ${Math.max(...tw.map(w => woMin(w[2])))} min · total ${tw.length * 3} rides.</p>
@@ -2459,7 +2464,7 @@ function renderPlan(){
   }
   const ss = planSessions(p), done = ss.filter(x => x.done), missed = ss.filter(x => x.past && !x.done && !x.skipped && !x.optional);
   const total = ss.filter(x => !x.optional || x.done).length;   // optional sessions count only when done
-  const strong = isStrengthPlan(p), NW = planWeeks(p), pname = strong ? "Strength at home · 12 weeks" : PLAN.name;
+  const strong = isStrengthPlan(p), NW = planWeeks(p), pname = PedalaI18n.t(strong ? "Strength at home · 12 weeks" : PLAN.name);
   const week = Math.min(NW, Math.max(1, Math.floor((new Date() - fromYmd(p.start)) / (7 * 864e5)) + 1));
   const next = ss.find(x => !x.done && !x.skipped && !x.past), hours = done.filter(isRide).reduce((a, x) => a + totalDur(x.w), 0) / 3600;
   const started = new Date() >= fromYmd(p.start), end = plusDays(fromYmd(p.start), NW * 7 - 1);
@@ -2468,7 +2473,7 @@ function renderPlan(){
       <div class="pbar"><i style="width:${Math.round(done.length / total * 100)}%"></i></div>
       <div class="pstats"><span><b>${done.length}</b> of ${total} done</span><span><b>${missed.length}</b> missed</span>${strong ? "" : `<span><b>${hours.toFixed(1)}</b>h ridden</span>`}${done.length + missed.length ? `<span><b>${Math.round(done.length / (done.length + missed.length) * 100)}%</b> consistency</span>` : ""}</div></div>
     ${next ? `<div class="plan-card"><p>${next.today ? "Today" : shortDay(next.date)} · ${next.w.sport === "strength" ? "strength" : next.w.sport === "swim" ? "swim" : next.day === "tue2" ? "brick" : next.w.sport === "run" ? "run" : next.day === "sun" ? "long ride" : next.day === "tue" ? "threshold" : "VO2max"}</p>
-      <h3>${next.w.name}${/\d (min|h)$/.test(next.w.name) ? "" : ` · ${woMin(next.w)} min`}</h3><p>${next.w.desc}</p>
+      <h3>${sessionLabel(next.w)}${/\d (min|h)$/.test(next.w.name) ? "" : ` · ${woMin(next.w)} min`}</h3><p>${sessionDesc(next.w)}</p>
       <div class="row">${isRide(next) ? `<button class="btn primary" id="plan-ride">Ride now</button>` : next.w.steps ? `<button class="btn primary" id="plan-go-next">Start</button>` : `<button class="btn primary" id="plan-done-next">Mark done</button>`}<button class="btn small" id="plan-next-more">More</button></div></div>` : `<div class="plan-card"><h3>Plan complete 🎉</h3><p>${strong ? "Well done! Ask the coach what's next." : "Do the ramp test if you haven't yet, and set your new FTP."}</p></div>`}
     <div class="weeks" id="plan-weeks"></div>
     <div class="plan-card" style="margin-top:12px"><h3>Calendar and reminder</h3>
@@ -2490,7 +2495,7 @@ function renderPlan(){
       const b = document.createElement("button"); b.type = "button";
       b.className = [x.w.sport, x.done && "done", x.skipped && "skipped", !x.done && !x.skipped && !x.optional && x.past && "missed", x.optional && "opt", x.today && "today"].filter(Boolean).join(" ");
       b.innerHTML = `<small>${x.label} ${shortDate(x.date)} ${x.done ? "✓" : x.skipped ? "–" : ""}</small><b></b><small>${woMin(x.w)} min</small>`;
-      b.querySelector("b").textContent = x.w.name; b.onclick = () => openSession(x);
+      b.querySelector("b").textContent = sessionLabel(x.w); b.onclick = () => openSession(x);
       el.querySelector(".sess").append(b);
     }
     weeks.append(el);
@@ -2508,8 +2513,8 @@ function renderPlan(){
   $("#plan-stop").onclick = () => { if(confirm(strong ? "End the plan?" : "End the plan? Your rides stay in History.")){ store.set("plan", null); renderPlan(); } };
 }
 function openSession(x){
-  $("#sess-title").textContent = x.w.name;
-  $("#sess-sub").textContent = `${shortDay(x.date)} · week ${x.week} · ${woMin(x.w)} min${x.swapped ? " · swapped" : ""}${x.done ? " · done" : x.skipped ? " · skipped" : ""}${x.w.segs ? " — " : "\n\n"}${x.w.desc}`;
+  $("#sess-title").textContent = sessionLabel(x.w);
+  $("#sess-sub").textContent = `${shortDay(x.date)} · week ${x.week} · ${woMin(x.w)} min${x.swapped ? " · swapped" : ""}${x.done ? " · done" : x.skipped ? " · skipped" : ""}${x.w.segs ? " — " : "\n\n"}${sessionDesc(x.w)}`;
   const acts = $("#sess-acts"); acts.innerHTML = "";
   const add = (label, cls, fn) => { const b = document.createElement("button"); b.className = "btn " + cls; b.textContent = label; b.onclick = () => { fn(); $("#dlg-sess").close(); }; acts.append(b); };
   add("Close", "", () => {});
@@ -2553,6 +2558,7 @@ const CIRCUITS = { A: ["squat", "lunge", "bridge", "sideLunge", "wallSit", "calf
 const CIRCUIT_NAME = { A: "legs and glutes", B: "upper body and core", C: "full body" };
 const STRENGTH = { id: "snaga12", weeks: 12, deload: [4, 8, 12], days: [["mon", 0, "Mon", "A"], ["wed", 2, "Wed", "B"], ["fri", 4, "Fri", "C"]] };
 const ROUND_REST = 60;
+const STRENGTH_DESC = `{rounds} rounds: {names}.\n{work} s work, {rest} s rest, a minute's rest between rounds.\nA 4-minute warm-up at the start and 3 minutes of stretching at the end. All you need is a mat and a chair. The app guides the session and announces each exercise.`;
 function strengthWorkout(k, wi){
   const ph = wi < 4 ? 0 : wi < 8 ? 1 : 2, [work, rest] = [[30, 30], [40, 20], [45, 15]][ph], rounds = [3, 3, 4][ph] - (STRENGTH.deload.includes(wi + 1) ? 1 : 0);
   const steps = WARMUP.map(([n, s]) => ({ kind: "warm", n, s }));
@@ -2563,9 +2569,42 @@ function strengthWorkout(k, wi){
   }
   steps.push(...COOLDOWN.map(([n, s]) => ({ kind: "cool", n, s })));
   const names = CIRCUITS[k].map(e => EX[e][0].toLowerCase());
-  return { id: `s-${k}-${wi + 1}`, sport: "strength", strength: k, steps, min: Math.round(steps.reduce((a, x) => a + x.s, 0) / 60),
+  return { id: `s-${k}-${wi + 1}`, sport: "strength", strength: k, rounds, work, rest, steps, builtin: true, min: Math.round(steps.reduce((a, x) => a + x.s, 0) / 60),
     name: `Strength ${k} · ${CIRCUIT_NAME[k]}`,
-    desc: `${rounds} rounds: ${names.join(", ")}.\n${work} s work, ${rest} s rest, a minute's rest between rounds.\nA 4-minute warm-up at the start and 3 minutes of stretching at the end. All you need is a mat and a chair. The app guides the session and announces each exercise.` };
+    desc: fillVars(STRENGTH_DESC, { rounds, names: names.join(", "), work, rest }) };
+}
+/* Display names and descriptions: built-in and generated objects translate; imported/user objects stay as they are. */
+function zoneTime(m){ return m >= 120 ? (m / 60).toFixed(m % 60 ? 1 : 0) + " h" : m + " min"; }
+function workoutLabel(w){
+  if(!w) return "";
+  if(!w.builtin) return w.name || "";
+  if(w.zoneMin != null) return PedalaI18n.t("Zone 2 · {time}", { time: zoneTime(w.zoneMin) });
+  if(w.kind === "brick") return PedalaI18n.t("Brick · {min} min run", { min: w.min });
+  if(w.kind === "run") return PedalaI18n.t("Run · {km} km easy", { km: w.km });
+  if(w.kind === "swimTest") return PedalaI18n.t("Test · {m} m swim", { m: w.m });
+  if(w.kind === "run5k") return PedalaI18n.t("Test · {km} km run", { km: w.km });
+  if(w.strength) return PedalaI18n.t("Strength {k} · {name}", { k: w.strength, name: PedalaI18n.t(CIRCUIT_NAME[w.strength]) });
+  return PedalaI18n.t(w.name || "");
+}
+function sessionLabel(w){ return workoutLabel(w); }
+function sessionDesc(w){
+  if(!w) return "";
+  if(!w.builtin) return w.desc || "";
+  if(w.kind === "swimTech") return PedalaI18n.t(SWIM_TECH_DESC, { main: PedalaI18n.t(w.mainKey) });
+  if(w.kind === "swimEasy") return PedalaI18n.t(SWIM_EASY_DESC, { main: PedalaI18n.t(w.mainKey) });
+  if(w.strength) return PedalaI18n.t(STRENGTH_DESC, { rounds: w.rounds, names: CIRCUITS[w.strength].map(e => PedalaI18n.t(EX[e][0]).toLowerCase()).join(", "), work: w.work, rest: w.rest });
+  return w.desc ? PedalaI18n.t(w.desc) : "";
+}
+function exerciseName(step){ return step?.n ? PedalaI18n.t(step.n) : ""; }
+function stepName(step){
+  if(!step) return "";
+  if(step.kind === "rest") return PedalaI18n.t(step.long ? "Rest between rounds" : "Rest");
+  return exerciseName(step);
+}
+/* Saved rides keep their captured name and lap names; a built-in workout title may re-derive from workoutId. */
+function rideLabel(r){
+  const w = r?.workoutId ? findWorkout(r.workoutId) : null;
+  return w?.builtin ? workoutLabel(w) : (r?.name || "");
 }
 const isStrengthPlan = p => p?.id === STRENGTH.id;
 const planWeeks = p => isStrengthPlan(p) ? STRENGTH.weeks : PLAN.weeks.length;
@@ -2574,7 +2613,7 @@ const planWeeks = p => isStrengthPlan(p) ? STRENGTH.weeks : PLAN.weeks.length;
 const WK = { steps: [], i: -1, left: 0, done: 0, total: 0, paused: false, timer: null, last: 0, sess: null, w: null };
 function startStrength(w, sess = null){
   Object.assign(WK, { steps: w.steps, i: -1, done: 0, total: w.steps.reduce((a, x) => a + x.s, 0), paused: false, sess, w, last: performance.now() });
-  $("#wk-title").textContent = w.name; $("#wk-pause").textContent = "Pause";
+  $("#wk-title").textContent = sessionLabel(w); $("#wk-pause").textContent = "Pause";
   $("#dlg-sess").open && $("#dlg-sess").close();
   $("#dlg-strength").showModal(); wakeLock(); wkNext();
   clearInterval(WK.timer); WK.timer = setInterval(wkTick, 200);
@@ -2589,9 +2628,9 @@ function wkNext(){
   const name = x => x.n || "", spoken = x => x.n || "";
   $("#wk-phase").textContent = st.kind === "warm" ? "Warm-up" : st.kind === "cool" ? "Stretching" : st.kind === "rest" ? "Rest"
     : `Round ${st.r}/${st.rounds} · exercise ${st.j}/${st.of}`;
-  $("#wk-name").textContent = st.kind === "rest" ? (st.long ? "Rest between rounds" : "Rest") : name(st);
+  $("#wk-name").textContent = stepName(st);
   $("#wk-cue").textContent = st.c || "";
-  $("#wk-next").textContent = nx ? `Next: ${name(nx)}` : "Last exercise";
+  $("#wk-next").textContent = nx ? `Next: ${exerciseName(nx)}` : "Last exercise";
   $("#dlg-strength").dataset.kind = st.kind;
   if(st.kind === "rest") say(() => `Rest. Next: ${spoken(nx)}.`);
   else say(() => st.kind === "work" ? `${spoken(st)}, ${st.s} seconds.` : spoken(st));
@@ -2680,8 +2719,8 @@ function downloadIcs(){
 /* once a day: what the plan says for today */
 function planToday(){
   const x = planSessions().find(s => s.today && !s.done && !s.skipped);
-  if(x && store.get("planToldOn", "") !== x.d){ store.set("planToldOn", x.d); notify(isRide(x) ? `Today's plan: ${x.w.name} · ${woMin(x.w)} min. Open Plan → Ride now.`
-    : `Today's plan: ${x.w.name} · about ${woMin(x.w)} min.`); }
+  if(x && store.get("planToldOn", "") !== x.d){ store.set("planToldOn", x.d); notify(isRide(x) ? `Today's plan: ${sessionLabel(x.w)} · ${woMin(x.w)} min. Open Plan → Ride now.`
+    : `Today's plan: ${sessionLabel(x.w)} · about ${woMin(x.w)} min.`); }
 }
 
 /* ============ sync (api/sync.js, Vercel Blob) ============
@@ -2769,7 +2808,7 @@ function reportHeader(r){
     .map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join("");
 }
 async function openReport(r){
-  $("#rep-title").textContent = r.name;
+  $("#rep-title").textContent = rideLabel(r);
   $("#rep-sub").textContent = new Date(r.start).toLocaleString("en-GB");
   $("#rep-grid").innerHTML = reportHeader(r); renderRepCoach(r);
   $("#rep-body").innerHTML = ""; $("#dlg-report").showModal();
@@ -2845,7 +2884,7 @@ function openSummary(){
   if(!m || m.duration < 10){ toast("Too short to save"); resetRide(); return; }
   pendingRide = { id: "r-" + S.startMs, start: S.startMs, workoutId: S.workout?.id || null, name: S.workout ? S.workout.name : S.route ? S.route.name : "Free ride", route: !!S.route, ftp: settings.ftp, maxHr: settings.maxHr,
     samples: S.samples, m, laps: S.lap?.n ? [...S.laps, lapSummary(S.lap)] : [...S.laps] };
-  $("#sum-title").textContent = pendingRide.name;
+  $("#sum-title").textContent = rideLabel(pendingRide);
   $("#sum-sub").textContent = new Date(S.startMs).toLocaleString("en-GB");
   $("#sum-grid").innerHTML = reportHeader(pendingRide); $("#sum-report").innerHTML = "";
   const ftpBox = $("#sum-ftp"); ftpBox.innerHTML = "";

@@ -81,6 +81,32 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.context().close();
   });
 
+  await test("i18n: built-in labels translate, generated labels compose, imported names stay", async () => {
+    const p = await open();
+    await p.click('[data-view="workouts"]');
+    assert.ok((await p.textContent("#wo-list")).includes("Endurance 60"));
+    assert.equal(await p.evaluate(() => workoutLabel(extraWorkout("run", 4))), "Run · 2.5 km easy");
+    assert.equal(await p.evaluate(() => workoutLabel(PLAN_WO["p-z50"])), "Zone 2 · 50 min");
+    assert.equal(await p.evaluate(() => sessionDesc(PLAN_WO["p-z50"])), "Steady Zone 2 ride (65% of FTP). Conversational pace, cadence 85–95.");
+    assert.equal(await p.evaluate(() => sessionLabel(strengthWorkout("A", 0))), "Strength A · legs and glutes");
+    assert.match(await p.evaluate(() => sessionDesc(strengthWorkout("A", 0))), /^3 rounds: squat,/);
+    assert.equal(await p.evaluate(() => workoutLabel(BUILTIN_ROUTES[0])), "Sljeme (Cener, Sljemenska cesta)");
+    await p.context().close();
+
+    const z = await open({ settings: { lang: "zz" } });
+    await z.evaluate(() => { store.set("workouts", [{ id: "z-endurance", name: "Endurance 60", desc: "Imported ride.", segs: [{ d: 60, lo: .5, hi: .5 }], imported: true }]); renderWorkouts(); });
+    const names = await z.$$eval("#wo-list .item h3", els => els.map(e => e.textContent));
+    assert.ok(names.includes("zz:Endurance 60"), "a built-in workout label is translated");
+    assert.ok(names.includes("Endurance 60"), "the imported name is unchanged");
+    assert.equal(await z.evaluate(() => workoutLabel(extraWorkout("brick", 0))), "zz:Brick · 5 min run");
+    assert.equal(await z.evaluate(() => workoutLabel(PLAN_WO["p-z125"])), "zz:Zone 2 · 2.1 h");
+    assert.match(await z.evaluate(() => sessionDesc(PLAN_WO["p-z50"])), /^zz:Steady Zone 2 ride/);
+    assert.match(await z.evaluate(() => workoutLabel(BUILTIN_ROUTES[0])), /^zz:Sljeme/);
+    await z.click('[data-view="plan"]');
+    assert.match(await z.textContent("#plan-body"), /zz:Sustainable 14 weeks/);
+    await z.context().close();
+  });
+
   await test("soft start: flat road before the start and in pause, ERG ramps up from 40% FTP", async () => {
     const p = await open({ speed: 10 });
     await p.click("#chip-trainer"); await p.click("#c-sim");
