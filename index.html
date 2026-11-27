@@ -622,6 +622,10 @@ dialog.wide .sum{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
       <label class="check note" style="display:flex"><input type="checkbox" id="icu-auto"> Send every saved ride to intervals.icu automatically</label>
       <h2 class="section-title">Virtual coach</h2>
       <p class="note">After every session Claude (Anthropic) writes a short comment in English: on rides from Pedala and on everything else that reaches intervals.icu, such as runs and swims from a watch. Comments are under Progress and in the ride report.</p>
+      <label class="note" style="display:block;max-width:520px">OpenRouter API key (kept on this device)
+        <input id="coach-key" type="text" autocomplete="off" spellcheck="false" placeholder="sk-or-v1-…" style="display:block;width:100%;margin-top:5px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit">
+      </label>
+      <div class="dlg-acts" style="justify-content:flex-start;margin:8px 0"><button class="btn small" id="btn-coach-key" type="button">Save and check</button></div>
       <p class="note" id="coach-status"></p>
       <label class="note" style="display:block;max-width:520px">The coach writes on its own<select id="coach-mode" style="display:block;margin-top:5px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit">
         <option value="week">A weekly review on Saturdays (recommended)</option><option value="each">A comment after every session</option><option value="off">Nothing, only when I ask</option></select></label>
@@ -2039,7 +2043,7 @@ function drawProgress(){
 
 /* ============ backup ============ */
 async function exportBackup(){
-  const data = { app: "pedala", version: 1, exported: Date.now(), settings, workouts: store.get("workouts", []), routes: routes(), rides: await dbAll() };
+  const data = { app: "pedala", version: 1, exported: Date.now(), settings: Object.fromEntries(Object.entries(settings).filter(([k]) => k !== "orKey")), workouts: store.get("workouts", []), routes: routes(), rides: await dbAll() };
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: "application/json" }));
   a.download = `pedala-kopija-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
@@ -2053,7 +2057,7 @@ async function importBackup(file){
   const merge = (key, list) => { const cur = store.get(key, []), ids = new Set(cur.map(x => x.id)); return store.set(key, cur.concat((list || []).filter(x => x?.id && !ids.has(x.id)))); };
   merge("workouts", data.workouts);
   if(!merge("routes", data.routes)) toast(PedalaI18n.t("The routes did not fit in the browser"));
-  if(data.settings && confirm(PedalaI18n.t("Also take the settings from the backup (FTP, weight, gears)?"))){ Object.assign(settings, data.settings); migratePauseOn(); store.set("settings", settings); fillSettings(); }
+  if(data.settings && confirm(PedalaI18n.t("Also take the settings from the backup (FTP, weight, gears)?"))){ delete data.settings.orKey; Object.assign(settings, data.settings); migratePauseOn(); store.set("settings", settings); fillSettings(); }
   toast(PedalaI18n.t("New rides imported: {n}", { n })); renderHistory();
 }
 $("#btn-backup").onclick = () => exportBackup().catch(e => toast(PedalaI18n.t("Export failed: {error}", { error: e.message })));
@@ -2146,9 +2150,12 @@ document.addEventListener("visibilitychange", () => { if(document.visibilityStat
    After every training session the coach writes a short comment: rides saved in Pedala right after saving, and every
    other activity that reaches intervals.icu (runs and swims from a watch…) when the app opens. Comments are kept in
    store "coach" (shared between devices) as { "ride:<id>" | "icu:<id>": { text | error | pending, at, title, date } }. */
-let coachServer = false;                                   // ANTHROPIC_API_KEY is set on Vercel
+let coachServer = false;                                   // OPENROUTER_API_KEY is set on Vercel
+const coachKey = () => (settings.orKey || "").trim();      // the key pasted in Settings, kept on this device only
+const coachEnabled = () => coachServer || !!coachKey();
+const coachAuth = () => (coachKey() ? { orKey: coachKey() } : {});
 const coachMode = () => settings.coachMode || "week";   // week: a review on Saturdays; each: a comment after every session; off
-const coachOn = () => coachServer && coachMode() === "each" && Date.now() > store.get("coachPause", 0);   // paused for 12 h when the credit runs out
+const coachOn = () => coachEnabled() && coachMode() === "each" && Date.now() > store.get("coachPause", 0);   // paused for 12 h when the credit runs out
 const coachNotes = () => store.get("coach", {});
 function saveCoachNote(key, note){
   const all = { ...coachNotes(), [key]: note };
@@ -2173,7 +2180,7 @@ async function coachAsk(key, payload, title, date){
   const old = coachNotes()[key]; if(old?.pending && Date.now() - old.at < 3 * 60000) return null;
   saveCoachNote(key, { pending: true, at: Date.now(), title, date }); renderCoachViews();
   try{
-    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "comment", icuKey: icuKey() || undefined,
+    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "comment", icuKey: icuKey() || undefined, ...coachAuth(),
       notes: settings.coachAbout || "", athlete: { ftp: settings.ftp, maxHr: settings.maxHr, weight: settings.weight }, ...payload }) });
     const j = await r.json().catch(() => ({}));
     if(r.status === 402) store.set("coachPause", Date.now() + 12 * 36e5);
@@ -2196,7 +2203,7 @@ function coachWeekPayload(){
 }
 async function coachWeek(manual = false){
   const sat = lastSaturday(), key = "week:" + ymd(sat), note = coachNotes()[key];
-  if(!manual && (!coachServer || coachMode() !== "week" || Date.now() <= store.get("coachPause", 0) || Date.now() - sat > 3 * 864e5 || note && (note.text || note.pending || Date.now() - note.at < 12 * 36e5))) return null;
+  if(!manual && (!coachEnabled() || coachMode() !== "week" || Date.now() <= store.get("coachPause", 0) || Date.now() - sat > 3 * 864e5 || note && (note.text || note.pending || Date.now() - note.at < 12 * 36e5))) return null;
   const { sessions, from } = coachWeekPayload(); let rides = [];
   try{ rides = (await dbAll()).filter(r => r.start >= from.getTime()).sort((a, b) => a.start - b.start).map(r => ({ datum: ymd(new Date(r.start)), naziv: r.name,
     min: Math.round(r.m.duration / 60), tss: r.m.tss, np: r.m.np, puls: r.m.avgHr || undefined,
@@ -2210,7 +2217,7 @@ async function coachCheck(){
   if(!coachOn() || !icuOn() || coachCheck.busy || Date.now() - (coachCheck.at || 0) < 10 * 60000) return;
   coachCheck.busy = true; coachCheck.at = Date.now();
   try{
-    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "list", icuKey: icuKey() || undefined }) });
+    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "list", icuKey: icuKey() || undefined, ...coachAuth() }) });
     if(!r.ok) return;
     const { activities = [] } = await r.json(), notes = coachNotes(), mine = (await dbAll()).map(x => x.start);
     const todo = activities.map(a => ({ ...a, t: Date.parse(a.start) }))
@@ -2250,12 +2257,12 @@ function renderCoachBox(){
     $("#coach-form").onsubmit = e => { e.preventDefault(); const q = $("#coach-q").value.trim(); if(!q) return; $("#coach-q").value = ""; coachQuestion(q).catch(() => {}); };
     $("#coach-q").addEventListener("keydown", e => { if(e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#coach-form").requestSubmit(); });
   }
-  $("#coach-form").hidden = $("#coach-week-row").hidden = !coachServer;
+  $("#coach-form").hidden = $("#coach-week-row").hidden = !coachEnabled();
   const month = coachMonthUsd(); $("#coach-month").textContent = month ? PedalaI18n.t("Coach this month: ≈ ${amount}", { amount: numFixed(month, 2) }) : "";
   const list = Object.entries(coachNotes()).sort((a, b) => (b[1].date || b[1].at) - (a[1].date || a[1].at)).slice(0, 10), el = $("#coach-list");
-  if(!coachServer && !list.length) el.innerHTML = `<p class="note">${PedalaI18n.t("The coach is off. See Settings → Virtual coach.")}</p>`;
+  if(!coachEnabled() && !list.length) el.innerHTML = `<p class="note">${PedalaI18n.t("The coach is off. See Settings → Virtual coach.")}</p>`;
   else if(!list.length) el.innerHTML = `<p class="note">${PedalaI18n.t("Comments will show up after your next session.")}</p>`;
-  else el.innerHTML = `<div class="list">` + list.map(([k, n]) => `<div class="item" data-k="${k}"><div><h3></h3>${coachNoteHtml(n)}</div>${n.error && coachServer ? `<div class="acts"><button class="btn small" data-retry>${PedalaI18n.t("Try again")}</button></div>` : ""}</div>`).join("") + `</div>`;
+  else el.innerHTML = `<div class="list">` + list.map(([k, n]) => `<div class="item" data-k="${k}"><div><h3></h3>${coachNoteHtml(n)}</div>${n.error && coachEnabled() ? `<div class="acts"><button class="btn small" data-retry>${PedalaI18n.t("Try again")}</button></div>` : ""}</div>`).join("") + `</div>`;
   el.querySelectorAll("[data-k]").forEach(item => {
     const k = item.dataset.k, n = coachNotes()[k];
     item.querySelector("h3").textContent = `${n.title || PedalaI18n.t("Workout")} · ${coachDate(n.date || n.at)}`;
@@ -2288,7 +2295,7 @@ async function coachQuestion(q){
     .map(n => ({ trening: n.title, datum: ymd(new Date(n.date || n.at)), komentar: n.text.slice(0, 600) }));
   const chat = coachChat().filter(x => x.a).slice(-2).flatMap(x => [{ sportas: x.q.slice(0, 400) }, { trener: x.a.slice(0, 600) }]);
   try{
-    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "ask", question: q, icuKey: icuKey() || undefined,
+    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "ask", question: q, icuKey: icuKey() || undefined, ...coachAuth(),
       notes: settings.coachAbout || "", athlete: { ftp: settings.ftp, maxHr: settings.maxHr, weight: settings.weight }, plan: p ? { sessions, options } : null, rides, comments, chat }) });
     const j = await r.json().catch(() => ({}));
     if(!r.ok) throw new Error(j.error || PedalaI18n.t("error {status}", { status: r.status }));
@@ -2327,7 +2334,7 @@ function renderRepCoach(r){
   const box = $("#rep-coach"); if(!box) return; box.dataset.ride = r.id;
   const n = coachNotes()["ride:" + r.id];
   box.innerHTML = n ? `<div class="rep"><h3>${PedalaI18n.t("Coach")}</h3>${coachNoteHtml(n)}</div>`
-    : coachServer ? `<div class="dlg-acts" style="justify-content:flex-start;margin:4px 0 0"><button class="btn small" id="rep-coach-go">${PedalaI18n.t("Coach's comment")}</button></div>` : "";
+    : coachEnabled() ? `<div class="dlg-acts" style="justify-content:flex-start;margin:4px 0 0"><button class="btn small" id="rep-coach-go">${PedalaI18n.t("Coach's comment")}</button></div>` : "";
   $("#rep-coach-go")?.addEventListener("click", () => coachRide(r).catch(e => toast(e.message)));
 }
 async function renderCoachViews(){
@@ -2336,13 +2343,23 @@ async function renderCoachViews(){
 }
 function fillCoach(){
   const st = $("#coach-status"); if(!st) return;
-  st.innerHTML = coachServer ? PedalaI18n.tHtml("The coach is on (OPENROUTER_API_KEY is set on Vercel). Other activities also need an intervals.icu key.")
+  st.innerHTML = coachKey() ? PedalaI18n.tHtml("The coach is on (key on this device). Other activities also need an intervals.icu key.")
+    : coachServer ? PedalaI18n.tHtml("The coach is on (OPENROUTER_API_KEY is set on Vercel). Other activities also need an intervals.icu key.")
     : PedalaI18n.tHtml("The coach is off. Add an OpenRouter API key in Settings (or OPENROUTER_API_KEY on Vercel).");
   $("#coach-mode").value = coachMode();
+  if(document.activeElement !== $("#coach-key")) $("#coach-key").value = settings.orKey || "";
   if(document.activeElement !== $("#coach-about")) $("#coach-about").value = settings.coachAbout || "";
+}
+/* the key stays on this device: localStorage, not in the sync and not in a backup */
+function coachSaveKey(){
+  settings.orKey = $("#coach-key").value.trim(); store.set("settings", settings);
+  store.set("coachPause", 0); store.set("coachPauseWhy", null);
+  fillCoach(); renderCoachViews();
 }
 $("#coach-mode").onchange = e => { settings.coachMode = e.target.value; store.set("settings", settings); };
 $("#coach-about").addEventListener("change", e => { settings.coachAbout = e.target.value.trim(); store.set("settings", settings); });
+$("#btn-coach-key").onclick = coachSaveKey;
+$("#coach-key").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); coachSaveKey(); } });
 
 /* ============ training plan ============
    "Sustainable 14 weeks", adapted: the Tuesday threshold and Thursday VO2max sessions last 30 minutes at most
@@ -2692,7 +2709,7 @@ async function planIcuTick(manual = false){
   if(!open.length) return;
   planIcuTick.busy = true; planIcuTick.at = Date.now();
   try{
-    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "list", icuKey: icuKey() || undefined }) });
+    const r = await fetch("/api/coach", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "list", icuKey: icuKey() || undefined, ...coachAuth() }) });
     if(!r.ok){ if(manual) toast(PedalaI18n.t("intervals.icu is not answering ({status})", { status: r.status })); return; }
     const { activities = [] } = await r.json(), used = new Set(Object.values(p.done || {})), hits = {};
     for(const x of open){
@@ -2743,7 +2760,7 @@ function planToday(){
    Settings, the plan, imported workouts and routes go up as time-stamped sections; the newest wins and plan
    progress from both devices is merged. Rides go up and down one by one; deleted rides travel as tombstones.
    API keys and device-only settings stay on the device. */
-const SYNC_SKIP = ["ytKey", "icuKey", "clickMap", "voiceName", "clickOn", "hrOn", "lang"];
+const SYNC_SKIP = ["ytKey", "icuKey", "orKey", "clickMap", "voiceName", "clickOn", "hrOn", "lang"];
 var syncBusy = false, syncTimer = null, syncOff = false;   // var: store.set may call syncSoon before this line runs
 function syncSoon(){ clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(), 3000); }
 const publicSettings = () => Object.fromEntries(Object.entries(settings).filter(([k]) => !SYNC_SKIP.includes(k)));

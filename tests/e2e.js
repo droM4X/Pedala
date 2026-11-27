@@ -690,6 +690,35 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     srv.setEnv({ OPENROUTER_API_KEY: null }); await p.context().close();
   });
 
+  await test("coach: the key from Settings travels with every request and stays out of the backup", async () => {
+    srv.setEnv({ OPENROUTER_API_KEY: null }); srv.setOpenRouter({ reset: true }); srv.openrouter.length = 0;
+    const p = await open({ settings: { ftp: 160, maxHr: 185, weight: 100, coachMode: "off" } });
+    await p.click('[data-view="settings"]'); await p.fill("#coach-key", "sk-device"); await p.click("#btn-coach-key"); await p.waitForTimeout(600);
+    assert.match(await p.textContent("#coach-status"), /key on this device/i);
+    await p.evaluate(() => coachAsk("ride:r-key", { ride: { id: "r-key", name: "Key ride", start: new Date().toISOString(), m: { duration: 900 } } }, "Key ride", Date.now()));
+    assert.equal(srv.openrouterAuth.at(-1), "Bearer sk-device", "the device key is the one OpenRouter sees");
+    assert.equal(await p.evaluate(() => coachNotes()["ride:r-key"].text), "Good workout. Your heart rate is steady; keep it up.");
+    assert.equal(await p.evaluate(() => "orKey" in publicSettings()), false, "the key never syncs");
+    const exported = await p.evaluate(async () => {
+      const orig = URL.createObjectURL; let text = "";
+      URL.createObjectURL = b => { b.text().then(t => text = t); return "blob:x"; };
+      await exportBackup(); URL.createObjectURL = orig;
+      await new Promise(r => setTimeout(r, 50)); return text;
+    });
+    assert.doesNotMatch(exported, /sk-device/); assert.match(exported, /"ftp":\d+/, "the rest of the settings are in the backup");
+    await p.context().close();
+  });
+
+  await test("coach: without a key on the device or on Vercel the coach and the picker say so", async () => {
+    srv.setEnv({ OPENROUTER_API_KEY: null });
+    const p = await open({ settings: { coachMode: "each" } });
+    await p.click('[data-view="settings"]'); await p.waitForTimeout(400);
+    assert.match(await p.textContent("#coach-status"), /add an OpenRouter API key/i);
+    await p.click('[data-view="progress"]'); await p.waitForSelector("#coach-box");
+    assert.equal(await p.locator("#coach-form").isHidden(), true);
+    await p.context().close();
+  });
+
   await test("plan: swims and runs are in the plan and tick off from intervals.icu, the coach sees the day's target", async () => {
     srv.setEnv({ OPENROUTER_API_KEY: "sk-test" }); srv.setOpenRouter({ reset: true }); srv.openrouter.length = 0;
     const p = await open();
