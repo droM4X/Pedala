@@ -1044,7 +1044,7 @@ const CLIMBS = [
     desc: "From Poklon to the Vojak lookout: 7 km, about 475 m, an even climb." },
   { id: "c-biokovo", name: "Biokovo – Sveti Jure", from: "park entrance", start: 365, secs: [[14.5, 5.76], [1.5, 1], [7, 7.8]],
     desc: "23 km and almost 1400 m. It flattens briefly at the Skywalk, then a steep finish to the top." },
-  { id: "c-alpe", name: "Alps d'Huez", from: "Bourg d'Oisans", start: 744, secs: [[.5, 3], [2, 10.5], [10, 8.3], [1.8, 3.6]],
+  { id: "c-alpe", name: "Alpe d'Huez", from: "Bourg d'Oisans", start: 744, secs: [[.5, 3], [2, 10.5], [10, 8.3], [1.8, 3.6]],
     desc: "21 hairpins, 1120 m. The first two kilometres are the steepest (over 10%); the end is gentler." },
   { id: "c-ventoux", name: "Mont Ventoux", from: "Bédoin", start: 312, secs: [[1, 2.5], [3.6, 4.9], [.5, 6], [9.5, 9.4], [1.2, 5], [4.9, 7.9]],
     desc: "The Giant of Provence: a gentle start, then 10 km of forest at 9–10%, a breather at Chalet Reynard and the bare summit." },
@@ -1458,7 +1458,7 @@ function hidePicker(){
 }
 
 /* video search (YouTube Data API v3) */
-const VID_CHIPS = ["Dolomites", "Stelvio", "Alps d'Huez", "Mallorca", "Adriatic coast", "Tuscany", "Norway", "Swiss Alps", "Gravel forest"];
+const VID_CHIPS = ["Dolomites", "Stelvio", "Alpe d'Huez", "Mallorca", "Adriatic coast", "Tuscany", "Norway", "Swiss Alps", "Gravel forest"];
 const recentVideos = () => store.get("recentVideos", []);
 function rememberVideo(v){ const r = recentVideos().filter(x => x.id !== v.id); r.unshift(v); store.set("recentVideos", r.slice(0, 12)); }
 function isoDur(d){ const m = String(d).match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/); return m ? (+m[1]||0)*3600 + (+m[2]||0)*60 + (+m[3]||0) : 0; }

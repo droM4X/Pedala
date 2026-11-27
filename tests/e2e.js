@@ -109,6 +109,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.equal(await p.evaluate(() => sessionLabel(strengthWorkout("A", 0))), "Strength A · legs and glutes");
     assert.match(await p.evaluate(() => sessionDesc(strengthWorkout("A", 0))), /^3 rounds: squat,/);
     assert.equal(await p.evaluate(() => workoutLabel(BUILTIN_ROUTES[0])), "Sljeme (Cener, Sljemenska cesta)");
+    assert.equal(await p.evaluate(() => BUILTIN_ROUTES.find(r => r.id === "c-alpe").name), "Alpe d'Huez (Bourg d'Oisans)");
     await p.context().close();
 
     const z = await open({ settings: { lang: "zz" } });
@@ -247,7 +248,18 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const note = p.locator('p[data-i18n^="A free training analysis service"]');
     assert.match(await note.textContent(), /^Ingyenes edzésanalízis-szolgáltatás/);
     assert.match(await note.evaluate(el => el.innerHTML), /<b>API-kulcsot<\/b>/);
+
+    // a real ride with a workout: the HUD, start/pause and interval labels stay Hungarian
+    await p.click('[data-view="ride"]');
+    await p.click("#chip-trainer"); await p.click("#c-sim");
+    await p.click("#btn-start"); await p.waitForTimeout(400);
+    assert.equal(await p.textContent("#tgt-lbl"), "Cél");
+    assert.equal(await p.textContent("#btn-start"), "Szünet");
+    assert.match(await p.textContent("#iv-lbl"), /^Intervallum 1 \/ \d+$/);
     assert.equal(pageErrors.length, errorsBefore);
+    await p.click("#btn-end");
+    await p.waitForSelector("#dlg-summary[open]", { timeout: 5000 });
+    await p.evaluate(() => document.querySelector("#dlg-summary").close());
     await p.context().close();
   });
 
