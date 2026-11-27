@@ -1,7 +1,21 @@
 /* Hungarian (Magyar) UI strings.
    English text in the app is the key: a missing key falls back to English.
    Proper names, units and product terms stay as they are; see docs/archive/hungarian-voice.md.
-   The spoken announcements are a separate task. */
+   The spoken announcements use the same archive: Hungarian has no plural after a number,
+   joins a duration with a space, and adds the suffix that follows the number's final word. */
+/* Hungarian suffix harmony follows the final spoken word of the number (docs/archive/hungarian-voice.md). */
+function huSuffix(n){
+  const units = ["as", "es", "es", "as", "es", "ös", "os", "es", "as", "es"];
+  const tens = { 1: "es", 2: "as", 3: "as", 4: "es", 5: "es", 6: "as", 7: "es", 8: "as", 9: "es", 10: "as" };
+  return n % 10 ? units[n % 10] : tens[n === 100 ? 10 : n % 100 / 10] || "as";
+}
+const huWatts = n => `${n} watt`;
+function huDuration(sec){
+  sec = Math.round(sec); const m = Math.floor(sec / 60), x = sec % 60;
+  const mm = m ? `${m} perc` : "", ss = x ? `${x} másodperc` : "";
+  return [mm, ss].filter(Boolean).join(" ");
+}
+const huCadence = (lo, hi, any = 999) => hi >= any ? `kadencia ${lo} vagy több` : `kadencia ${lo} és ${hi} között`;
 PedalaI18n.add({
   code: "hu",
   name: "Magyar",
@@ -668,5 +682,45 @@ PedalaI18n.add({
     "Zone 2 · {time}": "2. zóna · {time}",
     "Zwift Click": "Zwift Click",
     "Zwift Cog (teeth)": "Zwift Cog (fogak)"
+  },
+  speech: {
+    watts: huWatts,
+    duration: huDuration,
+    cadence: huCadence,
+    segment(seg, ctx){
+      ctx = ctx || {};
+      const dur = typeof ctx.duration === "function" ? ctx.duration : huDuration;
+      const watt = typeof ctx.watts === "function" ? ctx.watts : huWatts;
+      const cad = typeof ctx.cadence === "function" ? ctx.cadence : huCadence;
+      const note = seg.note ? seg.note + ". " : "", cadText = seg.cad ? ", " + cad(seg.cad[0], seg.cad[1], ctx.anyCad) : "";
+      const d = dur(seg.d);
+      let power;
+      if(seg.free) power = `${d} szabadon`;
+      else if(seg.hr) power = `${d} ${seg.hr}-${huSuffix(seg.hr)} pulzuson`;
+      else power = Math.abs(seg.loW - seg.hiW) < 5 ? `${d} ${watt(seg.loW)}on` : `${d}, ${seg.loW}-tól ${watt(seg.hiW)}on`;
+      return note + power + cadText;
+    },
+    lap(lap, ctx){
+      ctx = ctx || {};
+      const dur = typeof ctx.duration === "function" ? ctx.duration : huDuration;
+      const watt = typeof ctx.watts === "function" ? ctx.watts : huWatts;
+      if(lap.cadTgt){   // drill laps: report only the drill parts, stay quiet on recoveries
+        if(lap.cadTgt[0] >= 100 || lap.cadTgt[1] <= 70) return `Átlagos kadencia ${lap.avgCad}.`;
+        return "";
+      }
+      if(lap.kind === "dist") return `${lap.km} kilométer. Az utolsó ${lap.kmLimit} kilométer ${dur(lap.dur)} alatt, átlag ${watt(lap.avgP)}.`;
+      if(lap.score != null && lap.dur >= 30) return lap.kind === "hr" ? `Intervallum kész. Átlagos pulzus ${lap.avgHr}.`
+        : `Intervallum kész. Átlag ${watt(lap.avgP)}, ${lap.score} százalék.`;
+      return "";
+    },
+    finish: route => route ? "Célba értél." : "Vége az edzésnek. Szép munka.",
+    strength(step, next){
+      const t = key => PedalaI18n.t(key);
+      if(step.kind === "rest") return `Pihenő. Következik: ${t(next?.n || "")}.`;
+      if(step.kind === "work") return `${t(step.n || "")}, ${step.s} másodperc.`;
+      return t(step.n || "");
+    },
+    start: () => "Kezdődik az edzés.",
+    soon: text => `10 másodperc múlva: ${text}.`
   }
 });

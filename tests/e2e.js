@@ -399,6 +399,51 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await z.context().close();
   });
 
+  await test("voice: Hungarian is spoken with a hu-HU voice, and a missing one falls back with a Hungarian notice", async () => {
+    const hu = await open({ settings: { lang: "hu" }, voices: [["Google magyar", "hu-HU"], ["Samsung English", "en-US"]] });
+    await hu.click('[data-view="settings"]'); await hu.click("#btn-voice-test"); await hu.waitForTimeout(300);
+    assert.equal((await hu.evaluate(() => __spoken))[0], "10 másodperc múlva: 3 perc 265 watton, kadencia 90 és 100 között.");
+    assert.match(await hu.textContent("#voice-note"), /^A bemondások Magyar nyelven szólnak/);
+
+    await hu.click('[data-view="ride"]');
+    await hu.evaluate(() => { S.workout = { ftp: 230, builtin: true }; say(() => segmentSpeech({ d: 200, free: true, note: "High cadence, stay seated", cad: [90, CAD_ANY] }), true); S.workout = null; });
+    await hu.waitForTimeout(100);
+    assert.equal((await hu.evaluate(() => __spoken)).at(-1), "Magas kadencia, maradj ülve. 3 perc 20 másodperc szabadon, kadencia 90 vagy több");
+
+    await hu.evaluate(() => { S.workout = { ftp: 230 }; S.bias = 1; say(() => segmentSpeech({ d: 200, lo: 200 / settings.ftp, hi: 265 / settings.ftp }), true); S.workout = null; });
+    await hu.waitForTimeout(100);
+    assert.equal((await hu.evaluate(() => __spoken)).at(-1), "3 perc 20 másodperc, 200-tól 265 watton");
+
+    await hu.evaluate(() => { S.workout = { ftp: 230 }; S.hrOff = 0; say(() => segmentSpeech({ d: 180, hr: 145 / settings.maxHr }), true); S.workout = null; });
+    await hu.waitForTimeout(100);
+    assert.equal((await hu.evaluate(() => __spoken)).at(-1), "3 perc 145-ös pulzuson");
+    await hu.evaluate(() => { S.workout = { ftp: 230 }; S.hrOff = 0; say(() => segmentSpeech({ d: 180, hr: 150 / settings.maxHr }), true); S.workout = null; }); await hu.waitForTimeout(100);
+    assert.equal((await hu.evaluate(() => __spoken)).at(-1), "3 perc 150-es pulzuson");
+
+    await hu.evaluate(() => { S.workout = null; S.dist = 12000; lapResult({ kind: "dist", name: "Lap 1", dur: 200, avgP: 250, kmLimit: 5 }); });
+    await hu.waitForTimeout(100);
+    assert.equal((await hu.evaluate(() => __spoken)).at(-1), "12 kilométer. Az utolsó 5 kilométer 3 perc 20 másodperc alatt, átlag 250 watt.");
+
+    const wk = await hu.evaluate(() => {
+      startStrength({ name: "Test", min: 1, steps: [{ kind: "work", n: "Squat", s: 1 }, { kind: "rest", s: 30 }, { kind: "work", n: "Glute bridge", s: 1 }] });
+      clearInterval(WK.timer);
+      const first = __spoken.at(-1);
+      wkNext(); const rest = __spoken.at(-1);
+      wkNext(); const second = __spoken.at(-1);
+      document.querySelector("#dlg-strength").close();
+      return { first, rest, second };
+    });
+    assert.deepEqual(wk, { first: "Guggolás, 1 másodperc.", rest: "Pihenő. Következik: Csípőhíd.", second: "Csípőhíd, 1 másodperc." });
+    await hu.context().close();
+
+    const none = await open({ settings: { lang: "hu" }, voices: [["Samsung English", "en-US"]] });
+    await none.click('[data-view="settings"]'); await none.waitForTimeout(200);
+    assert.equal(await none.textContent("#voice-note"), "Ezen az eszközön nincs Magyar hang; a bemondások angolul szólnak (Samsung English).");
+    await none.click("#btn-voice-test"); await none.waitForTimeout(300);
+    assert.equal((await none.evaluate(() => __spoken))[0], "In 10 seconds: 3 minutes at 265 watts, cadence 90 to 100.");
+    await none.context().close();
+  });
+
   await test("laps: the free-ride lap length comes from Settings, and the average is announced at that length", async () => {
     const p = await open({ voices: [["Samsung English", "en-US"]] });
     await p.click('[data-view="settings"]'); await p.waitForTimeout(200);
