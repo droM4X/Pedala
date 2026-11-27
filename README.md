@@ -76,7 +76,7 @@ The interface is in English by default. *Settings → Language* can follow the b
 
 ## Development
 
-The app is a single `index.html` with no build step. The server side is five small files: `middleware.js` (login), `api/sync.js` (Vercel Blob), `api/intervals.js`, `api/youtube.js` and `api/coach.js` (proxies that keep keys on the server).
+The app is a single `index.html` with no build step. The server side is a few small files: `middleware.js` (login), `api/sync.js` (Vercel Blob), `api/intervals.js`, `api/youtube.js`, `api/coach.js` and `api/models.js` (proxies that keep keys on the server).
 
 ```bash
 npm install

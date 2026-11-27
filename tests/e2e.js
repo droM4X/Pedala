@@ -757,6 +757,18 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.context().close();
   });
 
+  await test("coach: a failed model refresh keeps showing the last cached list", async () => {
+    srv.setEnv({ OPENROUTER_API_KEY: "sk-cache-fail" }); srv.setOpenRouter({ reset: true, fail: 502 });
+    const p = await open({ settings: { coachMode: "off" }, sync: false });
+    await p.evaluate(() => store.set("coachList", { fp: coachFp("server"), at: Date.now() - 2 * 36e5, default: "cached/model",
+      list: [{ id: "cached/model", name: "Cached Model", priceIn: 0.1, priceOut: 0.2, ctx: 1000, caps: { mc: false, reasoning: null, schema: false } }] }));
+    await p.click('[data-view="settings"]'); await p.waitForTimeout(700);
+    const ids = await p.evaluate(() => [...document.querySelectorAll("#coach-model option")].map(o => o.value).filter(Boolean));
+    assert.deepEqual(ids, ["cached/model"], "the list from before the failure is still offered");
+    assert.match(await p.textContent("#coach-model-note"), /could not be loaded/i);
+    await p.context().close();
+  });
+
   await test("coach: a refusal pauses the automatic comments until the key is saved again, and a tiny cost shows four decimals", async () => {
     srv.setEnv({ OPENROUTER_API_KEY: "sk-test" }); srv.setOpenRouter({ reset: true, cost: 0.0004 }); srv.openrouter.length = 0;
     const p = await open({ settings: { coachMode: "each", coachModel: "deepseek/deepseek-v4.1-flash-1017" } });

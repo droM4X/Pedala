@@ -2191,18 +2191,23 @@ async function loadCoachModels(force = false){
   }
   if(coachModelsBusy) return;
   coachModelsBusy = true; coachModelsNote = PedalaI18n.t("Models are loading…"); renderCoachModels();
+  /* no new list: keep the one this key had, as the spec asks, and say why it was not refreshed */
+  const lastList = msg => {
+    coachModelsNote = msg;
+    if(cached && cached.fp === fp){ coachModels = cached.list || []; coachModelsLoaded = true; resolveCoachModel(cached.default); }
+  };
   try{
     const r = await fetch("/api/models", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ orKey: key || undefined }) });
     const j = await r.json().catch(() => ({}));
-    if(r.status === 409) coachModelsNote = PedalaI18n.t("Add an OpenRouter API key to see the models.");
-    else if(r.status === 401) coachModelsNote = PedalaI18n.t("The key was rejected by OpenRouter.");
-    else if(!r.ok) coachModelsNote = PedalaI18n.t("The models could not be loaded.");
+    if(r.status === 409) lastList(PedalaI18n.t("Add an OpenRouter API key to see the models."));
+    else if(r.status === 401) lastList(PedalaI18n.t("The key was rejected by OpenRouter."));
+    else if(!r.ok) lastList(PedalaI18n.t("The models could not be loaded."));
     else{
       coachModels = Array.isArray(j.models) ? j.models : []; coachModelsLoaded = true; coachModelsNote = "";
       store.set("coachList", { fp, at: Date.now(), list: coachModels, default: j.default || null });
       resolveCoachModel(j.default || null);
     }
-  }catch{ coachModelsNote = PedalaI18n.t("The models could not be loaded."); }
+  }catch{ lastList(PedalaI18n.t("The models could not be loaded.")); }
   finally{ coachModelsBusy = false; renderCoachModels(); }
 }
 /* saved if the key still allows it, else the list's default, else let the athlete choose; never switches away silently */

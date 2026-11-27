@@ -76,6 +76,7 @@ async function fakeOpenRouter(u, opt){
   const auth = (opt.headers || {}).Authorization || "";
   if(u.pathname === "/api/v1/models/user"){
     if(!auth.startsWith("Bearer sk-") || auth === "Bearer sk-bad") return J({ error: { message: "No auth credentials found" } }, 401);
+    if(or.fail) return J({ error: { message: "Provider returned error", code: or.fail } }, or.fail);
     log.push(`openrouter models ${or.models.length}`);
     return J({ data: or.models });
   }
