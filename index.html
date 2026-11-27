@@ -759,7 +759,7 @@ const SYNCED = ["settings", "plan", "workouts", "routes", "ytChannels", "ytPlayl
 /* profiles: a second person logged in (pedala_ns cookie, set by middleware.js) keeps everything under their own name */
 const NS = (() => { try{ const m = document.cookie.match(/(?:^|;\s*)pedala_ns=([^;]+)/); return m ? decodeURIComponent(m[1]).replace(/[^\w-]/g, "") : ""; }catch{ return ""; } })();
 const LS = "pedala." + (NS ? NS + "." : "");
-const APP_VERSION = "0.3.0";   // shown as v + this in Settings → About; bump it together with the git tag
+const APP_VERSION = "0.4.0";   // shown as v + this in Settings → About; bump it together with the git tag
 const store = {
   get(k, d){ try{ const v = localStorage.getItem(LS+k); return v==null ? d : JSON.parse(v); }catch{ return d; } },
   set(k, v){

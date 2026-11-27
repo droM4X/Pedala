@@ -1,7 +1,7 @@
 // Service worker: needed so Chrome offers to install Pedala as an app.
 // Page loads are left to the browser on purpose, so the login prompt always works;
 // only the icons and the manifest are kept in a cache. api/ is never touched.
-const CACHE = "pedala-v1";
+const CACHE = "pedala-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));

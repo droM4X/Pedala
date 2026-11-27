@@ -72,7 +72,7 @@ Announcements use the selected voice's language, not the interface language. *Se
 
 ## Languages
 
-The interface is in English by default. *Settings → Language* can follow the browser or switch to another language, and the choice is saved on that device. Hungarian translates the whole interface text. Adding a language is one file in `lang/`: see [docs/adding-a-language.md](docs/adding-a-language.md). The login page, the phone remote (`gear.html`), the virtual coach's comments and FIT/ICS metadata stay English.
+The interface is in English by default. *Settings → Language* can follow the browser or switch to another language, and the choice is saved on that device. Hungarian translates the whole interface text. A language is one file in `lang/`: copy `lang/_template.js` to `lang/<code>.js`, set its code, name and locale, fill in the strings, then run `npm run langs` to add it to `lang/index.json`. English text is the key, so missing strings fall back to English. The login page, the phone remote (`gear.html`), the virtual coach's comments and FIT/ICS metadata stay English.
 
 ## Development
 

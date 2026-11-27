@@ -58,7 +58,7 @@ module for grammar.
 | `index.html` | Script tag, settings `lang`, init wrapping, Language select, `t()` conversion, speech delegation, date/number replacement, readiness flag. |
 | `tests/support/server.js` | `.json` MIME, 404 for missing `/lang/*`, fixture alias. |
 | `tests/fixtures/lang/zz.js` | Test-only language, served at `/lang/zz.js`; not in `lang/`, not in the index. |
-| `docs/adding-a-language.md`, `README.md` | Workflow, contract, limits. |
+| `README.md` | Workflow summary, contract, limits. |
 
 ### Module contract
 
@@ -167,7 +167,7 @@ PedalaI18n.add({
   translated, and Settings shows a translated notice. A saved `voiceName` is ignored
   when its language does not match.
 - `fillVoices()` lists voices for the active locale; if none, English voices plus the
-  notice. Hungarian terms follow `docs/archive/hungarian-voice.md`.
+  notice. Hungarian terms follow the archived Hungarian voice reference (since removed).
 
 ### Dates, numbers, plurals, units
 

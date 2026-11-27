@@ -155,7 +155,7 @@ Expected: FAIL — `Cannot find module '../scripts/langs.js'`.
 
 - [ ] **Step 4: Add the template and scripts**
 
-`lang/_template.js`: annotated skeleton (`PedalaI18n.add({...})`) with a comment pointing at `docs/adding-a-language.md`; not listed in the index. `lang/index.json`: `[]` (no languages yet). `package.json`:
+`lang/_template.js`: annotated skeleton (`PedalaI18n.add({...})`) with a comment explaining how to register it; not listed in the index. `lang/index.json`: `[]` (no languages yet). `package.json`:
 
 ```json
 "langs": "node scripts/langs.js",
@@ -388,7 +388,7 @@ Convert `renderPlan`, `openSession`, the calendar/reminder prose, the strength p
 **Files:** `scripts/i18n-keys.js` (Playwright walk), `lang/hu.js`, `tests/e2e.js`, `package.json` (`i18n:keys`).
 
 - Enable the core recorder with `?i18n=keys`; walk every view/dialog with Playwright, collect `PedalaI18n.seen`, write a sorted key report; compare with `lang/hu.js` to list missing/unused keys.
-- Write the full Hungarian module: all UI strings, dates/numbers/plurals, speech (Hungarian duration, watt, cadence, HR suffix harmony, lap/finish/strength/soon), using `docs/archive/hungarian-voice.md` as the reference.
+- Write the full Hungarian module: all UI strings, dates/numbers/plurals, speech (Hungarian duration, watt, cadence, HR suffix harmony, lap/finish/strength/soon), using the archived Hungarian voice reference (since removed).
 - Proper nouns stay; built-in workout/strength/drill names and cues translate; imported names untouched.
 - Tests: `settings.lang = "hu"` shows Hungarian Ride/Settings labels, a Hungarian date, a Hungarian voice sentence (`145-ös pulzuson`, `3 perc 20 másodperc`, `12 kilométer` style); no Hungarian voice -> English announcements + Hungarian notice; English default unchanged.
 - Report the translation for owner review; do not claim linguistic perfection.
@@ -399,7 +399,7 @@ Convert `renderPlan`, `openSession`, the calendar/reminder prose, the strength p
 
 ### Task 13: documentation and final audit
 
-**Files:** `docs/adding-a-language.md`, `README.md`, `tests/e2e.js`.
+**Files:** `README.md`, `tests/e2e.js`; the language how-to was written and has since been removed.
 
 - Document: copy `lang/_template.js` -> `lang/xx.js`, set `code/name/locale`, fill `strings`/optional speech, `npm run langs`, `npm run dev`, commit. Explain the English-key fallback, the `data-i18n`/`tHtml` rule, speech/voice fallback, the generated labels, and the out-of-scope surfaces.
 - README: Languages section; update the voice line from English-only to the selected language; keep the coach/login/remote notes.

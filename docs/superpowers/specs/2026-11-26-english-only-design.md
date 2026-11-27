@@ -65,7 +65,7 @@ Rejected:
 4. **`tests/unit.js`** — the login-language test asserts English for every
    `accept-language` (the Croatian assertion at line 23 flips).
 5. **`README.md`** — drop the "Hrvatski" link; delete `README.hr.md`.
-6. **New: `docs/archive/hungarian-voice.md`** — data-only archive (not loaded by
+6. **New: a Hungarian voice archive under `docs/archive/` (since removed)** — data-only (not loaded by
    the app): `NOTE_HU` map, Hungarian words in `sayDur`/`watts` (`perc`,
    `másodperc`, `watt`), `cadSay`/`segSpeechPower` Hungarian templates,
    `huSuffix` with its harmony table, and the original `L(hr, en, hu)` call sites

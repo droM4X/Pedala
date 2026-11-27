@@ -16,7 +16,7 @@
 - No behaviour or feature changes beyond language; untouched code stays untouched.
 - English source of truth is what already exists in the code: the `EN` map entries, the 2nd arg of `ui()`, the 2nd arg of `L()` — copy those, do not re-translate.
 - The Hungarian voice material is archived **before** any code that contains it is modified (spec, Scope item 6).
-- `docs/archive/hungarian-voice.md` is documentation, not machine input: verbatim code snippets + the e2e assertions that pin them.
+- The Hungarian voice archive (since removed) is documentation, not machine input: verbatim code snippets + the e2e assertions that pin them.
 - Commit after every task.
 
 ## Review Focus
@@ -33,7 +33,7 @@
 ### Task 1: Archive the Hungarian voice material
 
 **Files:**
-- Create: `docs/archive/hungarian-voice.md`
+- Create: a Hungarian voice archive under `docs/archive/` (since removed).
 
 **Interfaces:**
 - Consumes: nothing. Produces: nothing later tasks rely on (this file is data-only documentation).
@@ -54,13 +54,13 @@ Structure the file: intro line ("Hungarian spoken-announcement work removed from
 
 - [ ] **Step 2: Verify the archive is complete**
 
-Run: `grep -ciE "pulzuson|perc|másodperc|kadencia|kilométer" docs/archive/hungarian-voice.md`
-Expected: ≥ 20 matches. Run: `grep -c "huSuffix" docs/archive/hungarian-voice.md` → ≥ 2.
+Run the equivalent of `grep -ciE "pulzuson|perc|másodperc|kadencia|kilométer"` against the archive file.
+Expected: ≥ 20 matches. Run the same with `grep -c "huSuffix"` → ≥ 2.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add docs/archive/hungarian-voice.md
+git add docs/archive/
 git commit -m "docs: archive the Hungarian voice-announcement work before removing it"
 ```
 
@@ -185,7 +185,7 @@ git commit -m "coach: prompts and comments in English"
 - Delete: `README.hr.md`
 
 **Interfaces:**
-- Consumes: nothing. Produces: a repo with no Croatian anywhere outside `docs/archive/hungarian-voice.md` and git history.
+- Consumes: nothing. Produces: a repo with no Croatian anywhere outside the Hungarian voice archive (since removed) and git history.
 
 - [ ] **Step 1: Clean the docs**
 

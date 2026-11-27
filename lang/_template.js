@@ -1,6 +1,6 @@
 /* Pedala language module template.
    Copy this file to lang/<code>.js (the filename must equal code), then fill in the strings.
-   Run `npm run langs` to add it to lang/index.json. See docs/adding-a-language.md.
+   Run `npm run langs` to add it to lang/index.json.
    English text in the app is the key: a missing key falls back to English. */
 PedalaI18n.add({
   code: "xx",                         // required, 2-3 lowercase letters, equals the filename

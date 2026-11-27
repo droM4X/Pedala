@@ -1,9 +1,9 @@
 /* Hungarian (Magyar) UI strings.
    English text in the app is the key: a missing key falls back to English.
-   Proper names, units and product terms stay as they are; see docs/archive/hungarian-voice.md.
-   The spoken announcements use the same archive: Hungarian has no plural after a number,
+   Proper names, units and product terms stay as they are.
+   The spoken announcements follow Hungarian grammar: no plural after a number,
    joins a duration with a space, and adds the suffix that follows the number's final word. */
-/* Hungarian suffix harmony follows the final spoken word of the number (docs/archive/hungarian-voice.md). */
+/* Hungarian suffix harmony follows the final spoken word of the number. */
 function huSuffix(n){
   const units = ["as", "es", "es", "as", "es", "ös", "os", "es", "as", "es"];
   const tens = { 1: "es", 2: "as", 3: "as", 4: "es", 5: "es", 6: "as", 7: "es", 8: "as", 9: "es", 10: "as" };
