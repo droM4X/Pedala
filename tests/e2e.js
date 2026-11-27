@@ -689,6 +689,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.doesNotMatch(plain.messages[1].content, /Available replacement sessions/); assert.match(plain.messages[1].content, /This week's plan/);
     assert.equal(plain.max_tokens, 4000); assert.equal(plain.reasoning, undefined); assert.equal(plain.reasoning_effort, undefined);
     assert.ok((plain.messages[1].content.match(/"id":"w\d+-/g) || []).length <= 14, "one or two weeks of the plan");
+    await p.evaluate(() => { store.set("coach", {}); store.set("coachChat", [{ q: "x", a: "y", at: Date.now(), usd: 0.0012 }]); renderCoachBox(); });
+    assert.match(await p.textContent("#coach-month"), /≈ \$0\.0012/, "below a cent the monthly total keeps four decimals, like the per-answer tag");
     srv.setEnv({ OPENROUTER_API_KEY: null }); await p.context().close();
   });
 
@@ -730,9 +732,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.equal(await p.evaluate(() => coachModel()), "deepseek/deepseek-v4.1-flash-1017", "the default is adopted");
     assert.match(await p.textContent("#coach-model"), /\$0\.04 \/ \$0\.1/);
     await p.fill("#coach-search", "acme"); await p.waitForTimeout(200);
-    assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll("#coach-model option")].map(o => o.value).filter(Boolean)), ["acme/plain-model"]);
+    assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll("#coach-model option")].map(o => o.value).filter(Boolean)),
+      ["deepseek/deepseek-v4.1-flash-1017", "acme/plain-model"], "the selected default stays visible through the filter");
     await p.selectOption("#coach-model", "acme/plain-model"); await p.waitForTimeout(400);
     assert.equal(await p.evaluate(() => settings.coachModel), "acme/plain-model");
+    await p.fill("#coach-search", "deepseek"); await p.waitForTimeout(200);
+    assert.equal(await p.evaluate(() => document.querySelector("#coach-model").value), "acme/plain-model", "the selected model stays visible when the search filters it out");
+    assert.ok(await p.evaluate(() => [...document.querySelectorAll("#coach-model option")].some(o => o.value === "acme/plain-model" && o.selected)));
     await p.evaluate(() => coachAsk("ride:r-model", { ride: { id: "r-model", name: "M", start: new Date().toISOString(), m: { duration: 900 } } }, "M", Date.now()));
     const sent = srv.openrouter.at(-1);
     assert.equal(sent.model, "acme/plain-model");
@@ -745,6 +751,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await p.click('[data-view="settings"]'); await p.waitForTimeout(700);
     assert.match(await p.textContent("#coach-model-note"), /not available with this key/i);
     assert.equal(await p.evaluate(() => coachModel()), "gone/model", "no silent switch");
+    assert.match(await p.textContent("#coach-status"), /coach is off/i, "the status follows coachEnabled after the list loads");
     await p.click('[data-view="progress"]'); await p.waitForSelector("#coach-box");
     assert.equal(await p.locator("#coach-form").isHidden(), true);
     await p.context().close();
@@ -754,7 +761,47 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const p = await open({ settings: { coachMode: "each" }, sync: false });
     await p.click('[data-view="settings"]'); await p.waitForTimeout(700);
     assert.match(await p.textContent("#coach-model-note"), /No models for this key/i);
+    assert.match(await p.textContent("#coach-status"), /coach is off/i, "an empty list does not leave the status saying the coach is on");
     assert.equal(await p.evaluate(() => coachOn()), false);
+    await p.context().close();
+  });
+  await test("coach: a model id cannot inject markup into the Settings status", async () => {
+    srv.setEnv({ OPENROUTER_API_KEY: "sk-test" });
+    const p = await open({ settings: { coachMode: "off" }, sync: false });
+    const evil = 'x"><img src=x onerror="window.__xss=1">';
+    await p.evaluate(m => { coachServer = true; coachModelsLoaded = false; settings.coachModel = m; fillCoach(); }, evil);
+    const seen = await p.evaluate(() => ({ text: document.querySelector("#coach-status").textContent,
+      imgs: document.querySelectorAll("#coach-status img").length, xss: window.__xss }));
+    assert.equal(seen.imgs, 0, "no element is injected");
+    assert.equal(seen.xss, undefined);
+    assert.ok(seen.text.includes(evil), "the model id is shown as text");
+    await p.context().close();
+  });
+  await test("coach: saving a new key restarts an in-flight model load and the old answer cannot overwrite it", async () => {
+    srv.setEnv({ OPENROUTER_API_KEY: "sk-stale-server" });
+    const model = id => ({ id, name: id.toUpperCase(), context_length: 1000, pricing: { prompt: "0.000001", completion: "0.000002" },
+      supported_parameters: ["max_tokens"], endpoints: ["/api/v1/chat/completions"], architecture: { output_modalities: ["text"] } });
+    srv.setOpenRouter({ reset: true, models: [model("old/key")], delay: 800 });
+    const p = await open({ settings: { coachMode: "off" }, sync: false });
+    await p.click('[data-view="settings"]'); await p.waitForTimeout(100);   // the server key's slow load is now in flight
+    srv.setOpenRouter({ models: [model("new/key")], delay: 100 });
+    await p.fill("#coach-key", "sk-stale-device"); await p.click("#btn-coach-key");
+    await p.waitForFunction(() => [...document.querySelectorAll("#coach-model option")].some(o => o.value === "new/key"), null, { timeout: 5000 });
+    await p.waitForTimeout(1000);   // the older response has arrived by now
+    assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll("#coach-model option")].map(o => o.value).filter(Boolean)), ["new/key"],
+      "the old key's list never comes back");
+    await p.context().close();
+  });
+  await test("coach: a 429 sets no pause and the next manual ask works", async () => {
+    srv.setEnv({ OPENROUTER_API_KEY: "sk-test" }); srv.setOpenRouter({ reset: true, fail: 429 });
+    const p = await open({ settings: { coachMode: "off" }, sync: false });
+    const failed = await p.evaluate(() => coachAsk("ride:r-429", { ride: { id: "r-429", name: "Busy", start: new Date().toISOString(), m: { duration: 900 } } }, "Busy", Date.now())
+      .then(() => "", e => e.message));
+    assert.match(failed, /busy/i);
+    assert.equal(await p.evaluate(() => coachPaused()), false, "429 does not pause the coach");
+    srv.setOpenRouter({ fail: null });
+    await p.evaluate(() => coachAsk("ride:r-429", { ride: { id: "r-429", name: "Busy", start: new Date().toISOString(), m: { duration: 900 } } }, "Busy", Date.now()));
+    assert.equal(await p.evaluate(() => coachNotes()["ride:r-429"]?.text), "Good workout. Your heart rate is steady; keep it up.");
     await p.context().close();
   });
 

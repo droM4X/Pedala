@@ -546,6 +546,7 @@
   "The Click is not answering. Update its firmware with Zwift Companion.",
   "The coach commented on your ride (Progress → Coach)",
   "The coach is off. Add an OpenRouter API key in Settings (or OPENROUTER_API_KEY on Vercel).",
+  "The coach is off. Choose a model in Settings that this key allows.",
   "The coach is off. See Settings → Virtual coach.",
   "The coach is on (key on this device). Other activities also need an intervals.icu key.",
   "The coach is on (OPENROUTER_API_KEY is set on Vercel). Other activities also need an intervals.icu key.",

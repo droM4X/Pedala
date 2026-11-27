@@ -2151,12 +2151,12 @@ $("#click-on").onchange = e => { settings.clickOn = e.target.checked; store.set(
 window.addEventListener("online", () => syncIcu());
 document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") syncIcu(); });
 
-/* ============ virtual coach (api/coach.js, Claude) ============
+/* ============ virtual coach (api/coach.js, OpenRouter) ============
    After every training session the coach writes a short comment: rides saved in Pedala right after saving, and every
    other activity that reaches intervals.icu (runs and swims from a watch…) when the app opens. Comments are kept in
    store "coach" (shared between devices) as { "ride:<id>" | "icu:<id>": { text | error | pending, at, title, date } }. */
 let coachServer = false;                                   // OPENROUTER_API_KEY is set on Vercel
-let coachModels = [], coachModelsLoaded = false, coachModelsNote = "", coachModelsBusy = false;
+let coachModels = [], coachModelsLoaded = false, coachModelsNote = "", coachModelsFp = "", coachLoadSeq = 0;
 const coachKey = () => (settings.orKey || "").trim();      // the key pasted in Settings, kept on this device only
 const coachModel = () => settings.coachModel || "";
 const coachCaps = () => coachModels.find(m => m.id === coachModel())?.caps || null;
@@ -2185,30 +2185,32 @@ const coachModelLabel = m => `${m.name || m.id} — ${coachPrice(m.priceIn)} / $
 /* fetch (or reuse for an hour) the models this key may use; never stores the key itself */
 async function loadCoachModels(force = false){
   const key = coachKey(), fp = coachFp(key || "server"), cached = store.get("coachList", null);
+  const seq = ++coachLoadSeq, current = () => seq === coachLoadSeq;   // a saved key restarts the load; an older response is ignored
+  if(coachModelsFp && coachModelsFp !== fp){ coachModels = []; coachModelsLoaded = false; coachModelsNote = ""; coachModelsFp = ""; }   // never show another key's list
   if(!force && cached && cached.fp === fp && Date.now() - cached.at < 36e5){
-    coachModels = cached.list || []; coachModelsLoaded = true; coachModelsNote = "";
-    resolveCoachModel(cached.default); renderCoachModels(); return;
+    coachModels = cached.list || []; coachModelsLoaded = true; coachModelsNote = ""; coachModelsFp = fp;
+    resolveCoachModel(cached.default); fillCoach(); return;
   }
-  if(coachModelsBusy) return;
-  coachModelsBusy = true; coachModelsNote = PedalaI18n.t("Models are loading…"); renderCoachModels();
+  coachModelsNote = PedalaI18n.t("Models are loading…"); fillCoach();
   /* no new list: keep the one this key had, as the spec asks, and say why it was not refreshed */
   const lastList = msg => {
     coachModelsNote = msg;
-    if(cached && cached.fp === fp){ coachModels = cached.list || []; coachModelsLoaded = true; resolveCoachModel(cached.default); }
+    if(cached && cached.fp === fp){ coachModels = cached.list || []; coachModelsLoaded = true; coachModelsFp = fp; resolveCoachModel(cached.default); }
   };
   try{
     const r = await fetch("/api/models", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ orKey: key || undefined }) });
     const j = await r.json().catch(() => ({}));
+    if(!current()) return;
     if(r.status === 409) lastList(PedalaI18n.t("Add an OpenRouter API key to see the models."));
     else if(r.status === 401) lastList(PedalaI18n.t("The key was rejected by OpenRouter."));
     else if(!r.ok) lastList(PedalaI18n.t("The models could not be loaded."));
     else{
-      coachModels = Array.isArray(j.models) ? j.models : []; coachModelsLoaded = true; coachModelsNote = "";
+      coachModels = Array.isArray(j.models) ? j.models : []; coachModelsLoaded = true; coachModelsNote = ""; coachModelsFp = fp;
       store.set("coachList", { fp, at: Date.now(), list: coachModels, default: j.default || null });
       resolveCoachModel(j.default || null);
     }
-  }catch{ lastList(PedalaI18n.t("The models could not be loaded.")); }
-  finally{ coachModelsBusy = false; renderCoachModels(); }
+  }catch{ if(current()) lastList(PedalaI18n.t("The models could not be loaded.")); }
+  finally{ if(current()) fillCoach(); }
 }
 /* saved if the key still allows it, else the list's default, else let the athlete choose; never switches away silently */
 function resolveCoachModel(def){
@@ -2222,10 +2224,12 @@ function renderCoachModels(){
   const q = ($("#coach-search")?.value || "").trim().toLowerCase(), saved = coachModel();
   const shown = coachModels.filter(m => !q || String(m.id).toLowerCase().includes(q) || String(m.name || "").toLowerCase().includes(q));
   const missing = !!saved && !coachModels.some(m => m.id === saved);
+  const hidden = !missing && saved && !shown.some(m => m.id === saved) ? coachModels.find(m => m.id === saved) : null;   // the search must not hide the pick
   const groups = new Map();
   for(const m of shown){ const a = String(m.id).split("/")[0]; if(!groups.has(a)) groups.set(a, []); groups.get(a).push(m); }
   let html = `<option value="">${PedalaI18n.t("Choose a model")}</option>`;
   if(missing) html = `<option value="${coachAttr(saved)}" selected>${coachAttr(saved)} (${PedalaI18n.t("not available with this key")})</option>` + html;
+  else if(hidden) html += `<option value="${coachAttr(saved)}" selected>${coachAttr(coachModelLabel(hidden))}</option>`;
   for(const [a, list] of groups) html += `<optgroup label="${coachAttr(a)}">` + list.map(m =>
     `<option value="${coachAttr(m.id)}"${m.id === saved ? " selected" : ""}>${coachAttr(coachModelLabel(m))}</option>`).join("") + `</optgroup>`;
   sel.innerHTML = html;
@@ -2339,7 +2343,7 @@ function renderCoachBox(){
     $("#coach-q").addEventListener("keydown", e => { if(e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#coach-form").requestSubmit(); });
   }
   $("#coach-form").hidden = $("#coach-week-row").hidden = !coachEnabled();
-  const month = coachMonthUsd(); $("#coach-month").textContent = month ? PedalaI18n.t("Coach this month: ≈ ${amount}", { amount: numFixed(month, 2) }) : "";
+  const month = coachMonthUsd(); $("#coach-month").textContent = month ? PedalaI18n.t("Coach this month: ≈ ${amount}", { amount: numFixed(month, month < 0.01 ? 4 : 2) }) : "";
   const list = Object.entries(coachNotes()).sort((a, b) => (b[1].date || b[1].at) - (a[1].date || a[1].at)).slice(0, 10), el = $("#coach-list");
   if(!coachEnabled() && !list.length) el.innerHTML = `<p class="note">${PedalaI18n.t("The coach is off. See Settings → Virtual coach.")}</p>`;
   else if(!list.length) el.innerHTML = `<p class="note">${PedalaI18n.t("Comments will show up after your next session.")}</p>`;
@@ -2425,12 +2429,14 @@ async function renderCoachViews(){
 }
 function fillCoach(){
   const st = $("#coach-status"); if(!st) return;
-  const base = coachKey() ? PedalaI18n.tHtml("The coach is on (key on this device). Other activities also need an intervals.icu key.")
-    : coachServer ? PedalaI18n.tHtml("The coach is on (OPENROUTER_API_KEY is set on Vercel). Other activities also need an intervals.icu key.")
+  const on = coachKey() ? PedalaI18n.tHtml("The coach is on (key on this device). Other activities also need an intervals.icu key.")
+    : PedalaI18n.tHtml("The coach is on (OPENROUTER_API_KEY is set on Vercel). Other activities also need an intervals.icu key.");
+  const off = coachKey() || coachServer ? PedalaI18n.tHtml("The coach is off. Choose a model in Settings that this key allows.")
     : PedalaI18n.tHtml("The coach is off. Add an OpenRouter API key in Settings (or OPENROUTER_API_KEY on Vercel).");
+  const base = coachEnabled() ? on : off;
   const paused = store.get("coachPauseWhy") === "settings" ? PedalaI18n.tHtml("The coach is paused: OpenRouter refused the request. Check the key and the model.")
     : Date.now() <= store.get("coachPause", 0) ? PedalaI18n.tHtml("The coach is paused: the OpenRouter account has no credit.") : "";
-  st.innerHTML = (paused || base) + (coachModel() && coachEnabled() ? `<br>` + PedalaI18n.tHtml("Model: {model}", { model: coachModel() }) : "");
+  st.innerHTML = (paused || base) + (coachModel() && coachEnabled() ? `<br>` + PedalaI18n.tHtml("Model: {model}", { model: esc(coachModel()) }) : "");
   $("#coach-mode").value = coachMode();
   if(document.activeElement !== $("#coach-key")) $("#coach-key").value = settings.orKey || "";
   if(document.activeElement !== $("#coach-about")) $("#coach-about").value = settings.coachAbout || "";

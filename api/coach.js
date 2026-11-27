@@ -89,8 +89,8 @@ module.exports = async (req, res) => {
     const key = keyOf(b);
     if(!key) return res.status(501).json({ error: "Coach is not enabled: add an OpenRouter API key in Settings, or OPENROUTER_API_KEY on Vercel." });
     const ctx = { key, model: b.model, caps: b.caps, host: req.headers?.host };
-    if(b.action === "ask") return ask(b, icuKey, res, ctx);
-    if(b.action === "week") return week(b, icuKey, res, ctx);
+    if(b.action === "ask") return await ask(b, icuKey, res, ctx);
+    if(b.action === "week") return await week(b, icuKey, res, ctx);
     if(!b.ride && !b.icuId) return res.status(400).json({ error: "No session to comment on" });
 
     // what the coach looks at; intervals.icu parts are optional (no key, or the service is down)
@@ -140,10 +140,12 @@ async function ask(b, icuKey, res, ctx){
   const cut = cutOff(j); if(cut) return res.status(502).json({ error: cut });
   if(j.choices?.[0]?.finish_reason === "content_filter") return res.status(422).json({ error: "The coach did not respond this time" });
   const out = parseJson(messageText(j));
-  if(!out) return res.status(502).json({ error: "The coach returned an invalid response" });
+  if(!out || typeof out !== "object" || Array.isArray(out) || typeof out.answer !== "string" || !Array.isArray(out.changes))   // malformed: never a bare 500
+    return res.status(502).json({ error: "The coach returned an invalid response" });
   const ids = new Set((b.plan?.sessions || []).map(x => x.id)), opts = new Set((b.plan?.options || []).map(x => x.id));
-  const changes = (out.changes || []).filter(c => ids.has(c.session_id) && (c.action !== "replace" || opts.has(c.workout_id)));   // only what the app can apply
-  return res.status(200).json({ answer: String(out.answer || "").trim(), changes, model: replyModel(j, ctx.model), usage: usage(j) });
+  const changes = out.changes.filter(c => c && typeof c === "object" && ids.has(c.session_id)   // only what the app can apply
+    && ["replace", "skip", "restore"].includes(c.action) && (c.action !== "replace" || opts.has(c.workout_id)));
+  return res.status(200).json({ answer: out.answer.trim(), changes, model: replyModel(j, ctx.model), usage: usage(j) });
 }
 
 /* Saturday review of the week: the plan around it, Pedala's rides, intervals.icu and wellness */
@@ -183,7 +185,12 @@ async function orChat({ key, model, caps, system, content, schema, host }){
     return j;
   };
   try{ return await send(body); }
-  catch(e){ if(e.status === 400 && optional) return send({ model: body.model, messages: body.messages, max_tokens: 4000 }); throw e; }
+  catch(e){
+    // retry conservatively only when the provider names one of the optional fields; every other 400 is a real refusal
+    if(e.status === 400 && optional && /max_tokens|max_completion_tokens|reasoning|response_format/i.test(String(e.message)))
+      return send({ model: body.model, messages: body.messages, max_tokens: 4000 });
+    throw e;
+  }
 }
 /* the answer was cut off at the token limit */
 function cutOff(j){

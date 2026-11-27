@@ -569,6 +569,7 @@ PedalaI18n.add({
     "The Click is not answering. Update its firmware with Zwift Companion.": "A Click nem válaszol. Frissítsd a firmware-ét a Zwift Companionnal.",
     "The coach commented on your ride (Progress → Coach)": "Az edző megjegyzést írt a tekerésedhez (Fejlődés → Edző)",
     "The coach is off. Add an OpenRouter API key in Settings (or OPENROUTER_API_KEY on Vercel).": "Az edző ki van kapcsolva. Adj hozzá OpenRouter API-kulcsot a Beállításokban (vagy OPENROUTER_API_KEY-et a Vercelen).",
+    "The coach is off. Choose a model in Settings that this key allows.": "Az edző ki van kapcsolva. Válassz a Beállításokban egy modellt, amelyet ez a kulcs engedélyez.",
     "The coach is off. See Settings → Virtual coach.": "Az edző ki van kapcsolva. Lásd: Beállítások → Virtuális edző.",
     "The coach is on (key on this device). Other activities also need an intervals.icu key.": "Az edző be van kapcsolva (a kulcs ezen az eszközön van). A többi aktivitáshoz intervals.icu-kulcs is kell.",
     "The coach is on (OPENROUTER_API_KEY is set on Vercel). Other activities also need an intervals.icu key.": "Az edző be van kapcsolva (az OPENROUTER_API_KEY be van állítva a Vercelen). A többi aktivitáshoz intervals.icu-kulcs is kell.",

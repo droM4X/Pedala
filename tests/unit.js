@@ -132,7 +132,8 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
   });
   await test("coach: without caps the body is conservative and a schema answer still parses", async () => {
     process.env.OPENROUTER_API_KEY = "sk-test"; let sent;
-    const out = { answer: "Rest today.", changes: [{ session_id: "w1-tue", action: "skip", workout_id: null, reason: "cold" }] };
+    const out = { answer: "Rest today.", changes: [{ session_id: "w1-tue", action: "skip", workout_id: null, reason: "cold" },
+      { session_id: "w1-tue", action: "explode", workout_id: null, reason: "an unknown action must be dropped" }] };
     global.fetch = async (url, opt) => { sent = JSON.parse(opt.body);
       return new Response(JSON.stringify({ model: "m", choices: [{ message: { content: "```json\n" + JSON.stringify(out) + "\n```" }, finish_reason: "stop" }], usage: { prompt_tokens: 10, completion_tokens: 5 } }), { status: 200 }); };
     try{
@@ -141,6 +142,32 @@ async function test(name, fn){ try{ await fn(); results.push(["ok", name]); }cat
       assert.equal(sent.max_tokens, 4000); assert.equal(sent.reasoning, undefined); assert.equal(sent.response_format, undefined);
       assert.match(sent.messages[0].content, /Return only JSON/); assert.match(sent.messages[1].content, /I have a cold/);
       assert.deepEqual(r.body.usage, { input: 10, output: 5, usd: null }, "no cost, no invented price");
+    }finally{ global.fetch = realFetch; delete process.env.OPENROUTER_API_KEY; }
+  });
+  await test("coach: a malformed answer and an upstream failure are 502, never a bare 500", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-test";
+    try{
+      global.fetch = async () => new Response(JSON.stringify({ choices: [{ message: { content: '{"answer":"Rest","changes":"nope"}' }, finish_reason: "stop" }] }), { status: 200 });
+      const bad = await callCoach("POST", { action: "ask", question: "I have a cold", plan: { sessions: [{ id: "w1-tue" }], options: [] } });
+      assert.equal(bad.status, 502); assert.match(bad.body.error, /invalid/i);
+      global.fetch = async () => new Response(JSON.stringify({ error: { message: "upstream exploded" } }), { status: 500 });
+      const broken = await callCoach("POST", { action: "ask", question: "I have a cold", plan: { sessions: [], options: [] } });
+      assert.equal(broken.status, 502); assert.match(broken.body.error, /upstream exploded/);
+    }finally{ global.fetch = realFetch; delete process.env.OPENROUTER_API_KEY; }
+  });
+  await test("coach: a 400 retries only when the provider names an optional field", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-test"; let calls = 0, bodies = [];
+    try{
+      global.fetch = async (url, opt) => { calls++; bodies.push(JSON.parse(opt.body));
+        if(calls === 1) return new Response(JSON.stringify({ error: { message: "Unsupported parameter: max_completion_tokens" } }), { status: 400 });
+        return new Response(JSON.stringify({ model: "m", choices: [{ message: { content: "Good workout." }, finish_reason: "stop" }] }), { status: 200 }); };
+      const retried = await callCoach("POST", { action: "comment", ride: coachRide, caps: { mc: true } });
+      assert.equal(retried.status, 200); assert.equal(calls, 2, "the named field is retried once");
+      assert.equal(bodies[1].max_tokens, 4000); assert.equal(bodies[1].max_completion_tokens, undefined);
+      calls = 0;
+      global.fetch = async () => { calls++; return new Response(JSON.stringify({ error: { message: "Invalid request: messages must not be empty" } }), { status: 400 }); };
+      const refused = await callCoach("POST", { action: "comment", ride: coachRide, caps: { mc: true } });
+      assert.equal(refused.status, 502); assert.equal(calls, 1, "a 400 that names no optional field is not retried");
     }finally{ global.fetch = realFetch; delete process.env.OPENROUTER_API_KEY; }
   });
   await test("coach: 402, 403, 404 and 429 are told apart", async () => {

@@ -69,7 +69,7 @@ const DEFAULT_OR = () => ({ models: [
   orModel("acme/plain-model", "0.000001", "0.000002", ["max_tokens"]),
   orModel("deepseek/deepseek-v4.1-flash-1017:batch", "0.00000002", "0.00000005", ["max_tokens"]),
   orModel("acme/image-only", "0.00001", "0.00002", ["max_tokens"], ["/api/v1/chat/completions"], ["image"]),
-], cost: 0.02, fail: null });
+], cost: 0.02, fail: null, delay: 0 });
 let or = DEFAULT_OR();
 const openrouter = [], openrouterAuth = [];
 async function fakeOpenRouter(u, opt){
@@ -77,8 +77,10 @@ async function fakeOpenRouter(u, opt){
   if(u.pathname === "/api/v1/models/user"){
     if(!auth.startsWith("Bearer sk-") || auth === "Bearer sk-bad") return J({ error: { message: "No auth credentials found" } }, 401);
     if(or.fail) return J({ error: { message: "Provider returned error", code: or.fail } }, or.fail);
-    log.push(`openrouter models ${or.models.length}`);
-    return J({ data: or.models });
+    const models = or.models, delay = or.delay;   // capture now, so a later patch cannot change this request's answer
+    if(delay) await new Promise(r => setTimeout(r, delay));
+    log.push(`openrouter models ${models.length}`);
+    return J({ data: models });
   }
   if(u.pathname === "/api/v1/chat/completions"){
     const body = JSON.parse(opt.body); openrouter.push(body); openrouterAuth.push(auth);
@@ -146,7 +148,7 @@ function start(port = 0){
   return new Promise(resolve => server.listen(port, () => resolve({
     url: `http://localhost:${server.address().port}`, log, blobs, openrouter, openrouterAuth,
     setEnv(vars){ for(const [k, v] of Object.entries(vars)){ if(v == null) delete process.env[k]; else process.env[k] = v; } },
-    setOpenRouter(patch = {}){ if(patch.reset) or = DEFAULT_OR(); for(const k of ["models", "cost", "fail"]) if(k in patch) or[k] = patch[k]; return or; },
+    setOpenRouter(patch = {}){ if(patch.reset) or = DEFAULT_OR(); for(const k of ["models", "cost", "fail", "delay"]) if(k in patch) or[k] = patch[k]; return or; },
     close: () => new Promise(r => { remote.close(); server.close(r); }),
   })));
 }
