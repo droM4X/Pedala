@@ -107,6 +107,19 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await z.context().close();
   });
 
+  await test("i18n: Ride view labels are dynamic, video titles stay as they are", async () => {
+    const p = await open({ settings: { lang: "zz" } });
+    assert.equal(await p.textContent("#tgt-lbl"), "zz:Free ride");
+    assert.equal(await p.textContent("#bias-lbl"), "zz:Intensity");
+    assert.equal(await p.textContent("#cad-lbl"), "zz:Cadence");
+    await p.evaluate(() => { store.set("recentVideos", [{ id: "dQw4w9WgXcQ", title: "Imported video title", channel: "Some channel" }]); renderRecent(); });
+    assert.equal(await p.locator("#vid-recent .vcard b").first().textContent(), "Imported video title");
+    await p.evaluate(() => setWorkout(allWorkouts().find(w => w.id === "b-ss")));
+    assert.equal(await p.textContent("#tgt-lbl"), "zz:Target");
+    assert.match(await p.textContent("#iv-lbl"), /^zz:Interval 1 of \d+$/);
+    await p.context().close();
+  });
+
   await test("i18n: dates, numbers and plurals follow the active locale", async () => {
     const p = await open();
     assert.deepEqual(await p.evaluate(() => ({

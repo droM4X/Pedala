@@ -798,7 +798,7 @@ function parseBikeData(dv){
 /* gatt.connect() to a device that is off can wait for a very long time; give up after 12 s */
 function gattConnect(dev, ms = 12000){
   return new Promise((res, rej) => {
-    const t = setTimeout(() => { try{ dev.gatt.disconnect(); }catch{} rej(new Error("The device is not responding")); }, ms);
+    const t = setTimeout(() => { try{ dev.gatt.disconnect(); }catch{} rej(new Error(PedalaI18n.t("The device is not responding"))); }, ms);
     dev.gatt.connect().then(v => { clearTimeout(t); res(v); }, e => { clearTimeout(t); rej(e); });
   });
 }
@@ -808,7 +808,7 @@ class BleTrainer {
   async connect(){ await this.attach(await navigator.bluetooth.requestDevice({ filters: [{ services: [FTMS] }] })); rememberDevice("trainer", this.device); }
   attach(dev){ this.device = dev; dev.addEventListener("gattserverdisconnected", () => this.reconnect()); return this.setup(); }
   async setup(){
-    this.onStatus("wait", "Connecting…");
+    this.onStatus("wait", PedalaI18n.t("Connecting…"));
     const server = await gattConnect(this.device);
     const svc = await server.getPrimaryService(FTMS);
     this.cp = await svc.getCharacteristic(CONTROL);
@@ -824,16 +824,16 @@ class BleTrainer {
     this.lastPower = this.lastGrade = null;
     if(this.mode === "erg" && this.pendingPower != null) this.setPower(this.pendingPower);
     if(this.mode === "sim" && this.pendingGrade != null) this.setGrade(this.pendingGrade);
-    this.onStatus("on", this.device.name || "Trainer");
+    this.onStatus("on", this.device.name || PedalaI18n.t("Trainer"));
   }
   async reconnect(){
     if(this.closing) return;
-    this.onStatus("wait", "Reconnecting…");
+    this.onStatus("wait", PedalaI18n.t("Reconnecting…"));
     for(let i = 0; i < 8; i++){
-      try{ await new Promise(r => setTimeout(r, 1500)); await this.setup(); toast("Trainer reconnected"); return; }
+      try{ await new Promise(r => setTimeout(r, 1500)); await this.setup(); toast(PedalaI18n.t("Trainer reconnected")); return; }
       catch(e){ console.warn("reconnect", e); }
     }
-    this.onStatus("off", "Trainer disconnected");
+    this.onStatus("off", PedalaI18n.t("Trainer disconnected"));
   }
   write(bytes){
     this.q = this.q.then(() => this.cp && this.cp.writeValueWithResponse(new Uint8Array(bytes))).catch(e => console.warn("FTMS write", e));
@@ -857,7 +857,7 @@ class BleTrainer {
 class SimTrainer {
   constructor(onData, onStatus){ this.onData = onData; this.onStatus = onStatus; this.target = 150; this.grade = 0; this.mode = "erg"; this.p = 0; this.hr = 72; }
   async connect(){
-    this.onStatus("on", "Simulator");
+    this.onStatus("on", PedalaI18n.t("Simulator"));
     this.timer = setInterval(() => {
       const pedaling = !this.stopped;
       const cad = pedaling ? 88 + Math.sin(Date.now()/7000) * 4 + (Math.random()-.5)*3 : 0;
@@ -879,14 +879,14 @@ class BleHR {
   async connect(){ await this.attach(await navigator.bluetooth.requestDevice({ filters: [{ services: [HR_SVC] }] })); rememberDevice("hr", this.device); }
   attach(dev){ this.device = dev; dev.addEventListener("gattserverdisconnected", () => this.reconnect()); return this.setup(); }
   async setup(){
-    this.onStatus("wait", "Connecting…");
+    this.onStatus("wait", PedalaI18n.t("Connecting…"));
     const s = await gattConnect(this.device);
     const c = await (await s.getPrimaryService(HR_SVC)).getCharacteristic(HR_MEAS);
     await c.startNotifications();
     c.oncharacteristicvaluechanged = e => { const v = e.target.value; this.onHR(v.getUint8(0) & 1 ? v.getUint16(1, true) : v.getUint8(1)); };
-    this.onStatus("on", "HR");
+    this.onStatus("on", PedalaI18n.t("HR"));
   }
-  async reconnect(){ for(let i=0;i<8;i++){ try{ await new Promise(r=>setTimeout(r,1500)); await this.setup(); return; }catch{} } this.onStatus("off","HR"); }
+  async reconnect(){ for(let i=0;i<8;i++){ try{ await new Promise(r=>setTimeout(r,1500)); await this.setup(); return; }catch{} } this.onStatus("off", PedalaI18n.t("HR")); }
 }
 
 /* ============ workouts ============ */
@@ -1081,6 +1081,8 @@ const hrFresh = () => S.live.hr > 0 && performance.now() - (S.hrAt || 0) < 5000 
 const power3s = () => S.pBuf.length ? Math.round(S.pBuf.reduce((a, x) => a + x[1], 0) / S.pBuf.length) : 0;
 
 function setChip(id, cls, text){ const c = $(id); c.className = "chip " + cls; c.lastElementChild.textContent = text; }
+/* built-in drill cues translate; an imported workout's own note stays as written */
+const noteText = (w, note) => note ? (w?.builtin ? PedalaI18n.t(note) : note) : "";
 
 /* virtual speed from power on flat road (like other apps do), m/s */
 function speedFromPower(P){
@@ -1109,7 +1111,7 @@ const cadIn = (rpm, [lo, hi]) => rpm >= lo - 2 && rpm <= hi + 2;
 function steerHr(c){
   if(!c?.s.hr){ S.hrP = null; return; }
   S.hrP ??= toWatts(S.workout, c.s.lo);
-  if(!hrFresh()){ if(!S.hrWarned){ S.hrWarned = true; notify("No heart rate: power stays the same until the strap works again"); } return; }   // hold, never climb blind
+  if(!hrFresh()){ if(!S.hrWarned){ S.hrWarned = true; notify(PedalaI18n.t("No heart rate: power stays the same until the strap works again")); } return; }   // hold, never climb blind
   S.hrWarned = false;
   if(S.soft || S.hrHold > 0){ S.hrHold--; return; }        // just (re)started: heart rate is still catching up
   const err = hrTarget(c.s) - S.live.hr;
@@ -1140,15 +1142,15 @@ function lapTick(c, tgt){
   if(S.workout && c){
     if(!S.lap || S.lap.seg !== c.i){
       const done = lapClose(); if(done) lapResult(done);
-      lapOpen({ seg: c.i, name: `Interval ${c.i + 1}`, kind: c.s.free ? "free" : c.s.hr ? "hr" : "power", cadTgt: c.s.cad, note: c.s.note });
+      lapOpen({ seg: c.i, name: PedalaI18n.t("Interval {i}", { i: c.i + 1 }), kind: c.s.free ? "free" : c.s.hr ? "hr" : "power", cadTgt: c.s.cad, note: c.s.note });
       if(c.i === 0 && S.t <= 1) say(() => `Workout starting. ${segSpeech(c.s)}.`);
     }
     // next segment in 10 seconds
     const nx = S.workout.segs[c.i + 1];
     if(nx && Math.round(c.left) === 10 && c.s.d >= 20) say(() => `In 10 seconds: ${segSpeech(nx)}.`);
   } else if(!S.workout){
-    if(!S.lap) lapOpen({ name: `Lap ${S.laps.length + 1}`, kind: "dist" });
-    else if(S.dist - S.lap.d0 >= S.lap.kmLimit * 1000){ lapResult(lapClose()); lapOpen({ name: `Lap ${S.laps.length + 1}`, kind: "dist" }); }
+    if(!S.lap) lapOpen({ name: PedalaI18n.t("Lap {n}", { n: S.laps.length + 1 }), kind: "dist" });
+    else if(S.dist - S.lap.d0 >= S.lap.kmLimit * 1000){ lapResult(lapClose()); lapOpen({ name: PedalaI18n.t("Lap {n}", { n: S.laps.length + 1 }), kind: "dist" }); }
   }
   const l = S.lap; if(!l) return;
   l.n++; l.p += S.live.power; l.c += S.live.cadence; if(S.live.hr){ l.hr += S.live.hr; l.hrN++; }
@@ -1160,7 +1162,7 @@ function lapResult(lap){
   if(lap.cadTgt && S.workout?.cat === "drill"){
     // drills: report the cadence of the drill parts, stay quiet on recoveries
     if(lap.cadTgt[0] >= 100 || lap.cadTgt[1] <= 70){
-      notify(`${lap.name}: ${lap.avgCad} rpm (target ${cadTxt(lap.cadTgt)})`);
+      notify(PedalaI18n.t("{name}: {cad} rpm (target {target})", { name: lap.name, cad: lap.avgCad, target: cadTxt(lap.cadTgt) }));
       say(() => `Average cadence ${lap.avgCad}.`);
     }
     return;
@@ -1170,7 +1172,7 @@ function lapResult(lap){
     const km = Math.round(S.dist / 1000);
     say(() => `${PedalaI18n.tn(km, "{n} kilometer", "{n} kilometers", { n: km })}. Last ${lap.kmLimit} in ${sayDur(lap.dur)}, average ${watts(lap.avgP)}.`);
   } else if(lap.score != null && lap.dur >= 30 && !S.workout?.test){
-    const what = lap.kind === "hr" ? `${lap.avgHr} bpm of ${lap.tgt}` : `${lap.avgP} W of ${lap.tgt}`;
+    const what = lap.kind === "hr" ? PedalaI18n.t("{value} bpm of {target}", { value: lap.avgHr, target: lap.tgt }) : PedalaI18n.t("{value} W of {target}", { value: lap.avgP, target: lap.tgt });
     notify(`${lap.name}: ${what} (${lap.score}%)`);
     say(() => lap.kind === "hr" ? `Interval done. Average heart rate ${lap.avgHr}.`
       : `Interval done. Average ${watts(lap.avgP)}, ${lap.score} percent.`);
@@ -1272,7 +1274,7 @@ function softStep(){
 /* ERG only: cadence under 45 rpm for 3 s while below target means the rider is losing the fight */
 function guardCadence(tgt){
   if(tgt == null || S.soft || !S.running){ S.lowCad = 0; return; }
-  if(S.live.cadence < 45 && power3s() < tgt * .9){ if(++S.lowCad >= 3){ softStart(.3); notify("Cadence dropped, easing off"); } }
+  if(S.live.cadence < 45 && power3s() < tgt * .9){ if(++S.lowCad >= 3){ softStart(.3); notify(PedalaI18n.t("Cadence dropped, easing off")); } }
   else S.lowCad = 0;
 }
 function applyControl(){
@@ -1338,8 +1340,8 @@ function start(){
   S.running = true; S.autoPaused = false; S.idle = 0; S.grace = GRACE_S; if(S.trainer.stopped) S.trainer.stopped = false;
   softStart(); S.hrHold = 60; applyControl(); startClock(); wakeLock(); yt("playVideo"); render();
 }
-function pause(auto){ S.running = false; S.autoPaused = !!auto; S.soft = null; applyControl(); if(settings.pauseVideo) yt("pauseVideo"); if(auto) notify("Paused: start pedalling to resume"); render(); }
-function resume(){ S.running = true; S.autoPaused = false; S.idle = 0; S.grace = GRACE_S; softStart(); S.hrHold = 60; applyControl(); yt("playVideo"); toast("Resuming"); }
+function pause(auto){ S.running = false; S.autoPaused = !!auto; S.soft = null; applyControl(); if(settings.pauseVideo) yt("pauseVideo"); if(auto) notify(PedalaI18n.t("Paused: start pedalling to resume")); render(); }
+function resume(){ S.running = true; S.autoPaused = false; S.idle = 0; S.grace = GRACE_S; softStart(); S.hrHold = 60; applyControl(); yt("playVideo"); toast(PedalaI18n.t("Resuming")); }
 function finishWorkout(){ S.running = false; S.soft = null; applyControl(); if(settings.beep) beep(660, .4); say(() => S.route ? "You made it to the finish." : "Workout complete. Well done."); openSummary(); }
 
 /* ============ metrics ============ */
@@ -1422,7 +1424,7 @@ function setVideo(id){
   if(!id){ showPicker(); return; }
   const f = document.createElement("iframe"); f.id = "vid-frame";
   f.src = `https://www.youtube.com/embed/${id}?enablejsapi=1&playsinline=1&rel=0&modestbranding=1&fs=0${S.running ? "&autoplay=1" : ""}`;
-  f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"; f.title = "YouTube video"; ytListen(f);
+  f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"; f.title = PedalaI18n.t("YouTube video"); ytListen(f);
   st.prepend(f); hidePicker(); store.set("video", id); store.set("stageMode", "video");
 }
 /* no video: the stage shows the workout profile with the metrics, like fullscreen */
@@ -1435,13 +1437,13 @@ function showPicker(){
   const st = $("#stage"), vf = $("#vid-frame");
   if(vf){ yt("pauseVideo"); vf.hidden = true; }
   $("#stage-empty").hidden = false; st.classList.add("picking"); $("#vid-tools").hidden = true;
-  $("#btn-vid-back").hidden = !(vf || isDash()); $("#btn-vid-back").textContent = vf ? "Back to video" : "Back to profile";
+  $("#btn-vid-back").hidden = !(vf || isDash()); $("#btn-vid-back").textContent = vf ? PedalaI18n.t("Back to video") : PedalaI18n.t("Back to profile");
   renderRecent(); renderRecentMusic(); renderFeed();
 }
 function hidePicker(){
   const st = $("#stage"), f = $("#vid-frame"); if(f){ f.hidden = false; if(S.running) yt("playVideo"); }
   $("#stage-empty").hidden = true; st.classList.remove("picking"); $("#vid-tools").hidden = !(f || isDash());
-  $("#btn-vid-change").textContent = f ? "Change video" : "Choose a video";
+  $("#btn-vid-change").textContent = f ? PedalaI18n.t("Change video") : PedalaI18n.t("Choose a video");
 }
 
 /* video search (YouTube Data API v3) */
@@ -1455,7 +1457,7 @@ function vidCard(v, onPick = () => { rememberVideo(v); setVideo(v.id); }){
   b.innerHTML = `<div class="th"><img loading="lazy" alt=""></div><b></b><small></small>`;
   b.querySelector("img").src = v.thumb || `https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`;
   if(v.dur){ const d = document.createElement("span"); d.className = "dur"; d.textContent = fmtTime(v.dur); b.querySelector(".th").append(d); }
-  b.querySelector("b").textContent = v.title || "YouTube video";
+  b.querySelector("b").textContent = v.title || PedalaI18n.t("YouTube video");
   b.querySelector("small").textContent = v.channel || "";
   b.onclick = onPick;
   return b;
@@ -1485,54 +1487,54 @@ async function cached(key, maxAge, fn){
   store.set("ytCache", c2); return data;
 }
 const ytChannels = () => store.get("ytChannels", []), ytPlaylists = () => store.get("ytPlaylists", []);
-const feedErr = e => String(e.message) === "noKey" ? "Channels and picks need a YouTube key on Vercel (YOUTUBE_API_KEY)." : "Not loaded: " + String(e.message).replace(/[<>]/g, "");
+const feedErr = e => String(e.message) === "noKey" ? PedalaI18n.t("Channels and picks need a YouTube key on Vercel (YOUTUBE_API_KEY).") : PedalaI18n.t("Not loaded: {error}", { error: String(e.message).replace(/[<>]/g, "") });
 function feedSection(title, id){ return `<div class="vsect">${title}</div><div class="vgrid" id="${id}"></div>`; }
 function fillGrid(id, items, empty){
   const g = $("#" + id); if(!g) return; g.innerHTML = "";
-  if(!items.length){ g.innerHTML = `<p class="note">${empty}</p>`; return; }
+  if(!items.length){ const p = document.createElement("p"); p.className = "note"; p.textContent = empty; g.append(p); return; }
   items.forEach(v => g.append(vidCard({ ...v, title: unesc(v.title), channel: unesc(v.channel || "") })));
 }
 async function renderFeed(){
   const box = $("#vid-feed"); if(!box) return;
   const chans = ytChannels(), lists = ytPlaylists(), long = $("#vid-long").checked;
   const day = ymd(new Date()), themeIdx = (store.get("feedTheme", {})[day] ?? Math.floor(Date.now() / 864e5)) % FEED_THEMES.length, [theme, query] = FEED_THEMES[themeIdx];
-  box.innerHTML = `<div class="vsect">My channels</div>
-    <form class="field" id="feed-ch-form"><input id="feed-ch" type="search" placeholder="Add a channel: link or @name" aria-label="Add a YouTube channel"><button class="btn" type="submit">Add</button></form>
+  box.innerHTML = `<div class="vsect">${PedalaI18n.tHtml("My channels")}</div>
+    <form class="field" id="feed-ch-form"><input id="feed-ch" type="search" placeholder="${PedalaI18n.t("Add a channel: link or @name")}" aria-label="${PedalaI18n.t("Add a YouTube channel")}"><button class="btn" type="submit">${PedalaI18n.tHtml("Add")}</button></form>
     <div class="vchips" id="feed-ch-list"></div><div class="vgrid" id="feed-ch-videos"></div>
-    <div class="vsect">My playlists</div>
-    <form class="field" id="feed-pl-form"><input id="feed-pl" type="search" placeholder="Paste a link to your YouTube playlist" aria-label="Add playlist"><button class="btn" type="submit">Add</button></form>
+    <div class="vsect">${PedalaI18n.tHtml("My playlists")}</div>
+    <form class="field" id="feed-pl-form"><input id="feed-pl" type="search" placeholder="${PedalaI18n.t("Paste a link to your YouTube playlist")}" aria-label="${PedalaI18n.t("Add playlist")}"><button class="btn" type="submit">${PedalaI18n.tHtml("Add")}</button></form>
     <div id="feed-pls"></div>
-    <div class="vsect">Today's picks: ${theme} <button class="more" type="button" id="feed-next">another theme</button></div><div class="vgrid" id="feed-today"></div>`;
+    <div class="vsect">${PedalaI18n.tHtml("Today's picks: {theme}", { theme })} <button class="more" type="button" id="feed-next">${PedalaI18n.tHtml("another theme")}</button></div><div class="vgrid" id="feed-today"></div>`;
   // channels: chips to remove, then the newest uploads of all of them mixed
   for(const c of chans){
-    const b = document.createElement("button"); b.type = "button"; b.className = "ch"; b.title = "Remove channel";
+    const b = document.createElement("button"); b.type = "button"; b.className = "ch"; b.title = PedalaI18n.t("Remove channel");
     b.innerHTML = `${c.thumb ? `<img alt="" src="${c.thumb}">` : ""}<span></span> ✕`; b.querySelector("span").textContent = c.title;
     b.onclick = () => { if(confirm(`Remove channel ${c.title}?`)){ store.set("ytChannels", ytChannels().filter(x => x.id !== c.id)); renderFeed(); } };
     $("#feed-ch-list").append(b);
   }
   $("#feed-ch-form").onsubmit = async e => { e.preventDefault(); const t = $("#feed-ch").value.trim(); if(!t) return;
-    try{ const c = await ytApi({ channel: t }); if(ytChannels().some(x => x.id === c.id)) return toast("This channel is already added");
-      store.set("ytChannels", [...ytChannels(), c]); toast(`Channel ${c.title} added`); renderFeed(); }catch(err){ toast(feedErr(err)); } };
+    try{ const c = await ytApi({ channel: t }); if(ytChannels().some(x => x.id === c.id)) return toast(PedalaI18n.t("This channel is already added"));
+      store.set("ytChannels", [...ytChannels(), c]); toast(PedalaI18n.t("Channel {name} added", { name: c.title })); renderFeed(); }catch(err){ toast(feedErr(err)); } };
   $("#feed-pl-form").onsubmit = async e => { e.preventDefault(); const t = $("#feed-pl").value.trim(); if(!t) return;
-    try{ const pl = await ytApi({ playlist: t }); if(ytPlaylists().some(x => x.id === pl.id)) return toast("This playlist is already added");
-      store.set("ytPlaylists", [...ytPlaylists(), { id: pl.id, title: pl.title || "Playlist" }]); toast(`Playlist ${pl.title} added`); renderFeed(); }catch(err){ toast(feedErr(err)); } };
+    try{ const pl = await ytApi({ playlist: t }); if(ytPlaylists().some(x => x.id === pl.id)) return toast(PedalaI18n.t("This playlist is already added"));
+      store.set("ytPlaylists", [...ytPlaylists(), { id: pl.id, title: pl.title || PedalaI18n.t("Playlist") }]); toast(PedalaI18n.t("Playlist {name} added", { name: pl.title })); renderFeed(); }catch(err){ toast(feedErr(err)); } };
   $("#feed-next").onclick = () => { store.set("feedTheme", { [day]: themeIdx + 1 }); renderFeed(); };
   if(chans.length){
     Promise.all(chans.map(c => cached("ch:" + c.uploads, 3 * 36e5, () => ytApi({ playlist: c.uploads })).then(r => r.items.map(v => ({ ...v, channel: c.title }))).catch(() => [])))
-      .then(all => fillGrid("feed-ch-videos", all.flat().sort((a, b) => String(b.published).localeCompare(String(a.published))).slice(0, 12), "The channels have no videos right now."));
-  } else $("#feed-ch-videos").innerHTML = `<p class="note">Add channels you like to watch, e.g. <b>@channelname</b> or a channel link, and their newest videos will show up here.</p>`;
+      .then(all => fillGrid("feed-ch-videos", all.flat().sort((a, b) => String(b.published).localeCompare(String(a.published))).slice(0, 12), PedalaI18n.t("The channels have no videos right now.")));
+  } else $("#feed-ch-videos").innerHTML = `<p class="note">${PedalaI18n.tHtml("Add channels you like to watch, e.g. <b>@channelname</b> or a channel link, and their newest videos will show up here.")}</p>`;
   for(const pl of lists){
     const sec = document.createElement("div"), gid = "feed-pl-" + pl.id.replace(/[^\w-]/g, "");
-    sec.innerHTML = `<div class="vsect" style="font-size:17px;margin-top:12px"><span></span> <button class="more" type="button">remove</button></div><div class="vgrid" id="${gid}"></div>`;
+    sec.innerHTML = `<div class="vsect" style="font-size:17px;margin-top:12px"><span></span> <button class="more" type="button">${PedalaI18n.tHtml("remove")}</button></div><div class="vgrid" id="${gid}"></div>`;
     sec.querySelector("span").textContent = pl.title;
     sec.querySelector("button").onclick = () => { if(confirm(`Remove playlist ${pl.title}?`)){ store.set("ytPlaylists", ytPlaylists().filter(x => x.id !== pl.id)); renderFeed(); } };
     $("#feed-pls").append(sec);
-    cached("pl:" + pl.id, 3 * 36e5, () => ytApi({ playlist: pl.id })).then(r => fillGrid(gid, r.items.slice(0, 12), "The playlist is empty."), err => fillGrid(gid, [], feedErr(err)));
+    cached("pl:" + pl.id, 3 * 36e5, () => ytApi({ playlist: pl.id })).then(r => fillGrid(gid, r.items.slice(0, 12), PedalaI18n.t("The playlist is empty.")), err => fillGrid(gid, [], feedErr(err)));
   }
-  if(!lists.length) $("#feed-pls").innerHTML = `<p class="note">E.g. your own “Trainer” playlist on YouTube. It has to be public or unlisted.</p>`;
+  if(!lists.length) $("#feed-pls").innerHTML = `<p class="note">${PedalaI18n.tHtml("E.g. your own “Trainer” playlist on YouTube. It has to be public or unlisted.")}</p>`;
   const seen = new Set(recentVideos().map(v => v.id));
   cached(`theme:${day}:${themeIdx}:${long}`, 864e5, () => ytSearch(query, long))
-    .then(r => fillGrid("feed-today", r.filter(v => !seen.has(v.id)).slice(0, 8), "No picks today."), err => fillGrid("feed-today", [], feedErr(err)));
+    .then(r => fillGrid("feed-today", r.filter(v => !seen.has(v.id)).slice(0, 8), PedalaI18n.t("No picks today.")), err => fillGrid("feed-today", [], feedErr(err)));
 }
 function vidMsg(html){ const m = $("#vid-msg"); m.hidden = !html; m.innerHTML = html || ""; }
 /* search through api/youtube.js with YOUTUBE_API_KEY from Vercel; without it, straight to Google with the key from Settings */
@@ -1558,24 +1560,24 @@ async function ytSearch(q, long, music = false){
   return items.map(i => ({ id: i.id.videoId, title: i.snippet.title, channel: i.snippet.channelTitle, thumb: i.snippet.thumbnails?.medium?.url, dur: durs[i.id.videoId] || 0 }));
 }
 async function searchVideos(q, label){
-  vidMsg("Searching…"); $("#vid-results").innerHTML = ""; $("#vid-res-title").hidden = true;
+  vidMsg(PedalaI18n.t("Searching…")); $("#vid-results").innerHTML = ""; $("#vid-res-title").hidden = true;
   try{
     const list = (await ytSearch(q, $("#vid-long").checked)).map(v => ({ ...v, title: unesc(v.title), channel: unesc(v.channel) }));
-    vidMsg(list.length ? "" : "Nothing found. Try another search or turn off the long-videos filter.");
-    $("#vid-res-title").hidden = !list.length; $("#vid-res-title").textContent = `Results for “${label || q}”`;
+    vidMsg(list.length ? "" : PedalaI18n.t("Nothing found. Try another search or turn off the long-videos filter."));
+    $("#vid-res-title").hidden = !list.length; $("#vid-res-title").textContent = PedalaI18n.t("Results for “{label}”", { label: label || q });
     list.forEach(v => $("#vid-results").append(vidCard(v)));
   }catch(e){
     const why = String(e.message);
-    vidMsg(why === "noKey" ? "Searching needs a free YouTube API key. Add it on Vercel as <b>YOUTUBE_API_KEY</b> or enter it in <b>Settings</b>. Until then you can paste a video link."
-      : why.includes("quota") ? "Today's search quota is used up. It resets at midnight Pacific time; until then you can paste a link."
-      : /referer|referrer/i.test(why) ? "Google refuses the key because it is restricted to websites. In Google Cloud Console set this key to <b>Application restrictions: None</b> and keep API restrictions on YouTube Data API v3."
-      : why.includes("keyInvalid") || why.includes("API key") ? "YouTube does not accept the API key. Check it and that YouTube Data API v3 is enabled."
-      : why.includes("Failed to fetch") ? "Can't reach YouTube. Check your internet connection."
-      : "Search failed: " + why.replace(/[<>]/g, ""));
+    vidMsg(why === "noKey" ? PedalaI18n.tHtml("Searching needs a free YouTube API key. Add it on Vercel as <b>YOUTUBE_API_KEY</b> or enter it in <b>Settings</b>. Until then you can paste a video link.")
+      : why.includes("quota") ? PedalaI18n.tHtml("Today's search quota is used up. It resets at midnight Pacific time; until then you can paste a link.")
+      : /referer|referrer/i.test(why) ? PedalaI18n.tHtml("Google refuses the key because it is restricted to websites. In Google Cloud Console set this key to <b>Application restrictions: None</b> and keep API restrictions on YouTube Data API v3.")
+      : why.includes("keyInvalid") || why.includes("API key") ? PedalaI18n.tHtml("YouTube does not accept the API key. Check it and that YouTube Data API v3 is enabled.")
+      : why.includes("Failed to fetch") ? PedalaI18n.tHtml("Can't reach YouTube. Check your internet connection.")
+      : PedalaI18n.tHtml("Search failed: {error}", { error: why.replace(/[<>]/g, "") }));
   }
 }
 async function playLink(id){
-  const v = { id, title: "YouTube video", channel: "" };
+  const v = { id, title: PedalaI18n.t("YouTube video"), channel: "" };
   try{ const r = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent("https://www.youtube.com/watch?v=" + id)}`);
     if(r.ok){ const j = await r.json(); v.title = j.title; v.channel = j.author_name; } }catch{}
   rememberVideo(v); setVideo(id);
@@ -1597,9 +1599,9 @@ function setMusic(m, play = true){
   const q = `enablejsapi=1&playsinline=1&rel=0${play ? "&autoplay=1" : ""}`, f = document.createElement("iframe");
   f.src = m.id ? `https://www.youtube.com/embed/${m.id}?${q}${m.list ? "&list=" + encodeURIComponent(m.list) : ""}`
     : `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(m.list)}&${q}`;
-  f.allow = "autoplay; encrypted-media"; f.title = "Music"; ytListen(f);
+  f.allow = "autoplay; encrypted-media"; f.title = PedalaI18n.t("Music"); ytListen(f);
   fr.append(f); box.hidden = false; box.classList.remove("min");
-  musicOn = play; $("#mus-play").textContent = play ? "⏸" : "▶"; $("#mus-prev").hidden = $("#mus-next").hidden = !m.list; $("#music-title").textContent = m.title || m.list ? "Playlist" : "Music";
+  musicOn = play; $("#mus-play").textContent = play ? "⏸" : "▶"; $("#mus-prev").hidden = $("#mus-next").hidden = !m.list; $("#music-title").textContent = m.title || m.list ? PedalaI18n.t("Playlist") : PedalaI18n.t("Music");
   store.set("music", m);
 }
 const MUS_CHIPS = ["Workout mix", "Workout techno", "Workout rock", "Drum and bass", "Lo-fi", "Croatian hits", "Epic motivation"];
@@ -1612,23 +1614,23 @@ function renderRecentMusic(){
 }
 function musMsg(html){ const m = $("#mus-msg"); m.hidden = !html; m.innerHTML = html || ""; }
 async function searchMusic(q){
-  musMsg("Searching…"); $("#mus-results").innerHTML = "";
+  musMsg(PedalaI18n.t("Searching…")); $("#mus-results").innerHTML = "";
   try{
     const list = (await ytSearch(q, false, true)).map(v => ({ ...v, title: unesc(v.title), channel: unesc(v.channel) }));
-    musMsg(list.length ? "" : "Nothing found. Try another search.");
+    musMsg(list.length ? "" : PedalaI18n.t("Nothing found. Try another search."));
     list.slice(0, 12).forEach(v => $("#mus-results").append(vidCard(v, () => pickMusic(v))));
-  }catch(e){ musMsg(e.message === "noKey" ? "Searching needs a YouTube API key (YOUTUBE_API_KEY on Vercel). A YouTube Music link works without one." : "Search failed: " + String(e.message).replace(/[<>]/g, "")); }
+  }catch(e){ musMsg(e.message === "noKey" ? PedalaI18n.t("Searching needs a YouTube API key (YOUTUBE_API_KEY on Vercel). A YouTube Music link works without one.") : PedalaI18n.t("Search failed: {error}", { error: String(e.message).replace(/[<>]/g, "") })); }
 }
 async function musicFromLink(text){
-  const ref = musicRef(text); if(!ref){ toast("That doesn't look like a YouTube Music or YouTube link"); return; }
-  const m = { ...ref, title: ref.list && !ref.id ? "Playlist" : "Music" };
+  const ref = musicRef(text); if(!ref){ toast(PedalaI18n.t("That doesn't look like a YouTube Music or YouTube link")); return; }
+  const m = { ...ref, title: ref.list && !ref.id ? PedalaI18n.t("Playlist") : PedalaI18n.t("Music") };
   if(ref.id) try{ const r = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent("https://www.youtube.com/watch?v=" + ref.id)}`);
     if(r.ok){ const j = await r.json(); m.title = j.title; m.channel = j.author_name; } }catch{}
   pickMusic(m);
 }
 $("#mus-form").onsubmit = e => { e.preventDefault(); const q = $("#mus-url").value.trim(); if(!q) return;
   if(/^https?:|youtu/.test(q)){ $("#mus-url").value = ""; musicFromLink(q); } else searchMusic(q); };
-MUS_CHIPS.forEach(c => { const b = document.createElement("button"); b.type = "button"; b.textContent = c; b.onclick = () => { $("#mus-url").value = c; searchMusic(c); }; $("#mus-chips").append(b); });
+MUS_CHIPS.forEach(c => { const b = document.createElement("button"); b.type = "button"; b.textContent = PedalaI18n.t(c); b.onclick = () => { $("#mus-url").value = c; searchMusic(c); }; $("#mus-chips").append(b); });
 $("#mus-stop").onclick = () => setMusic(null);
 /* the music player takes the same postMessage commands as the video player */
 let musicOn = false;
@@ -1672,15 +1674,15 @@ function render(){
   const rg = S.route ? roadGrade() : null;
   $("#tgt").textContent = tgt != null ? tgt + " W" : rg != null ? numFixed(rg, 1) + " %" : "";
   $("#tgt").style.color = rg != null && tgt == null ? gradeColor(rg) : "";
-  $("#tgt-lbl").textContent = S.route && tgt == null ? "Grade" : !S.workout ? "Free ride" : c?.s.free ? "Free" : c?.s.hr ? `Target · HR ${hrTarget(c.s)}` : "Target";
+  $("#tgt-lbl").textContent = S.route && tgt == null ? PedalaI18n.t("Grade") : !S.workout ? PedalaI18n.t("Free ride") : c?.s.free ? PedalaI18n.t("Free") : c?.s.hr ? PedalaI18n.t("Target · HR {bpm}", { bpm: hrTarget(c.s) }) : PedalaI18n.t("Target");
   $("#pw-delta").textContent = tgt != null && S.running ? (p - tgt > 0 ? "+" : "") + (p - tgt) : "";
   const ct = S.workout && c?.s.cad;
   $("#cad").innerHTML = (S.live.cadence ? Math.round(S.live.cadence) : "–") + "<i>rpm</i>";
-  $("#cad-lbl").textContent = ct ? `Cadence · ${cadTxt(ct)}` : "Cadence";
+  $("#cad-lbl").textContent = ct ? PedalaI18n.t("Cadence · {target}", { target: cadTxt(ct) }) : PedalaI18n.t("Cadence");
   $("#cad").style.color = ct && S.live.cadence ? cssVar(cadIn(S.live.cadence, ct) ? "--z3" : "--z5") : "";
   const hz = hrZone(S.live.hr);
   $("#hr").innerHTML = (S.live.hr ? S.live.hr : "–") + "<i>bpm</i>";
-  $("#hr-lbl").textContent = hz >= 0 ? `HR · ${HR_ZONES[hz][2]}` : "HR";
+  $("#hr-lbl").textContent = hz >= 0 ? PedalaI18n.t("HR · {zone}", { zone: HR_ZONES[hz][2] }) : PedalaI18n.t("HR");
   $("#hr").style.color = hz >= 0 ? cssVar(HR_ZONES[hz][1]) : "";
   $(".stats").classList.toggle("no-hr", !S.hrm);   // no strap: no pulse cell, the cadence takes its row
   $("#elapsed").textContent = fmtTime(S.t);
@@ -1692,25 +1694,26 @@ function render(){
   const freeNow = !S.workout || c?.s.free;
   $("#adj-erg").hidden = freeNow; $("#adj-gear").hidden = !freeNow;
   $("#bias").textContent = c?.s.hr ? hrTarget(c.s) + " bpm" : Math.round(S.bias * 100) + "%";
-  const soft = S.soft && S.running ? `Soft start · ${Math.round(S.soft.k * 100)}%` : "";
-  $("#bias-lbl").textContent = soft || (c?.s.hr ? "Target HR" : "Intensity");
+  const soft = S.soft && S.running ? PedalaI18n.t("Soft start · {pct}%", { pct: Math.round(S.soft.k * 100) }) : "";
+  $("#bias-lbl").textContent = soft || (c?.s.hr ? PedalaI18n.t("Target HR") : PedalaI18n.t("Intensity"));
   $("#gear").textContent = S.gear;
-  $("#gear-sub").textContent = soft || `Gear · ratio ${numFixed(GEARS[S.gear - 1], 2)}`;
+  $("#gear-sub").textContent = soft || PedalaI18n.t("Gear · ratio {ratio}", { ratio: numFixed(GEARS[S.gear - 1], 2) });
 
   const ib = $("#interval-box");
   if(S.workout && c){
     ib.hidden = false;
-    $("#iv-lbl").textContent = `Interval ${c.i + 1} of ${S.workout.segs.length}${c.s.note ? " · " + c.s.note : ""}`;
+    $("#iv-lbl").textContent = PedalaI18n.t("Interval {i} of {n}", { i: c.i + 1, n: S.workout.segs.length }) + (c.s.note ? " · " + noteText(S.workout, c.s.note) : "");
     $("#iv-cd").textContent = fmtTime(c.left);
     const n = S.workout.segs[c.i + 1];
-    $("#iv-next").textContent = n ? `Next: ${fmtTime(n.d)} ${n.free ? "free" : n.hr ? "at HR " + hrTarget(n) : "at " + Math.round(toWatts(S.workout, (n.lo + n.hi) / 2) * S.bias) + " W"}${n.cad ? " · " + cadTxt(n.cad) + " rpm" : ""}${n.note ? " · " + n.note : ""}` : "Last interval";
-    $("#wo-left").textContent = S.workout.test ? "Ride as long as you can, then Finish" : `${fmtTime(totalDur(S.workout) - S.woT)} left`;
+    const nTarget = n ? (n.free ? PedalaI18n.t("free") : n.hr ? PedalaI18n.t("at HR {bpm}", { bpm: hrTarget(n) }) : PedalaI18n.t("at {w} W", { w: Math.round(toWatts(S.workout, (n.lo + n.hi) / 2) * S.bias) })) : "";
+    $("#iv-next").textContent = n ? PedalaI18n.t("Next: {time} {target}", { time: fmtTime(n.d), target: nTarget + (n.cad ? " · " + cadTxt(n.cad) + " rpm" : "") + (n.note ? " · " + noteText(S.workout, n.note) : "") }) : PedalaI18n.t("Last interval");
+    $("#wo-left").textContent = S.workout.test ? PedalaI18n.t("Ride as long as you can, then Finish") : PedalaI18n.t("{time} left", { time: fmtTime(totalDur(S.workout) - S.woT) });
   } else if(S.route){
     const r = S.route, left = Math.max(0, r.len - S.dist);
     ib.hidden = false;
-    $("#iv-lbl").textContent = "To the finish";
+    $("#iv-lbl").textContent = PedalaI18n.t("To the finish");
     $("#iv-cd").textContent = numFixed(left / 1000, left < 10000 ? 2 : 1) + " km";
-    $("#iv-next").textContent = `${Math.round(climbLeft(r, S.dist))} m of climbing left · altitude ${Math.round(eleAt(r, S.dist))} m`;
+    $("#iv-next").textContent = PedalaI18n.t("{m} m of climbing left · altitude {alt} m", { m: Math.round(climbLeft(r, S.dist)), alt: Math.round(eleAt(r, S.dist)) });
     $("#wo-left").textContent = `${numFixed(S.dist / 1000, 1)} / ${numFixed(r.len / 1000, 1)} km`;
   } else { ib.hidden = true; $("#wo-left").textContent = ""; }
 
@@ -1730,22 +1733,22 @@ function renderOverlay(p, tgt, rg){
   const o = (id, v) => { const el = $(id); v = String(v); if(el.textContent !== v) el.textContent = v; };
   o("#o-pw", p);
   const cs = currentSeg();
-  o("#o-tgt", S.soft && S.running ? "soft start" : cs?.s.hr ? `HR ${hrTarget(cs.s)} · ${tgt} W` : tgt != null ? `Target ${tgt} W` : rg != null ? `grade ${numFixed(rg, 1)} %` : "");
+  o("#o-tgt", S.soft && S.running ? PedalaI18n.t("soft start") : cs?.s.hr ? PedalaI18n.t("HR {bpm} · {w} W", { bpm: hrTarget(cs.s), w: tgt }) : tgt != null ? PedalaI18n.t("Target {w} W", { w: tgt }) : rg != null ? PedalaI18n.t("grade {pct} %", { pct: numFixed(rg, 1) }) : "");
   $("#o-tgt").style.color = tgt == null && rg != null ? gradeColor(rg) : "";
   $("#o-iv-box").hidden = $("#interval-box").hidden;
   o("#o-iv-lbl", $("#iv-lbl").textContent); o("#o-iv", $("#iv-cd").textContent); o("#o-iv-next", $("#iv-next").textContent);
   o("#o-cad", S.live.cadence ? Math.round(S.live.cadence) : "–");
-  const ct = S.workout && cs?.s.cad; o("#o-cad-lbl", ct ? `Cadence · ${cadTxt(ct)}` : "Cadence");
+  const ct = S.workout && cs?.s.cad; o("#o-cad-lbl", ct ? PedalaI18n.t("Cadence · {target}", { target: cadTxt(ct) }) : PedalaI18n.t("Cadence"));
   $("#o-cad-box").style.borderLeftColor = ct && S.live.cadence ? cssVar(cadIn(S.live.cadence, ct) ? "--z3" : "--z5") : "transparent";
   /* the gear box sits right after the heart-rate one: it takes its place when no strap is connected */
   const hrOn = !!S.hrm;
   o("#o-hr", S.live.hr || "–");
-  const hz = hrZone(S.live.hr); o("#o-hr-lbl", hz >= 0 ? `HR · ${HR_ZONES[hz][2]}` : "HR");
+  const hz = hrZone(S.live.hr); o("#o-hr-lbl", hz >= 0 ? PedalaI18n.t("HR · {zone}", { zone: HR_ZONES[hz][2] }) : PedalaI18n.t("HR"));
   $("#o-hr-box").hidden = !hrOn || !settings.hrOn;
   $("#o-hr-box").style.borderLeftColor = hrOn && hz >= 0 ? cssVar(HR_ZONES[hz][1]) : "transparent";
-  if(!S.workout || cs?.s.free){ o("#o-gear", S.gear); o("#o-gear-lbl", `Gear · ratio ${numFixed(GEARS[S.gear - 1], 2)}`); o("#o-gear-unit", "/" + GEARS.length); }
-  else if(cs?.s.hr){ o("#o-gear", hrTarget(cs.s)); o("#o-gear-lbl", "Target HR"); o("#o-gear-unit", "bpm"); }
-  else { o("#o-gear", Math.round(S.bias * 100)); o("#o-gear-lbl", "Intensity"); o("#o-gear-unit", "%"); }
+  if(!S.workout || cs?.s.free){ o("#o-gear", S.gear); o("#o-gear-lbl", PedalaI18n.t("Gear · ratio {ratio}", { ratio: numFixed(GEARS[S.gear - 1], 2) })); o("#o-gear-unit", "/" + GEARS.length); }
+  else if(cs?.s.hr){ o("#o-gear", hrTarget(cs.s)); o("#o-gear-lbl", PedalaI18n.t("Target HR")); o("#o-gear-unit", "bpm"); }
+  else { o("#o-gear", Math.round(S.bias * 100)); o("#o-gear-lbl", PedalaI18n.t("Intensity")); o("#o-gear-unit", "%"); }
   o("#o-time", fmtTime(S.t));
   $("#o-dist-box").hidden = !S.route; o("#o-dist", numFixed(S.dist / 1000, 1));
   o("#o-x", numFixed(S.live.speed || 0, 1));
@@ -1824,14 +1827,14 @@ function drawProfile(cv = $("#profile")){
     const sm = S.samples.slice(-win);
     for(const s of sm){ const x = (s[0] - (S.t - win)) / win * W, f = s[1] / settings.ftp; g.fillStyle = zoneColor(f); g.fillRect(x, H - Math.min(1, f / maxF) * H, Math.max(1, W / win + .5), H); }
     drawHr(g, sm.map(s => [(s[0] - (S.t - win)) / win * W, s[3]]), H, lw);
-    if(!sm.length){ g.fillStyle = cssVar("--muted"); g.font = "500 14px Barlow, system-ui"; g.fillText("Your power over the last 20 minutes is drawn here", 0, H / 2); }
+    if(!sm.length){ g.fillStyle = cssVar("--muted"); g.font = "500 14px Barlow, system-ui"; g.fillText(PedalaI18n.t("Your power over the last 20 minutes is drawn here"), 0, H / 2); }
   }
 }
 
 function setWorkout(w){
   if(S.started && !confirm("The current ride will carry on with the new workout. Continue?")) return;
   S.workout = w; S.route = null; S.woT = 0; S.lastSeg = -1; S.bias = 1; S.hrOff = 0; S.hrP = null; S.lap = null; store.set("lastRoute", null);
-  $("#wo-name").textContent = w ? w.name : "Free ride";
+  $("#wo-name").textContent = w ? workoutLabel(w) : PedalaI18n.t("Free ride");
   $("#wo-meta").textContent = w && !w.test ? `· ${fmtTime(totalDur(w))}` : "";
   store.set("lastWorkout", w ? w.id : null);
   showView("ride"); applyControl(); render();
@@ -2961,16 +2964,16 @@ $("#chip-trainer").onclick = () => { if(!S.trainer) $("#dlg-connect").showModal(
 document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
 $("#c-ble").onclick = async () => {
   $("#dlg-connect").close();
-  if(!navigator.bluetooth){ toast("This browser has no Web Bluetooth. Open it in Chrome over https."); return; }
+  if(!navigator.bluetooth){ toast(PedalaI18n.t("This browser has no Web Bluetooth. Open it in Chrome over https.")); return; }
   const t = new BleTrainer(onData, trainerStatus);
   try{ await t.connect(); S.trainer = t; applyControl(); startClock(); }
-  catch(e){ setChip("#chip-trainer", "", "Connect trainer"); if(e.name !== "NotFoundError") toast("Could not connect: " + e.message); }
+  catch(e){ setChip("#chip-trainer", "", PedalaI18n.t("Connect trainer")); if(e.name !== "NotFoundError") toast(PedalaI18n.t("Could not connect: {error}", { error: e.message })); }
 };
 $("#c-sim").onclick = async () => { $("#dlg-connect").close(); const t = new SimTrainer(onData, (c, txt) => setChip("#chip-trainer", c, txt)); await t.connect(); S.trainer = t; window.__sim = t; applyControl(); startClock(); };
 $("#chip-hr").onclick = async () => {
-  if(S.hrm) return; if(!navigator.bluetooth){ toast("This browser has no Web Bluetooth"); return; }
+  if(S.hrm) return; if(!navigator.bluetooth){ toast(PedalaI18n.t("This browser has no Web Bluetooth")); return; }
   const h = new BleHR(setHr, hrStatus);
-  try{ await h.connect(); S.hrm = h; }catch(e){ setChip("#chip-hr", "", "HR"); if(e.name !== "NotFoundError") toast("Could not connect the heart rate strap"); }
+  try{ await h.connect(); S.hrm = h; }catch(e){ setChip("#chip-hr", "", PedalaI18n.t("HR")); if(e.name !== "NotFoundError") toast(PedalaI18n.t("Could not connect the heart rate strap")); }
 };
 
 /* ============ Zwift Click ============
@@ -3027,33 +3030,33 @@ function onClickPress(z, key){
     else d = z.role === "plus" ? 1 : -1;
   } else {
     d = settings.clickMap?.[key] ?? CLICK_DEFAULT[key] ?? 0;
-    if(!d){ if(!onClickPress.warned){ onClickPress.warned = true; toast("Unknown Click button. Set it up in Settings (Zwift Click)."); } return; }
+    if(!d){ if(!onClickPress.warned){ onClickPress.warned = true; toast(PedalaI18n.t("Unknown Click button. Set it up in Settings (Zwift Click).")); } return; }
   }
   if(document.querySelector("dialog[open]")) return;
   const now = performance.now(); if(now - (z.lastPress || 0) < CLICK_DEBOUNCE_MS) return; z.lastPress = now;
   bump(d);
 }
-function startCalibration(){ if($("#dlg-click").open) return; calib = { step: 1 }; $("#clk-step").textContent = "Press any button on the harder-gear pod (+)."; $("#dlg-click").showModal(); }
+function startCalibration(){ if($("#dlg-click").open) return; calib = { step: 1 }; $("#clk-step").textContent = PedalaI18n.t("Press any button on the harder-gear pod (+)."); $("#dlg-click").showModal(); }
 function calibPress(z, key){
   const step = t => { $("#clk-step").textContent = t; }, done = msg => { calib = null; $("#dlg-click").close(); toast(msg); };
   if(z.kind !== "ride"){   // Click v1: two buttons on one device
-    if(calib.step === 1){ calib.first = key; calib.step = 2; step("Now press the button for an easier gear (−)."); }
-    else if(key !== calib.first){ settings.clickMap = { [calib.first]: 1, [key]: -1 }; store.set("settings", settings); done("Click buttons set up"); }
-    else step("That is the same button as +. Press the button for an easier gear (−), on the other Click pod if you have one.");
+    if(calib.step === 1){ calib.first = key; calib.step = 2; step(PedalaI18n.t("Now press the button for an easier gear (−).")); }
+    else if(key !== calib.first){ settings.clickMap = { [calib.first]: 1, [key]: -1 }; store.set("settings", settings); done(PedalaI18n.t("Click buttons set up")); }
+    else step(PedalaI18n.t("That is the same button as +. Press the button for an easier gear (−), on the other Click pod if you have one."));
     return;
   }
   if(calib.step === 1){
     z.role = "plus"; setClickRole(z.device.id, "plus"); z.onStatus("on");
     calib.first = z; calib.key = key; calib.step = 2;
-    step("Now press a button for an easier gear (−): any on the other pod, or another button on the same pod.");
+    step(PedalaI18n.t("Now press a button for an easier gear (−): any on the other pod, or another button on the same pod."));
   }
-  else if(z !== calib.first){ z.role = "minus"; setClickRole(z.device.id, "minus"); setClickRole(calib.first.device.id, "plus"); z.onStatus("on"); calib.first.onStatus("on"); done("Click pods set: + and −"); }
+  else if(z !== calib.first){ z.role = "minus"; setClickRole(z.device.id, "minus"); setClickRole(calib.first.device.id, "plus"); z.onStatus("on"); calib.first.onStatus("on"); done(PedalaI18n.t("Click pods set: + and −")); }
   // another button on the same pod: this pod shifts both ways, by button (the left Click v2 pod often sends no presses)
   else if(key !== calib.key){
     const k = store.get("devices", {}); k.clickKeys = { ...(k.clickKeys || {}), [z.device.id]: { [calib.key]: 1, [key]: -1 } }; store.set("devices", k);
-    z.role = "keys"; setClickRole(z.device.id, "keys"); z.onStatus("on"); done("Both directions are on this pod: one button +, another −");
+    z.role = "keys"; setClickRole(z.device.id, "keys"); z.onStatus("on"); done(PedalaI18n.t("Both directions are on this pod: one button +, another −"));
   }
-  else step("That is the same button as +. Press a button for an easier gear (−): on the other pod, or another button on this one.");
+  else step(PedalaI18n.t("That is the same button as +. Press a button for an easier gear (−): on the other pod, or another button on this one."));
 }
 $("#dlg-click").addEventListener("close", () => { calib = null; });
 
@@ -3062,13 +3065,13 @@ class ZwiftClick {
   get tag(){ return podTag(this.device?.id); }
   /* each pod has its own chip; the text is its role, the dot its state */
   onStatus(c){
-    const role = this.role || "plus"; setChip(clickChipOf(role), c === "off" ? "" : c, CLICK_LABEL[role]);
+    const role = this.role || "plus"; setChip(clickChipOf(role), c === "off" ? "" : c, PedalaI18n.t(CLICK_LABEL[role]));
     if(role === "both") $("#chip-click-m").hidden = c === "on";
   }
   async connect(){ await this.attach(await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "Zwift" }], optionalServices: [ZW.v1, ZW.ride, "battery_service"] })); rememberDevice("clicks", this.device); }
   attach(dev){ this.device = dev; dev.addEventListener("gattserverdisconnected", () => this.reconnect()); return this.setup(); }
   async setup(){
-    this.onStatus("wait", "Connecting Click…");
+    this.onStatus("wait", PedalaI18n.t("Connecting Click…"));
     const srv = await gattConnect(this.device);
     let svc; try{ svc = await srv.getPrimaryService(ZW.ride); this.kind = "ride"; }catch{ svc = await srv.getPrimaryService(ZW.v1); this.kind = "v1"; }
     this.rx = await svc.getCharacteristic(ZW.rx);
@@ -3081,8 +3084,8 @@ class ZwiftClick {
     await this.send(RIDE_ON);
     clearInterval(this.ka);
     if(this.kind === "ride") this.ka = setInterval(() => this.send(RIDE_ON).catch(() => {}), 3000);   // pods sleep without traffic
-    setTimeout(() => { if(!this.answered && this.device.gatt.connected) toast("The Click is not answering. Update its firmware with Zwift Companion."); }, 5000);
-    this.onStatus("on", "Click");
+    setTimeout(() => { if(!this.answered && this.device.gatt.connected) toast(PedalaI18n.t("The Click is not answering. Update its firmware with Zwift Companion.")); }, 5000);
+    this.onStatus("on", PedalaI18n.t("Click"));
   }
   async send(bytes){ const d = new Uint8Array(bytes);
     try{ await this.rx.writeValueWithoutResponse(d); }catch{ await this.rx.writeValueWithResponse(d); } }
@@ -3092,7 +3095,7 @@ class ZwiftClick {
     logClick((isTx ? "tx " : "as ") + this.tag, b);
     if(isTx){
       if(b[0] === 0x52 && b[1] === 0x69 && this.kind === "ride" && !this.unlockSent){ this.unlockSent = true; this.send([0xff, 0x04, 0x00]).catch(() => {}); }
-      if(b[0] === 0xff && b[1] === 0x03) toast("This Click pod is locked. Connect it to Zwift once, then try again.");
+      if(b[0] === 0xff && b[1] === 0x03) toast(PedalaI18n.t("This Click pod is locked. Connect it to Zwift once, then try again."));
       return;
     }
     const keys = clickKeys(b); if(!keys) return;
@@ -3101,11 +3104,11 @@ class ZwiftClick {
   }
   async reconnect(){
     if(this.closing || this.dead) return; clearInterval(this.ka); this.unlockSent = false;
-    this.onStatus("wait", "Click is asleep…");
+    this.onStatus("wait", PedalaI18n.t("Click is asleep…"));
     for(let i = 0; i < 200; i++){            // Click sleeps when idle; a button press wakes it up
       try{ await new Promise(r => setTimeout(r, 3000)); await this.setup(); return; }catch{}
     }
-    this.onStatus("off", "Click");
+    this.onStatus("off", PedalaI18n.t("Click"));
   }
 }
 S.clicks = [];
@@ -3124,13 +3127,13 @@ const btState = { api: null, permitted: null, roles: {}, watching: new Set() };
 async function autoConnect(){
   btState.api = !!navigator.bluetooth?.getDevices;
   const k = store.get("devices", {}), clicks = k.clicks || [], remembered = !!(k.trainer || k.hr || clicks.length);
-  if(!btState.api){ renderBtState(); if(remembered) btHint("Chrome does not remember Bluetooth devices, so they don't connect by themselves. See Settings → Automatic connection."); return; }
+  if(!btState.api){ renderBtState(); if(remembered) btHint(PedalaI18n.t("Chrome does not remember Bluetooth devices, so they don't connect by themselves. See Settings → Automatic connection.")); return; }
   let devs = [];
   try{ devs = await navigator.bluetooth.getDevices(); }catch(e){ btState.error = e.message; }
   btState.permitted = devs.length;
-  if(!devs.length && remembered) btHint("Chrome did not keep the permission for your devices. Connect them by hand once and from then on they connect by themselves.");
+  if(!devs.length && remembered) btHint(PedalaI18n.t("Chrome did not keep the permission for your devices. Connect them by hand once and from then on they connect by themselves."));
   for(const dev of devs){
-    if(dev.id === k.trainer) watchDevice("trainer", dev, () => new BleTrainer(onData, trainerStatus), () => !!S.trainer, t => { S.trainer = t; applyControl(); startClock(); toast("Trainer connected"); });
+    if(dev.id === k.trainer) watchDevice("trainer", dev, () => new BleTrainer(onData, trainerStatus), () => !!S.trainer, t => { S.trainer = t; applyControl(); startClock(); toast(PedalaI18n.t("Trainer connected")); });
     else if(dev.id === k.hr && settings.hrOn) watchDevice("hr", dev, () => new BleHR(setHr, hrStatus), () => !!S.hrm, h => { S.hrm = h; });
     else if(clicks.includes(dev.id) && settings.clickOn){
       let role = clickRoleOf(dev.id); if(!role){ role = freeClickRole(); setClickRole(dev.id, role); }
@@ -3158,13 +3161,13 @@ async function watchDevice(role, dev, make, already, onOk){
       obj.device = dev; await obj.setup();
       dev.addEventListener("gattserverdisconnected", () => obj.reconnect());
       btState.roles[role] = "connected"; finish(); onOk(obj);
-    }catch(e){ btState.roles[role] = "waiting for it to switch on"; obj.onStatus("wait", `Waiting: ${BT_ROLES[role]}`); }
+    }catch(e){ btState.roles[role] = "waiting for it to switch on"; obj.onStatus("wait", PedalaI18n.t("Waiting: {role}", { role: PedalaI18n.t(BT_ROLES[role]) })); }
     finally{ busy = false; renderBtState(); if(again && !done){ again = false; setTimeout(() => tryNow(true), 0); } }
   }
   dev.addEventListener("advertisementreceived", onAdv);
   let watching = false;
   if(dev.watchAdvertisements){ try{ await dev.watchAdvertisements(ac ? { signal: ac.signal } : undefined); watching = true; }catch(e){ console.warn("watchAdvertisements", e); } }
-  if(!already()) make().onStatus("wait", `Waiting: ${BT_ROLES[role]}`);   // shows on the chip that it is looking
+  if(!already()) make().onStatus("wait", PedalaI18n.t("Waiting: {role}", { role: PedalaI18n.t(BT_ROLES[role]) }));   // shows on the chip that it is looking
   if(!watching) tryNow();                                        // without advertisements: try now and keep trying
   poll = setInterval(() => tryNow(false), watching ? 30000 : 5000);   // with them this is only a safety net
   setTimeout(() => { if(!done){ finish(); btState.roles[role] = "did not show up (open the app again)"; renderBtState(); } }, 30 * 60000);
@@ -3185,8 +3188,8 @@ document.addEventListener("visibilitychange", () => { if(document.visibilityStat
 
 /* Click + and Click −: the device picked in Chrome's list gets that role (a Click v1 gets both) */
 async function connectClick(role){
-  if(!navigator.bluetooth){ toast("This browser has no Web Bluetooth"); return; }
-  if(S.clicks.some(z => z.role === role && z.device.gatt.connected)){ toast(`${CLICK_LABEL[role]} is already connected`); return; }
+  if(!navigator.bluetooth){ toast(PedalaI18n.t("This browser has no Web Bluetooth")); return; }
+  if(S.clicks.some(z => z.role === role && z.device.gatt.connected)){ toast(PedalaI18n.t("{device} is already connected", { device: PedalaI18n.t(CLICK_LABEL[role]) })); return; }
   const z = new ZwiftClick(role);
   try{
     await z.connect();
@@ -3195,9 +3198,9 @@ async function connectClick(role){
     z.role = r; setClickRole(z.device.id, r); S.clicks.push(z);
     const other = S.clicks.find(x => x !== z && x.kind === "ride" && x.role === r);
     if(other && r !== "both"){ other.role = r === "plus" ? "minus" : "plus"; setClickRole(other.device.id, other.role); other.onStatus("on"); }   // the other pod had this role: they swap
-    else if(old && old.role !== r && old.role !== "both") setChip(clickChipOf(old.role), "", CLICK_LABEL[old.role]);   // its old chip is free now
+    else if(old && old.role !== r && old.role !== "both") setChip(clickChipOf(old.role), "", PedalaI18n.t(CLICK_LABEL[old.role]));   // its old chip is free now
     z.onStatus("on");
-  }catch(e){ if(!S.clicks.some(x => x.role === role)) z.onStatus("off"); if(e.name !== "NotFoundError") toast("Could not connect the Click: " + e.message); }
+  }catch(e){ if(!S.clicks.some(x => x.role === role)) z.onStatus("off"); if(e.name !== "NotFoundError") toast(PedalaI18n.t("Could not connect the Click: {error}", { error: e.message })); }
 }
 $("#chip-click-p").onclick = () => connectClick("plus");
 $("#chip-click-m").onclick = () => connectClick("minus");
@@ -3208,10 +3211,10 @@ $("#btn-click-yb").onclick = () => {
   const roles = store.get("devices", {}).clickRoles || {};
   const z = S.clicks.find(x => x.kind === "ride" && (x.role === "plus" || x.role === "keys"));
   const id = z?.device.id || Object.keys(roles).find(k => roles[k] === "plus" || roles[k] === "keys");
-  if(!id){ toast("Connect the right pod with the Click + button first."); return; }
+  if(!id){ toast(PedalaI18n.t("Connect the right pod with the Click + button first.")); return; }
   const k = store.get("devices", {}); k.clickKeys = { ...(k.clickKeys || {}), [id]: RIGHT_POD_YB }; store.set("devices", k);
   setClickRole(id, "keys"); if(z){ z.role = "keys"; z.onStatus("on"); }
-  toast("Right pod: Y and the shift button +, B −");
+  toast(PedalaI18n.t("Right pod: Y and the shift button +, B −"));
 };
 
 $("#btn-start").onclick = () => { if(!S.started || !S.running) { S.started && S.autoPaused ? resume() : start(); } else pause(false); render(); };
@@ -3223,7 +3226,7 @@ function remoteState(){ const c = currentSeg(); const mode = !S.workout || c?.s.
 function remoteSend(){ if(remote.es?.readyState !== 1) return;
   const s = JSON.stringify(remoteState()); remote.sent = s;   // every send path updates the change-detector, so the next render() does not re-POST identical state
   fetch("/__remote/state", { method: "POST", headers: { "content-type": "application/json" }, body: s }).catch(() => {}); }
-function remoteChip(){ setChip("#chip-remote", remote.phones ? "on" : "", "Remote"); }
+function remoteChip(){ setChip("#chip-remote", remote.phones ? "on" : "", PedalaI18n.t("Remote")); }
 function remoteSetPhones(n){ const had = remote.phones; remote.phones = n || 0; remoteChip(); if(!had && remote.phones) remoteSend(); }
 function remoteConnect(){
   remote.es?.close();
@@ -3248,9 +3251,9 @@ function openRemote(){
 }
 $("#chip-remote").onclick = () => { if(!remote.es) remoteConnect(); openRemote(); };
 $("#remote-copy").onclick = () => { const t = remote.links[0]; if(!t) return;
-  const fallback = () => { const el = $("#remote-link"), range = document.createRange(); range.selectNodeContents(el); const sel = window.getSelection(); sel?.removeAllRanges(); sel?.addRange(range); toast("Select the address and copy it"); };
+  const fallback = () => { const el = $("#remote-link"), range = document.createRange(); range.selectNodeContents(el); const sel = window.getSelection(); sel?.removeAllRanges(); sel?.addRange(range); toast(PedalaI18n.t("Select the address and copy it")); };
   if(!navigator.clipboard?.writeText){ fallback(); return; }
-  navigator.clipboard.writeText(t).then(() => toast("Copied"), fallback); };
+  navigator.clipboard.writeText(t).then(() => toast(PedalaI18n.t("Copied")), fallback); };
 const bump = d => { const c = currentSeg(); if(!S.workout || c?.s.free){ S.gear = clamp(S.gear + d, 1, GEARS.length); }
   else if(c?.s.hr){ S.hrOff = clamp(S.hrOff + d * 2, -20, 20); }
   else { S.bias = clamp(Math.round((S.bias + d * .05) * 100) / 100, .5, 1.5); } applyControl(); render(); remoteSend(); };
@@ -3262,19 +3265,19 @@ document.addEventListener("keydown", e => {
   if(e.code === "ArrowUp"){ e.preventDefault(); bump(1); } if(e.code === "ArrowDown"){ e.preventDefault(); bump(-1); }
 });
 $("#vid-form").onsubmit = e => { e.preventDefault(); const q = $("#vid-url").value.trim(); if(!q) return;
-  const id = /^https?:|youtu/.test(q) ? ytId(q) : null; if(id){ $("#vid-url").value = ""; return playLink(id); } if(/^https?:/.test(q)) return toast("That doesn't look like a YouTube link"); searchVideos(q); };
-VID_CHIPS.forEach(c => { const b = document.createElement("button"); b.type = "button"; b.textContent = c; b.onclick = () => { $("#vid-url").value = c; searchVideos(c + " cycling", c); }; $("#vid-chips").append(b); });
+  const id = /^https?:|youtu/.test(q) ? ytId(q) : null; if(id){ $("#vid-url").value = ""; return playLink(id); } if(/^https?:/.test(q)) return toast(PedalaI18n.t("That doesn't look like a YouTube link")); searchVideos(q); };
+VID_CHIPS.forEach(c => { const b = document.createElement("button"); b.type = "button"; b.textContent = PedalaI18n.t(c); b.onclick = () => { $("#vid-url").value = c; searchVideos(c + " cycling", c); }; $("#vid-chips").append(b); });
 $("#btn-vid-change").onclick = () => showPicker();
 $("#btn-vid-back").onclick = () => hidePicker();
 /* fullscreen the video area with metrics on top; on a tablet also turn to landscape */
 $("#btn-fs").onclick = async () => {
   if(document.fullscreenElement){ document.exitFullscreen(); return; }
-  try{ await $("#stage").requestFullscreen({ navigationUI: "hide" }); }catch{ toast("Full screen is not available"); return; }
+  try{ await $("#stage").requestFullscreen({ navigationUI: "hide" }); }catch{ toast(PedalaI18n.t("Full screen is not available")); return; }
   try{ await screen.orientation?.lock?.("landscape"); }catch{}
 };
 document.addEventListener("fullscreenchange", () => {
   const on = document.fullscreenElement === $("#stage");
-  $("#btn-fs").textContent = on ? "Exit" : "Full screen";
+  $("#btn-fs").textContent = on ? PedalaI18n.t("Exit") : PedalaI18n.t("Full screen");
   if(!on) try{ screen.orientation?.unlock?.(); }catch{}
   render();
 });
@@ -3296,9 +3299,9 @@ window.addEventListener("beforeunload", e => { if(S.started){ e.preventDefault()
 /* init */
 function runInit(){
   { const pl = plan(); if(pl && pl.extra !== false && !pl.extraFrom){ pl.extraFrom = ymd(new Date()); store.set("plan", pl); } }   // swims and runs were added to a running plan today
-  const lw = store.get("lastWorkout", null); const w = findWorkout(lw); if(w){ S.workout = w; $("#wo-name").textContent = w.name; $("#wo-meta").textContent = w.test ? "" : `· ${fmtTime(totalDur(w))}`; }
+  const lw = store.get("lastWorkout", null); const w = findWorkout(lw); if(w){ S.workout = w; $("#wo-name").textContent = workoutLabel(w); $("#wo-meta").textContent = w.test ? "" : `· ${fmtTime(totalDur(w))}`; }
   const lr = store.get("lastRoute", null); const rt = allRoutes().find(x => x.id === lr);
-  if(rt && !S.workout){ S.route = rt; $("#wo-name").textContent = rt.name; $("#wo-meta").textContent = `· ${numFixed(rt.len / 1000, 1)} km · ↑${rt.gain} m`; }
+  if(rt && !S.workout){ S.route = rt; $("#wo-name").textContent = workoutLabel(rt); $("#wo-meta").textContent = `· ${numFixed(rt.len / 1000, 1)} km · ↑${rt.gain} m`; }
   const v = store.get("video", null); v ? setVideo(v) : store.get("stageMode", null) === "dash" ? setDash() : showPicker();
   const mu = store.get("music", null); if(mu) setMusic(mu, false);
   fillSettings(); render();
