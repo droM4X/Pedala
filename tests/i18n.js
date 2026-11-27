@@ -20,6 +20,23 @@ assert.equal(I.tnum(1234.5, { minimumFractionDigits: 1 }), "1,234.5");
 assert.equal(I.use("en"), true);
 assert.equal(I.t("Ride"), "Ride");
 
+/* speech overrides: the English segment/lap builders take duration/watts/cadence from ctx */
+I.add({ code: "yy", name: "Speechish", strings: {}, speech: {
+  duration: s => `D${s}`,
+  watts: n => `<${n}W>`
+} });
+assert.equal(I.use("yy"), true);
+I.setSpeechLang("yy");
+const sp = I.speech, spCtx = { duration: sp.duration, watts: sp.watts, cadence: sp.cadence };
+const seg = sp.segment({ d: 180, loW: 200, hiW: 200 }, spCtx);
+assert.match(seg, /D180/); assert.match(seg, /<200W>/);
+assert.doesNotMatch(seg, /3 minutes|200 watts/);
+const lapPower = sp.lap({ kind: "power", score: 80, dur: 60, avgP: 200 }, spCtx);
+assert.match(lapPower, /<200W>/); assert.doesNotMatch(lapPower, /200 watts/);
+const lapDist = sp.lap({ kind: "dist", km: 1, dur: 60, avgP: 200, kmLimit: 5 }, spCtx);
+assert.match(lapDist, /D60/); assert.match(lapDist, /<200W>/);
+I.use("en"); I.setSpeechLang("en");
+
 /* language index generator: build writes the manifest, check fails when it is stale */
 const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
 const { build, check } = require("../scripts/langs.js");
@@ -34,4 +51,34 @@ assert.equal(check(dir), false);
 fs.writeFileSync(path.join(dir, "_template.js"), "throw new Error('must be ignored')");
 assert.equal(check(dir), false); // still stale from xx change
 build(dir); assert.equal(check(dir), true);
-console.log("i18n: ok");
+
+/* the first module load carries the manifest hash; a missing index still loads plain */
+(async () => {
+  const realFetch = global.fetch, realDocument = global.document;
+  const response = (body, ok = true, type = "application/json") => ({ ok, headers: { get: () => type }, json: async () => body });
+  const scripts = [];
+  let indexMode = "ok";
+  global.fetch = async url => {
+    if(url === "/lang/index.json") return indexMode === "ok" ? response([{ code: "qq", name: "Queue", v: "abc123" }]) : response(null, false);
+    return response(null, true, "text/javascript");
+  };
+  const fakeDoc = code => ({
+    documentElement: { lang: "", dir: "" },
+    querySelectorAll: () => [],
+    createTreeWalker: () => ({ nextNode: () => null }),
+    createElement: () => ({}),
+    head: { append(script){ scripts.push(script.src); I.add({ code, name: code.toUpperCase(), strings: {} }); } }
+  });
+  global.document = fakeDoc("qq");
+  await I.init("qq");
+  assert.equal(scripts[0], "/lang/qq.js?v=abc123");
+  indexMode = "fail"; scripts.length = 0;
+  global.document = fakeDoc("rr");
+  await I.init("rr");
+  assert.equal(scripts[0], "/lang/rr.js");
+  I.use("en"); I.setSpeechLang("en");
+  I.languages.delete("qq"); I.languages.delete("rr");
+  global.fetch = realFetch;
+  if(realDocument === undefined) delete global.document; else global.document = realDocument;
+  console.log("i18n: ok");
+})().catch(e => { console.error(e); process.exit(1); });

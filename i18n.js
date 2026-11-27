@@ -18,24 +18,31 @@
   function cadence(lo, hi, any = 999){
     return hi >= any ? `cadence ${lo} or more` : `cadence ${lo} to ${hi}`;
   }
-  function segment(seg, ctx = {}){
+  function segment(seg, ctx){
+    ctx = ctx || {};
+    const dur = typeof ctx.duration === "function" ? ctx.duration : duration;
+    const watt = typeof ctx.watts === "function" ? ctx.watts : watts;
+    const cad = typeof ctx.cadence === "function" ? ctx.cadence : cadence;
     const note = seg.note ? seg.note + ". " : "";
-    const cad = seg.cad ? ", " + cadence(seg.cad[0], seg.cad[1], ctx.anyCad) : "";
-    const d = duration(seg.d);
+    const cadText = seg.cad ? ", " + cad(seg.cad[0], seg.cad[1], ctx.anyCad) : "";
+    const d = dur(seg.d);
     let power;
     if(seg.free) power = `${d} free riding`;
     else if(seg.hr) power = `${d} at heart rate ${seg.hr}`;
-    else power = Math.abs(seg.loW - seg.hiW) < 5 ? `${d} at ${watts(seg.loW)}` : `${d}, from ${seg.loW} to ${watts(seg.hiW)}`;
-    return note + power + cad;
+    else power = Math.abs(seg.loW - seg.hiW) < 5 ? `${d} at ${watt(seg.loW)}` : `${d}, from ${seg.loW} to ${watt(seg.hiW)}`;
+    return note + power + cadText;
   }
-  function lap(lap, _ctx){
+  function lap(lap, ctx){
+    ctx = ctx || {};
+    const dur = typeof ctx.duration === "function" ? ctx.duration : duration;
+    const watt = typeof ctx.watts === "function" ? ctx.watts : watts;
     if(lap.cadTgt){   // drill laps: report only the drill parts, stay quiet on recoveries
       if(lap.cadTgt[0] >= 100 || lap.cadTgt[1] <= 70) return `Average cadence ${lap.avgCad}.`;
       return "";
     }
-    if(lap.kind === "dist") return `${lap.km} kilometers. Last ${lap.kmLimit} in ${duration(lap.dur)}, average ${watts(lap.avgP)}.`;
+    if(lap.kind === "dist") return `${lap.km} kilometers. Last ${lap.kmLimit} in ${dur(lap.dur)}, average ${watt(lap.avgP)}.`;
     if(lap.score != null && lap.dur >= 30) return lap.kind === "hr" ? `Interval done. Average heart rate ${lap.avgHr}.`
-      : `Interval done. Average ${watts(lap.avgP)}, ${lap.score} percent.`;
+      : `Interval done. Average ${watt(lap.avgP)}, ${lap.score} percent.`;
     return "";
   }
   const finish = route => route ? "You made it to the finish." : "Workout complete. Well done.";
@@ -204,6 +211,7 @@
     let chosen = "";
     try{
       const indexDone = loadIndex();
+      await Promise.race([indexDone, delay(500)]);   // manifest hash for the first load, but never a long boot stall
       if(pref){
         const p = String(pref).toLowerCase();
         if(p === "en") chosen = "en";
@@ -222,7 +230,6 @@
           if(await load(base)){ chosen = base; break; }
         }
       }
-      await Promise.race([indexDone, delay(1500)]);   // the selector likes the index, but boot does not wait for it
     }catch{ chosen = "en"; }
     if(!chosen || !use(chosen)) use("en");
     if(typeof document !== "undefined"){
