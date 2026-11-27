@@ -18,6 +18,8 @@
     "test": "node --no-warnings tests/i18n.js && node --no-warnings tests/unit.js && node tests/e2e.js",
     "test:unit": "node --no-warnings tests/unit.js",
     "langs": "node scripts/langs.js",
+    "i18n:keys": "node scripts/i18n-keys.js",
+    "i18n:check": "node scripts/i18n-check.js",
     "predev": "node scripts/langs.js",
     "pretest": "node scripts/langs.js --check",
     "dev": "node tests/support/server.js"

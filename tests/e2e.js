@@ -14,7 +14,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
   const srv = await start(), B = srv.url, browser = await chromium.launch(), pageErrors = [];
   /* a fresh browser profile; fake YouTube player that answers volume questions and records commands */
-  async function open({ viewport = { width: 1280, height: 860 }, speed = 100, voices = [], settings, mobile = false, locale = "en-US", cookies = [] } = {}){
+  async function open({ viewport = { width: 1280, height: 860 }, speed = 100, voices = [], settings, mobile = false, locale = "en-US", cookies = [], keys = false } = {}){
     const ctx = await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile, acceptDownloads: true, locale });
     if(cookies.length) await ctx.addCookies(cookies.map(([name, value]) => ({ name, value, url: B })));
     const p = await ctx.newPage(); p.on("pageerror", e => pageErrors.push(e.message)); p.on("dialog", d => d.accept());
@@ -30,7 +30,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
       speechSynthesis.speak = u => { __spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 200); };
       if(st && !localStorage.getItem("pedala.settings")) localStorage.setItem("pedala.settings", JSON.stringify(st));
     }, [voices, settings]);
-    await p.goto(`${B}/?simspeed=${speed}`);
+    await p.goto(`${B}/?simspeed=${speed}${keys ? "&i18n=keys" : ""}`);
     await p.waitForFunction(() => window.__pedala && document.documentElement.dataset.i18n === "ready", null, { timeout: 5000 });
     return p;
   }
@@ -55,6 +55,24 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.equal(await p.evaluate(() => document.documentElement.lang), "en");
     assert.equal(pageErrors.length, errorsBefore);
     await p.context().close();
+  });
+
+  await test("i18n: the ?i18n=keys recorder collects static and dynamic keys", async () => {
+    const p = await open({ keys: true });
+    assert.equal(await p.evaluate(() => PedalaI18n.record), true, "the recorder is on");
+    const seen = await p.evaluate(() => [...PedalaI18n.seen]);
+    assert.ok(seen.includes("Settings"), "a key from the static shell is recorded");
+    assert.ok(seen.includes("Free ride"), "a key from the first render is recorded");
+    await p.evaluate(() => setWorkout(allWorkouts().find(w => w.id === "b-ss")));
+    const more = await p.evaluate(() => [...PedalaI18n.seen]);
+    assert.ok(more.includes("Target"), "a key rendered later is recorded");
+    assert.ok(more.includes("Interval {i} of {n}"), "a key with placeholders is recorded");
+    await p.context().close();
+
+    const q = await open();
+    assert.equal(await q.evaluate(() => PedalaI18n.record), false, "the recorder is off without the switch");
+    assert.equal(await q.evaluate(() => PedalaI18n.seen.size), 0);
+    await q.context().close();
   });
 
   await test("i18n: Settings lists the dropped-in language and switching reloads", async () => {

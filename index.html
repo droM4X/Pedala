@@ -744,6 +744,9 @@ if(!window.PedalaI18n){
 /* ============ utilities ============ */
 const $ = s => document.querySelector(s);
 const params = new URLSearchParams(location.search);
+/* dev-only key coverage: ?i18n=keys records every key seen by the static pass and by t()/tHtml().
+   It is set here, before PedalaI18n.init runs, and changes nothing else. scripts/i18n-keys.js reads it. */
+if(params.get("i18n") === "keys") PedalaI18n.record = true;
 const SIM_SPEED = Math.max(1, Math.min(200, +params.get("simspeed") || 1)); // time warp, simulator only
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const fmtTime = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
@@ -2505,7 +2508,7 @@ function renderPlan(){
   for(let i = 0; i < NW; i++){
     const wk = ss.filter(x => x.week === i + 1), el = document.createElement("div");
     el.className = "week" + (started && i + 1 === week ? " now" : "");
-    el.innerHTML = `<h4><span>${PedalaI18n.t("Week {n}", { n: i + 1 })}${(strong ? STRENGTH.deload : PLAN.deload).includes(i + 1) ? (!strong && i === 13 ? PedalaI18n.t(" · test") : PedalaI18n.t(" · easier")) : ""}</span><small>${shortDay(wk[0].date)} – ${shortDay(wk.at(-1).date)}</small></h4><div class="sess"></div>`;
+    el.innerHTML = `<h4><span>${PedalaI18n.t("Week {n}", { n: i + 1 })}${(strong ? STRENGTH.deload : PLAN.deload).includes(i + 1) ? " · " + PedalaI18n.t(!strong && i === 13 ? "test" : "easier") : ""}</span><small>${shortDay(wk[0].date)} – ${shortDay(wk.at(-1).date)}</small></h4><div class="sess"></div>`;
     for(const x of wk){
       const b = document.createElement("button"); b.type = "button";
       b.className = [x.w.sport, x.done && "done", x.skipped && "skipped", !x.done && !x.skipped && !x.optional && x.past && "missed", x.optional && "opt", x.today && "today"].filter(Boolean).join(" ");
